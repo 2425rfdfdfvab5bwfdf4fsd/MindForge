@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "mFIMUs5X9MzqNZ8XpcAJI"
+uri = "file://research/mindforge-deep-research-report.md"
+type = "text"
+title = "MindForge — Full Research Report, PRD & Launch Blueprint"

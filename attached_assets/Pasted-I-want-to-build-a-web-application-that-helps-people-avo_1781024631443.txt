@@ -1,0 +1,87 @@
+I want to build a web application that helps people avoid bad habits.
+
+I have attached a research/transcript file.
+
+First, thoroughly analyze the attached file and identify:
+
+- The biggest recurring problems
+- Psychological pain points
+- Behavioral patterns
+- Addiction triggers
+- Brain rewiring opportunities
+- Habit formation mechanisms
+- Accountability gaps
+- Underserved market opportunities
+
+Then act as a senior startup strategist, SaaS founder, behavioral psychologist, product researcher, and market analyst.
+
+Your goal is NOT to generate multiple ideas.
+
+Instead, identify the SINGLE BEST web app opportunity with the highest probability of becoming a successful global SaaS business.
+
+The idea must:
+
+- Solve a painful real-world problem
+- Have strong product-market fit
+- Generate recurring revenue
+- Be suitable for a solo founder or small team
+- Have AI-powered features
+- Have clear differentiation from existing competitors
+- Be scalable globally
+- Create measurable user outcomes
+- Have strong retention potential
+
+Use insights from the attached file, including concepts such as:
+
+- Accountability Mirror
+- 40% Rule
+- Cookie Jar
+- Callousing the Mind
+- Power of Small Wins
+- Power of Why
+- Neuroplasticity
+- Dopamine regulation
+- Environment design
+- Brain rewiring
+- Behavioral conditioning
+
+After selecting the single best opportunity, provide:
+
+1. Product Name
+2. Problem Statement
+3. Target Audience
+4. Why This Opportunity Is Better Than All Other Options
+5. Core Value Proposition
+6. Detailed Feature List
+7. AI Features
+8. User Journey
+9. Gamification System
+10. Retention Mechanisms
+11. Monetization Strategy
+12. Pricing Model
+13. Competitive Analysis
+14. Unique Moat
+15. MVP Scope
+16. Technical Architecture
+17. Recommended Tech Stack
+18. Database Design
+19. API Requirements
+20. AI Models Required
+21. Go-To-Market Strategy
+22. Launch Plan
+23. Growth Loops
+24. Estimated MRR Potential
+25. Biggest Risks
+26. Why Users Would Pay For It
+
+Finally, provide:
+
+- A complete PRD (Product Requirements Document)
+- Database schema
+- Application architecture
+- Landing page copy
+- SaaS pricing page copy
+- 90-day MVP development roadmap
+
+Do not provide multiple ideas.
+Choose only ONE idea and defend why it is the strongest opportunity based on the attached research.
