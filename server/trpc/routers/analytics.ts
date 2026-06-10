@@ -244,4 +244,96 @@ export const analyticsRouter = router({
 
     return rows[0] ?? null;
   }),
+
+  habitCompletionByHabit: protectedProcedure
+    .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const cutoff = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
+
+      const activeHabits = await ctx.db
+        .select({ id: habits.id, name: habits.name })
+        .from(habits)
+        .where(and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true)));
+
+      if (!activeHabits.length) return [];
+
+      const completionRows = await ctx.db
+        .select({
+          habitId: habitCompletions.habitId,
+          completed: habitCompletions.completed,
+        })
+        .from(habitCompletions)
+        .where(
+          and(
+            eq(habitCompletions.userId, ctx.user.id),
+            gte(habitCompletions.localDate, cutoff)
+          )
+        );
+
+      return activeHabits.map((h) => {
+        const rows = completionRows.filter((r) => r.habitId === h.id);
+        const done = rows.filter((r) => r.completed).length;
+        const total = rows.length;
+        return {
+          name: h.name.length > 12 ? h.name.slice(0, 12) + "…" : h.name,
+          rate: total > 0 ? Math.round((done / total) * 100) : 0,
+        };
+      });
+    }),
+
+  getPeriodStats: protectedProcedure
+    .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const cutoff = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
+
+      const [profileRow, checkinRows, completionRows] = await Promise.all([
+        ctx.db
+          .select({ forgeScore: users.forgeScore })
+          .from(users)
+          .where(eq(users.id, ctx.user.id))
+          .limit(1),
+
+        ctx.db
+          .select({ honestyScore: dailyCheckins.honestyScore })
+          .from(dailyCheckins)
+          .where(
+            and(
+              eq(dailyCheckins.userId, ctx.user.id),
+              eq(dailyCheckins.onboardingMirror, false),
+              gte(dailyCheckins.localDate, cutoff),
+              isNotNull(dailyCheckins.honestyScore)
+            )
+          ),
+
+        ctx.db
+          .select({ completed: habitCompletions.completed })
+          .from(habitCompletions)
+          .where(
+            and(
+              eq(habitCompletions.userId, ctx.user.id),
+              gte(habitCompletions.localDate, cutoff),
+              eq(habitCompletions.completed, true)
+            )
+          ),
+      ]);
+
+      const scores = checkinRows
+        .map((r) => r.honestyScore)
+        .filter((s): s is number => s !== null);
+      const avgHonestyScore =
+        scores.length > 0
+          ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+          : 0;
+
+      return {
+        forgeScore: profileRow[0]?.forgeScore ?? 0,
+        checkinCount: scores.length,
+        avgHonestyScore,
+        habitsCompleted: completionRows.length,
+      };
+    }),
 });
