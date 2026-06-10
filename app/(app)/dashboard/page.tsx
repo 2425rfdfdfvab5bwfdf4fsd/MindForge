@@ -11,7 +11,7 @@ import {
   SkeletonForgeScore,
   SkeletonXPBar,
 } from "@/components/forge/Skeletons";
-import { getLevelFromXP } from "@/lib/xp";
+import { getLevelFromXP } from "@/lib/level";
 
 function getLocalDate(timezone: string): string {
   try {

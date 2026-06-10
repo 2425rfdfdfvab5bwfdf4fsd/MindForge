@@ -3,3 +3,4 @@
 - [TypeScript exclusions](ts-exclusions.md) — shared/models and server/replit_integrations excluded from tsconfig; both are legacy files not used by the active app
 - [Spec compliance audit](spec-audit.md) — full audit results: nearly 100% compliant; one fix applied (app layout onboarding guard)
 - [Firebase migration](firebase-migration.md) — Firebase Auth + Firestore replaces JWT/Replit Auth + PostgreSQL/Drizzle; key constraints documented
+- [Level utilities split](level-split.md) — getLevelFromXP/getLevelName live in lib/level.ts (client-safe); lib/xp.ts is server-only. Client components must import from lib/level.ts, never lib/xp.ts

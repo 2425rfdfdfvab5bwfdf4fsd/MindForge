@@ -221,9 +221,34 @@ export default function MirrorPage() {
 
               {/* Error state */}
               {error && !isStreaming && (
-                <p className="text-sm text-red-400">
-                  {error} — please try refreshing.
-                </p>
+                <div className="text-sm">
+                  {error === "GEMINI_API_KEY_MISSING" ? (
+                    <div className="space-y-1">
+                      <p className="font-semibold text-forge-orange">
+                        Gemini API key not configured
+                      </p>
+                      <p className="text-text-muted">
+                        Add your <code className="rounded bg-white/10 px-1 py-0.5 font-mono">GEMINI_API_KEY</code> in the{" "}
+                        <strong className="text-text-secondary">Secrets</strong> tab (🔒 in the sidebar), then refresh the page.
+                      </p>
+                      <p className="text-text-disabled">
+                        Get your key at{" "}
+                        <a
+                          href="https://aistudio.google.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-forge-orange"
+                        >
+                          aistudio.google.com
+                        </a>
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-red-400">
+                      Coach unavailable — please try refreshing.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 

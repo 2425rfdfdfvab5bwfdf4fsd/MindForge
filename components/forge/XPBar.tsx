@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getLevelFromXP } from "@/lib/xp";
+import { getLevelFromXP } from "@/lib/level";
 
 interface XPBarProps {
   xp: number;

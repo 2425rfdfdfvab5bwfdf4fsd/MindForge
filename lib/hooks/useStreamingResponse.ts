@@ -38,10 +38,21 @@ export function useStreamingResponse(): UseStreamingResponseReturn {
 
       if (!response.ok) {
         const text = await response.text();
+        let friendlyError = `Request failed (${response.status})`;
+        try {
+          const parsed = JSON.parse(text) as { error?: string };
+          if (parsed.error === "GEMINI_API_KEY not configured") {
+            friendlyError = "GEMINI_API_KEY_MISSING";
+          } else if (parsed.error) {
+            friendlyError = parsed.error;
+          }
+        } catch {
+          friendlyError = text || friendlyError;
+        }
         setState((prev) => ({
           ...prev,
           isStreaming: false,
-          error: text || `Request failed: ${response.status}`,
+          error: friendlyError,
         }));
         return;
       }

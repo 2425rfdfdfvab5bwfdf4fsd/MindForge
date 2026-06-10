@@ -79,6 +79,13 @@ function buildFallbackPrompt(
 }
 
 export async function POST(request: Request) {
+  if (!process.env.GEMINI_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: "GEMINI_API_KEY not configured" }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const session = await getSessionFromRequest(request);
   if (!session) return new Response("Unauthorized", { status: 401 });
 
