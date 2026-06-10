@@ -24,3 +24,9 @@ id = "MVMGHhcXsPSag2NnqEJIp"
 uri = "file://research/mindforge-color-theme-research.md"
 type = "text"
 title = "MindForge — Color & Theme Deep Research Report"
+
+[[outputs]]
+id = "q_aoTi-hgd5vOW3yGEK88"
+uri = "file://research/mindforge-build-guide.md"
+type = "text"
+title = "MindForge Phase-by-Phase Build Guide"
