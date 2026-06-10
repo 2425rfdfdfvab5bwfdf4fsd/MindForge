@@ -112,7 +112,7 @@ TABLE: subscriptions
 - lemonsqueezy_customer_id TEXT UNIQUE
 - lemonsqueezy_subscription_id TEXT UNIQUE
 - tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'elite'))
-- status TEXT NOT NULL DEFAULT 'inactive' CHECK (status IN ('active', 'cancelled', 'past_due', 'expired', 'inactive'))
+- status TEXT NOT NULL CHECK (status IN ('active', 'cancelled', 'past_due', 'expired'))
 - current_period_end TIMESTAMPTZ
 - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 - updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -206,7 +206,7 @@ TABLE: user_challenges
 - reflection TEXT
 - started_at TIMESTAMPTZ
 - completed_at TIMESTAMPTZ
-- UNIQUE(user_id, challenge_id)
+-- NO unique constraint on (user_id, challenge_id) — PRD Feature 11 explicitly states "Completed challenges can be repeated (no cooldown in v1)"
 
 TABLE: xp_events
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
@@ -669,7 +669,7 @@ WHY STATEMENT ACCEPTANCE FLOW:
 - On Accept: show Identity Declaration input: "Complete this: I am someone who..." (text input, full width)
 - On Identity Declaration submit: call tRPC user.updateWhy({ whyStatement, identityDeclaration })
 - Then show "Identity Locked" badge animation: badge icon goes scale(0) rotate(-15deg) → scale(1.15) rotate(5deg) → scale(1) using Framer Motion spring { stiffness: 250, damping: 12 } — total ~500ms
-- Call tRPC to award 'identity_locked' badge and 200 XP (onboarding XP)
+- Call tRPC to award 'identity_locked' badge only — checkAndAwardBadge awards its own 50 XP. Do NOT award the 200 XP here; that is for full onboarding completion (end of Step 3).
 - "Continue to Step 3" button → set onboarding_step = 'environment' → redirect to /onboarding/environment
 
 NO back button. This is a commitment.
@@ -713,7 +713,7 @@ ON SUBMIT:
 - Display results as numbered checklist cards
 - Each card has item text + "Mark as Done" button (calls tRPC user.markEnvironmentItemDone)
 - Each "Done" item: award 50 XP (event_type: 'environment')
-- "Enter the Forge" button at bottom: sets onboarding_complete = true, onboarding_step = 'complete', redirects to /dashboard
+- "Enter the Forge" button at bottom: call awardXP(userId, 200, 'Onboarding completed', 'onboarding') — this is the one-time 200 XP for completing the full onboarding flow (Why Excavation + Environment Audit per PRD Feature 13). Then set onboarding_complete = true, onboarding_step = 'complete', redirect to /dashboard
 
 ACCEPTANCE: All 12 questions display with proper navigation. On submit, AI generates personalized recommendations. "Mark as Done" awards 50 XP. "Enter the Forge" redirects to /dashboard.
 ```
@@ -1438,11 +1438,11 @@ Fetch all data with a single tRPC call using Promise.all in the server handler.
 
 CHARTS (use Recharts, all dark themed with no emojis in tooltips per PRD):
 
-1. FORGE SCORE HISTORY (Area chart, full width):
+1. FORGE SCORE HISTORY (Line chart, full width — PRD Feature 16 specifies "line chart"):
 - Data: analytics.forgeScoreHistory({ days: 30 })
 - X-axis: dates, Y-axis: 0–1000
-- Area fill: linear gradient — #FF6B2B at 20% opacity top, transparent bottom
-- Line stroke: #FF6B2B, strokeWidth 2
+- Use Recharts <LineChart>. Optional: wrap in <AreaChart> with a subtle gradient fill (rgba(255,107,43,0.08)) for visual depth — this is a visual enhancement that does not contradict the spec.
+- Line stroke: #FF6B2B, strokeWidth 2, dot={false}
 - Tooltip: "June 10 — 342 pts"
 
 2. HABIT COMPLETION RATE (Bar chart per habit):
