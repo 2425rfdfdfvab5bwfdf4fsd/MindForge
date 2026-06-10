@@ -90,17 +90,17 @@ export default function UpgradePage() {
     <div className="min-h-screen bg-[#0A0908] px-4 py-12">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3 tracking-tight">
             Forge Your Best Self
           </h1>
-          <p className="text-[#6B7280] text-lg max-w-xl mx-auto">
+          <p className="text-[#6B7280] text-base sm:text-lg max-w-xl mx-auto">
             Choose the level of accountability that matches your ambition.
           </p>
 
           <div className="inline-flex items-center gap-1 mt-8 bg-[#111110] border border-[#2A2927] rounded-lg p-1">
             <button
               onClick={() => setBilling("annual")}
-              className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-5 py-2 min-h-[40px] rounded-md text-sm font-medium transition-colors ${
                 billing === "annual"
                   ? "bg-[#FF6B2B] text-white"
                   : "text-[#6B7280] hover:text-white"
@@ -110,7 +110,7 @@ export default function UpgradePage() {
             </button>
             <button
               onClick={() => setBilling("monthly")}
-              className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-5 py-2 min-h-[40px] rounded-md text-sm font-medium transition-colors ${
                 billing === "monthly"
                   ? "bg-[#FF6B2B] text-white"
                   : "text-[#6B7280] hover:text-white"

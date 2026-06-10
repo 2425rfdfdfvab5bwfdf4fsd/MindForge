@@ -47,7 +47,7 @@ export default function HabitDetailPage() {
 
   if (habits && !habit) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-10">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-10">
         <p className="text-text-muted">Habit not found or archived.</p>
         <Link href="/habits" className="mt-4 inline-block text-sm text-forge-orange">
           ← Back to Habits
@@ -84,7 +84,7 @@ export default function HabitDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
+    <div className="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-10">
       {/* Back */}
       <Link
         href="/habits"
@@ -106,7 +106,7 @@ export default function HabitDetailPage() {
           <div className="mb-8 flex items-start justify-between gap-4">
             <div className="flex-1">
               {editing ? (
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
@@ -121,13 +121,13 @@ export default function HabitDetailPage() {
                   <button
                     onClick={handleSaveEdit}
                     disabled={updateMutation.isPending}
-                    className="bg-forge-orange px-4 text-sm font-bold text-forge-base disabled:opacity-50"
+                    className="bg-forge-orange px-4 min-h-[44px] text-sm font-bold text-forge-base disabled:opacity-50"
                   >
                     Save
                   </button>
                   <button
                     onClick={() => setEditing(false)}
-                    className="border border-forge-border px-4 text-sm text-text-muted"
+                    className="border border-forge-border px-4 min-h-[44px] text-sm text-text-muted"
                   >
                     Cancel
                   </button>
@@ -148,7 +148,7 @@ export default function HabitDetailPage() {
                 <button
                   onClick={startEdit}
                   title="Edit"
-                  className="border border-forge-border p-2 text-text-muted hover:border-forge-border-strong hover:text-text-primary"
+                  className="border border-forge-border p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-muted hover:border-forge-border-strong hover:text-text-primary"
                 >
                   <Pencil size={16} />
                 </button>
@@ -156,7 +156,7 @@ export default function HabitDetailPage() {
                   onClick={handleArchive}
                   disabled={archiving}
                   title="Archive"
-                  className="border border-forge-border p-2 text-text-muted hover:border-red-800 hover:text-red-400 disabled:opacity-50"
+                  className="border border-forge-border p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-text-muted hover:border-red-800 hover:text-red-400 disabled:opacity-50"
                 >
                   <Archive size={16} />
                 </button>

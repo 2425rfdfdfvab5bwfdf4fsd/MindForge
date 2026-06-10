@@ -189,7 +189,7 @@ export default function CheckinPage() {
   // -------------------------------------------------------------------
   if (checkinLoading) {
     return (
-      <div className="mx-auto max-w-[720px] px-6 py-12">
+      <div className="mx-auto max-w-[720px] px-4 sm:px-6 py-8 sm:py-12">
         <div className="mb-8 space-y-2 animate-pulse">
           <div className="h-8 w-72 rounded bg-forge-border" />
         </div>
@@ -202,9 +202,9 @@ export default function CheckinPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-[720px] px-6 py-12">
+      <div className="mx-auto max-w-[720px] px-4 sm:px-6 py-8 sm:py-12">
         {/* Page heading */}
-        <h1 className="mb-8 font-heading text-3xl font-bold text-text-primary">
+        <h1 className="mb-8 font-heading text-2xl sm:text-3xl font-bold text-text-primary">
           The Mirror —{" "}
           <span className="text-text-secondary">{todayLabel()}</span>
         </h1>
@@ -235,7 +235,7 @@ export default function CheckinPage() {
             <button
               onClick={handleSubmit}
               disabled={text.trim().length < 50}
-              className="w-full bg-forge-orange py-3.5 text-sm font-bold text-forge-base hover:bg-forge-orange-hover disabled:opacity-40"
+              className="w-full bg-forge-orange py-3.5 min-h-[52px] text-sm font-bold text-forge-base hover:bg-forge-orange-hover disabled:opacity-40"
             >
               Submit to the Mirror
             </button>
@@ -332,7 +332,7 @@ export default function CheckinPage() {
         {phase === "complete" && (
           <div className="space-y-6">
             {/* Status badge */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="border border-green-800/50 bg-green-950/30 px-3 py-1 text-xs font-medium text-green-400">
                 ✓ Check-in complete for today
               </span>

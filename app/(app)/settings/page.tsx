@@ -96,7 +96,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors w-full text-left ${
+      className={`flex items-center gap-2 px-3 lg:px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors shrink-0 whitespace-nowrap lg:w-full text-left ${
         active
           ? "bg-[#FF6B2B]/15 text-[#FF6B2B]"
           : "text-[#6B7280] hover:text-white hover:bg-[#1A1918]"
@@ -241,9 +241,9 @@ export default function SettingsPage() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold text-white mb-8">Settings</h1>
 
-        <div className="flex gap-6">
-          <aside className="w-52 flex-shrink-0">
-            <nav className="space-y-1">
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+          <aside className="w-full lg:w-52 lg:flex-shrink-0">
+            <nav className="flex overflow-x-auto gap-1 pb-1 lg:flex-col lg:overflow-visible lg:pb-0 lg:space-y-1">
               {tabs.map((t) => (
                 <TabButton
                   key={t.id}
@@ -257,7 +257,7 @@ export default function SettingsPage() {
             </nav>
           </aside>
 
-          <main className="flex-1 bg-[#111110] border border-[#2A2927] rounded-xl p-6 space-y-8">
+          <main className="flex-1 bg-[#111110] border border-[#2A2927] rounded-xl p-5 sm:p-6 space-y-8">
             {tab === "profile" && (
               <>
                 <Section title="Profile">

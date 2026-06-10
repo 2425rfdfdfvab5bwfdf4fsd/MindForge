@@ -106,9 +106,9 @@ export default function AnalyticsPage() {
   return (
     <div className="min-h-screen bg-[#0A0908] px-4 py-8">
       <div className="max-w-5xl mx-auto space-y-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
               Your Neural Progress
             </h1>
             <p className="text-[#6B7280] text-sm mt-1">
@@ -116,7 +116,7 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-          <div className="relative">
+          <div className="relative sm:flex-shrink-0">
             <select
               value={range}
               onChange={(e) => setRange(Number(e.target.value) as Range)}

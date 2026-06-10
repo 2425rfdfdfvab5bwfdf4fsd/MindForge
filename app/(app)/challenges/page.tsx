@@ -78,7 +78,7 @@ export default function ChallengesPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
+    <div className="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-10">
       {/* Header */}
       <div className="mb-8">
         <h1 className="font-heading text-3xl font-bold text-text-primary">
@@ -115,12 +115,12 @@ export default function ChallengesPage() {
       )}
 
       {/* Tabs */}
-      <div className="mb-6 flex border-b border-forge-border">
+      <div className="mb-6 flex overflow-x-auto border-b border-forge-border">
         {TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className="relative px-5 py-2.5 text-sm font-bold transition-colors"
+            className="relative px-4 sm:px-5 py-2.5 min-h-[44px] text-sm font-bold transition-colors shrink-0 whitespace-nowrap"
             style={{
               color: activeTab === tab.key ? "#EDEDEF" : "#87857F",
               borderBottom: activeTab === tab.key ? "2px solid #FF6B2B" : "2px solid transparent",

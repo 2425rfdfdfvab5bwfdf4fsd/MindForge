@@ -15,7 +15,7 @@ export default function TermsPage() {
         <a href="/" className="text-[#FF6B2B] text-sm font-semibold tracking-widest uppercase hover:underline">
           MINDFORGE
         </a>
-        <h1 className="text-3xl font-bold text-white mt-6 mb-2">Terms of Service</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-white mt-6 mb-2">Terms of Service</h1>
         <p className="text-[#6B7280] text-sm mb-10">Last updated: June 2026</p>
 
         <div className="space-y-8 text-[#A09FA0] text-sm leading-relaxed">

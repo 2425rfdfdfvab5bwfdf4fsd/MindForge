@@ -83,7 +83,7 @@ export default function NewHabitPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl px-6 py-10">
+    <div className="mx-auto max-w-xl px-4 sm:px-6 py-8 sm:py-10">
       {/* Back */}
       <Link
         href="/habits"
@@ -185,7 +185,7 @@ export default function NewHabitPage() {
 
           {/* Custom day selector */}
           {targetFrequency === "custom" && (
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               {DAY_LABELS.map((d, i) => (
                 <button
                   key={i}
@@ -215,7 +215,7 @@ export default function NewHabitPage() {
         <button
           type="submit"
           disabled={createHabit.isPending}
-          className="w-full bg-forge-orange py-3.5 text-sm font-bold text-forge-base hover:bg-forge-orange-hover disabled:opacity-50"
+          className="w-full bg-forge-orange py-3.5 min-h-[52px] text-sm font-bold text-forge-base hover:bg-forge-orange-hover disabled:opacity-50"
         >
           {createHabit.isPending ? "Creating…" : "Create Habit →"}
         </button>

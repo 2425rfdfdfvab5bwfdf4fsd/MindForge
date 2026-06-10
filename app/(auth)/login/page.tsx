@@ -80,7 +80,7 @@ export default function LoginPage() {
           <button
             onClick={handleGoogle}
             disabled={loading}
-            className="flex w-full items-center justify-center gap-3 border border-forge-border bg-forge-base px-4 py-3 text-sm font-medium text-text-primary transition hover:bg-forge-elevated disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-3 border border-forge-border bg-forge-base px-4 py-3 min-h-[52px] text-sm font-medium text-text-primary transition hover:bg-forge-elevated disabled:opacity-50"
           >
             <svg width="18" height="18" viewBox="0 0 48 48">
               <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -104,7 +104,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full border border-forge-border bg-forge-base px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-forge-orange focus:outline-none"
+              className="w-full border border-forge-border bg-forge-base px-3 py-3 min-h-[48px] text-sm text-text-primary placeholder:text-text-muted focus:border-forge-orange focus:outline-none"
             />
             <input
               type="password"
@@ -113,7 +113,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full border border-forge-border bg-forge-base px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-forge-orange focus:outline-none"
+              className="w-full border border-forge-border bg-forge-base px-3 py-3 min-h-[48px] text-sm text-text-primary placeholder:text-text-muted focus:border-forge-orange focus:outline-none"
             />
 
             {error && (
@@ -123,7 +123,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center bg-forge-orange px-4 py-3 text-sm font-medium text-forge-base transition hover:bg-forge-orange-hover disabled:opacity-50"
+              className="flex w-full items-center justify-center bg-forge-orange px-4 py-3 min-h-[52px] text-sm font-medium text-forge-base transition hover:bg-forge-orange-hover disabled:opacity-50"
             >
               {loading
                 ? "..."

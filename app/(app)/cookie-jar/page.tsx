@@ -182,18 +182,18 @@ function VictoryModal({ entry, onClose, onSaved }: ModalProps) {
             )}
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-1">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-sm text-text-muted hover:text-text-primary border border-forge-border hover:border-forge-border-strong transition-colors"
+                className="px-4 py-2.5 min-h-[44px] text-sm text-text-muted hover:text-text-primary border border-forge-border hover:border-forge-border-strong transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isPending || !title.trim() || !description.trim()}
-                className="px-6 py-2 text-sm font-bold text-white disabled:opacity-40 transition-opacity"
+                className="px-6 py-2.5 min-h-[44px] text-sm font-bold text-white disabled:opacity-40 transition-opacity"
                 style={{ background: "#FF6B2B" }}
               >
                 {isPending ? "Saving…" : isEdit ? "Save Changes" : "Lock It In"}
@@ -279,15 +279,15 @@ export default function CookieJarPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-2xl px-6 py-10">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-10">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-y-3">
           <h1 className="font-heading text-3xl font-bold text-text-primary">
             Cookie Jar
           </h1>
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90"
+            className="flex items-center gap-2 px-4 py-2 min-h-[44px] text-sm font-bold text-white transition-opacity hover:opacity-90"
             style={{ background: "#FF6B2B" }}
           >
             <Plus size={16} />
