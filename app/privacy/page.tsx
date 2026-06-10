@@ -1,5 +1,11 @@
-export const metadata = {
-  title: "Privacy Policy — MindForge",
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description:
+    "Learn how MindForge collects, uses, and protects your personal data. Your reflections and habit data stay private — we never sell your information.",
+  alternates: { canonical: "https://mindforge.app/privacy" },
+  robots: { index: true, follow: true },
 };
 
 export default function PrivacyPage() {
@@ -59,9 +65,9 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="8. Security">
-            We use industry-standard security practices including HTTPS encryption, JWT session
-            tokens, and HMAC verification for webhooks. Your data is stored in a managed
-            PostgreSQL database with encryption at rest.
+            We use industry-standard security practices including HTTPS encryption, Firebase session
+            cookies, and HMAC verification for webhooks. Your data is stored in Google Firestore
+            with encryption at rest.
           </Section>
 
           <Section title="9. Contact">

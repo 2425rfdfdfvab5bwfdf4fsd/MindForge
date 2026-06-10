@@ -1,5 +1,11 @@
-export const metadata = {
-  title: "Terms of Service — MindForge",
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description:
+    "Read MindForge's Terms of Service. Understand your rights, subscription terms, and acceptable use policy for our AI coaching and habit tracking platform.",
+  alternates: { canonical: "https://mindforge.app/terms" },
+  robots: { index: true, follow: true },
 };
 
 export default function TermsPage() {
@@ -25,7 +31,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="3. Account">
-            You must authenticate via Replit OAuth. You are responsible for all activity under
+            You must authenticate via Google or email. You are responsible for all activity under
             your account. You must be at least 16 years old to use MindForge. One account per person.
           </Section>
 
