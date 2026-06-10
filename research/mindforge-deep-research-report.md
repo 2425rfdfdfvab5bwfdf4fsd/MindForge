@@ -89,8 +89,8 @@ The current competitor landscape reveals a uniform philosophical blind spot — 
 
 The research reveals that effective AI coaching apps use a tiered memory system [9]:
 - **Short-term memory (STM)**: Active conversation context
-- **Session summaries**: Stored in PostgreSQL after each coaching session
-- **Long-term memory (LTM)**: Semantic and episodic facts about the user, stored in vector databases (pgvector), retrieved via RAG for dynamic system prompt personalization
+- **Session summaries**: Stored in Firestore `coaching_sessions` collection after each session
+- **Long-term memory (LTM)**: Semantic and episodic facts about the user, stored in Firestore `user_memories` collection as documents with `embedding: number[]` (768-dim), retrieved via in-process cosine similarity for dynamic system prompt personalization
 
 Neuroscience-informed app design research shows that dopamine feedback loops — instant visual confirmation of habit completion — are neurologically critical for reinforcing the reward signal that strengthens the habit pathway [8]. This means every interaction needs to be designed as a deliberate neurological intervention, not just a UI affordance.
 
@@ -111,7 +111,8 @@ The research confirms a clear "golden stack" for solo/small-team SaaS [9][10]:
 
 - **Frontend**: Next.js 14+ (App Router) + TypeScript + Tailwind CSS + shadcn/ui
 - **Backend**: Next.js API Routes + tRPC (type-safe APIs)
-- **Database**: Supabase (PostgreSQL + pgvector for embeddings + Supabase Auth)
+- **Database**: Firebase Firestore (NoSQL document database with real-time sync; embeddings stored as `number[]` arrays with in-process cosine similarity)
+- **Auth**: Firebase Auth (email/password + Google OAuth; server-side session cookies via Admin SDK)
 - **AI Layer**: Google Gemini 2.5 Pro for coaching conversations + text-embedding-004 for vector search
 - **Payments**: Lemon Squeezy (Merchant of Record — handles global VAT/tax automatically)
 - **Hosting**: Vercel (seamless Next.js deployment, edge functions)
@@ -230,7 +231,7 @@ Powered by Gemini 2.5 Pro with a persistent memory architecture (STM + session s
 - Challenges excuses specifically, not generically
 
 ### 2. Memory Engine
-After every session, a memory extraction agent (secondary LLM call) identifies new atomic facts about the user: preferences, triggers, victories, failures, identity statements, and fears. These are embedded and stored in pgvector. Every subsequent coaching interaction retrieves the top-K most relevant memories via RAG, dynamically injecting them into the system prompt.
+After every session, a memory extraction agent (secondary LLM call) identifies new atomic facts about the user: preferences, triggers, victories, failures, identity statements, and fears. These are embedded with text-embedding-004 and stored in Firestore. Every subsequent coaching interaction fetches the user's memories from Firestore, computes cosine similarity in-process on the server, and injects the top-K results into the system prompt.
 
 ### 3. Pattern Recognition Engine
 Analyzes habit completion data weekly to identify: time-of-day patterns, trigger correlations (e.g., always miss gym after late nights), momentum windows, and "drift" signals (early indicators of an upcoming streak collapse). Surfaces these to the user proactively.
@@ -418,14 +419,14 @@ The 90-day MVP delivers:
         ┌─────────────────────┼─────────────────────┐
         │                     │                     │
 ┌───────▼───────┐   ┌─────────▼────────┐  ┌────────▼────────┐
-│  Supabase DB   │   │  Gemini Service  │  │  LemonSqueezy    │
-│  (PostgreSQL)  │   │  (Gemini + RAG)  │  │  (Billing)       │
-│  + pgvector    │   └─────────────────┘  └─────────────────┘
+│  Firebase      │   │  Gemini Service  │  │  LemonSqueezy    │
+│  Firestore     │   │  (Gemini + RAG)  │  │  (Billing)       │
+│  (NoSQL + emb) │   └─────────────────┘  └─────────────────┘
 └───────────────┘
         │
 ┌───────▼───────────────────────────┐
-│           Supabase Auth            │
-│     (JWT + Row Level Security)     │
+│           Firebase Auth            │
+│  (Session cookies + Admin SDK)     │
 └───────────────────────────────────┘
 ```
 
@@ -438,7 +439,7 @@ User Message
 1. Embed query (text-embedding-004)
      │
      ▼
-2. Vector search pgvector → retrieve top-K memories
+2. Fetch user memories from Firestore → compute cosine similarity in-process → take top-K
      │
      ▼
 3. Build system prompt:
@@ -454,10 +455,10 @@ User Message
      ▼
 5. Memory extraction agent:
    - Parse response + user message for new atomic facts
-   - Embed + upsert to pgvector
+   - Embed with text-embedding-004 + write to Firestore user_memories
      │
      ▼
-6. Session summary → stored in PostgreSQL
+6. Session summary → stored in Firestore coaching_sessions
 ```
 
 ---
@@ -470,10 +471,10 @@ User Message
 | Language | TypeScript | Type safety, DX, reduced bugs |
 | Styling | Tailwind CSS + shadcn/ui | Fast, consistent, accessible |
 | API | tRPC | End-to-end type safety, no boilerplate |
-| Database | Supabase (PostgreSQL) | Managed, auth included, pgvector |
-| Vector Search | pgvector (Supabase extension) | AI memory without extra infra |
+| Database | Firebase Firestore | Managed NoSQL, real-time sync, flexible security rules |
+| Vector Search | In-process cosine similarity | Embeddings stored as number[] in Firestore; no extra infra |
 | AI | Google Gemini 2.5 Pro + text-embedding-004 | Best quality/cost for coaching |
-| Auth | Supabase Auth | Built-in, RLS, social login |
+| Auth | Firebase Auth + Admin SDK | Email/password + Google OAuth; server-side session cookies |
 | Payments | Lemon Squeezy | Merchant of Record, auto global VAT/tax, no tax registration needed |
 | Email | Resend + React Email | Developer-first, weekly reports |
 | Hosting | Vercel | Instant Next.js deploy, edge functions |
@@ -672,7 +673,8 @@ CREATE INDEX idx_cookie_jar_embedding ON cookie_jar_entries USING ivfflat (embed
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/auth/*` | Various | Supabase Auth (magic link, Google OAuth) |
+| `/api/auth/session` | POST | Exchange Firebase ID token for mf_session cookie |
+| `/api/auth/logout` | POST | Clear mf_session cookie |
 | `/api/habits` | GET/POST | List/create habits |
 | `/api/habits/[id]/complete` | POST | Log completion for local_date |
 | `/api/checkins` | GET/POST | Get/submit daily Accountability Mirror |
@@ -859,11 +861,11 @@ MindForge is a web-based SaaS application that helps users avoid bad habits, bui
 
 ### 4. FUNCTIONAL REQUIREMENTS
 
-**FR-001**: System must authenticate users via email magic link and Google OAuth.
+**FR-001**: System must authenticate users via email/password and Google OAuth (Firebase Auth); session maintained via HttpOnly server-side session cookie.
 **FR-002**: Onboarding must include Accountability Mirror, Why Excavation, and Environment Audit before the main dashboard is accessible.
 **FR-003**: Habit tracker must record completions using local date (user timezone), not UTC.
 **FR-004**: Forge Score must be recalculated on every habit completion/miss and every check-in submission.
-**FR-005**: AI coach must retrieve user memories from pgvector using cosine similarity before generating any response.
+**FR-005**: AI coach must retrieve user memories from Firestore and rank by cosine similarity (computed in-process) before generating any response.
 **FR-006**: After every AI coaching session, a memory extraction agent must parse new facts and upsert to user_memories table.
 **FR-007**: All AI responses must stream to the UI in real time (SSE or streaming API response).
 **FR-008**: Lemon Squeezy webhook must update subscription tier and status in the subscriptions table within 30 seconds of event.
@@ -875,7 +877,7 @@ MindForge is a web-based SaaS application that helps users avoid bad habits, bui
 **NFR-001**: First contentful paint < 1.5 seconds (Vercel edge caching).
 **NFR-002**: AI coaching response stream must begin within 3 seconds.
 **NFR-003**: Forge Score calculation must complete < 200ms.
-**NFR-004**: All user data encrypted at rest (Supabase default AES-256).
+**NFR-004**: All user data encrypted at rest (Firebase/Google Cloud default AES-256).
 **NFR-005**: GDPR compliant (data export, right to erasure endpoints).
 **NFR-006**: Mobile-responsive (primary users will check in via phone browser; native app is v2).
 
@@ -1107,10 +1109,10 @@ Your coaching sessions and personal reflections are used solely to personalize y
 
 ### Week 1 — Infrastructure Setup
 - [ ] Initialize Next.js 14 project with TypeScript, Tailwind, shadcn/ui
-- [ ] Configure Supabase project (PostgreSQL + pgvector extension)
-- [ ] Implement full database schema (all tables above)
-- [ ] Set up Supabase Auth (magic link + Google OAuth)
-- [ ] Configure Row Level Security (RLS) policies for all tables
+- [ ] Configure Firebase project (Firestore database + Security Rules)
+- [ ] Define Firestore collection structure + TypeScript types
+- [ ] Set up Firebase Auth (email/password + Google OAuth) + session cookie flow
+- [ ] Deploy Firestore Security Rules for all collections
 - [ ] Set up Vercel project + environment variables
 - [ ] Configure Resend for transactional email
 
@@ -1148,7 +1150,7 @@ Your coaching sessions and personal reflections are used solely to personalize y
 - [ ] Test prompt quality across user personas
 
 ### Week 6 — Memory Engine
-- [ ] Build embedding pipeline for user memories (pgvector)
+- [ ] Build embedding pipeline for user memories (text-embedding-004 → Firestore number[] storage)
 - [ ] Implement vector similarity search (cosine) for memory retrieval
 - [ ] Build memory extraction agent (post-session LLM call)
 - [ ] Integrate retrieved memories into system prompt dynamically
@@ -1184,7 +1186,7 @@ Your coaching sessions and personal reflections are used solely to personalize y
 - [ ] Build analytics dashboard (Forge Score history, habit completion charts, streak calendar)
 - [ ] Implement Weekly Neural Report generation (Gemini 2.5 Pro structured output)
 - [ ] Build Resend email template for weekly report
-- [ ] Set up weekly cron job (Vercel cron or Supabase pg_cron)
+- [ ] Set up weekly cron job (Vercel cron — requires Vercel Pro plan)
 - [ ] PostHog integration (page views, feature usage, conversion events)
 
 ### Week 11 — Polish + Onboarding
@@ -1226,7 +1228,7 @@ The closest competitors — Habitica, Fabulous, Streaks — compete on gentlenes
 
 The AI memory moat is the technical defensibility. The honest accountability brand is the cultural defensibility. The neuroscience content is the educational defensibility. The pod community is the social defensibility. Together, they create a product that gets better the longer users stay — and a brand that users wear as an identity badge, not just an app they use.
 
-The timing is right. The content ecosystem (Goggins, Huberman Lab, Jocko Willink) has built an audience of hundreds of millions primed for exactly this product. The technology (Gemini 2.5 Pro, pgvector, Next.js, Supabase) makes it buildable by a solo founder in 90 days. The market size ($7.5–41B) provides room to grow into a significant business.
+The timing is right. The content ecosystem (Goggins, Huberman Lab, Jocko Willink) has built an audience of hundreds of millions primed for exactly this product. The technology (Gemini 2.5 Pro, Firebase Firestore, Next.js, Firebase Auth) makes it buildable by a solo founder in 90 days. The market size ($7.5–41B) provides room to grow into a significant business.
 
 ---
 
