@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, desc, count } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { cookieJarEntries } from "@/shared/schema";
 import { awardXP } from "@/lib/xp";
@@ -18,12 +18,28 @@ export const cookiejarRouter = router({
   add: protectedProcedure
     .input(
       z.object({
-        title: z.string().max(80),
-        description: z.string().max(500),
+        title: z.string().min(1).max(80),
+        description: z.string().min(1).max(500),
         dateOfVictory: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Free tier: max 5 entries
+      const [{ value: entryCount }] = await ctx.db
+        .select({ value: count() })
+        .from(cookieJarEntries)
+        .where(eq(cookieJarEntries.userId, ctx.user.id));
+
+      const profile = ctx.userProfile;
+      const isFree = !profile || profile.tier === "free";
+
+      if (isFree && Number(entryCount) >= 5) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: JSON.stringify({ upgradeRequired: true }),
+        });
+      }
+
       const [entry] = await ctx.db
         .insert(cookieJarEntries)
         .values({
@@ -35,7 +51,16 @@ export const cookiejarRouter = router({
         .returning();
 
       await awardXP(ctx.user.id, 25, "Cookie Jar entry added", "cookie_jar");
-      checkCookieJarFounder(ctx.user.id).catch(() => {});
+
+      // Check badge: cookie_jar_founder at 10 entries
+      const [{ value: newCount }] = await ctx.db
+        .select({ value: count() })
+        .from(cookieJarEntries)
+        .where(eq(cookieJarEntries.userId, ctx.user.id));
+
+      if (Number(newCount) >= 10) {
+        checkCookieJarFounder(ctx.user.id).catch(() => {});
+      }
 
       return entry;
     }),
@@ -44,9 +69,9 @@ export const cookiejarRouter = router({
     .input(
       z.object({
         id: z.string().uuid(),
-        title: z.string().max(80).optional(),
-        description: z.string().max(500).optional(),
-        dateOfVictory: z.string().optional(),
+        title: z.string().min(1).max(80).optional(),
+        description: z.string().min(1).max(500).optional(),
+        dateOfVictory: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -60,15 +85,14 @@ export const cookiejarRouter = router({
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
+      const updates: Partial<typeof cookieJarEntries.$inferInsert> = {};
+      if (input.title !== undefined) updates.title = input.title;
+      if (input.description !== undefined) updates.description = input.description;
+      if (input.dateOfVictory !== undefined) updates.dateOfVictory = input.dateOfVictory;
+
       const [updated] = await ctx.db
         .update(cookieJarEntries)
-        .set({
-          ...(input.title !== undefined ? { title: input.title } : {}),
-          ...(input.description !== undefined ? { description: input.description } : {}),
-          ...(input.dateOfVictory !== undefined
-            ? { dateOfVictory: input.dateOfVictory }
-            : {}),
-        })
+        .set(updates)
         .where(eq(cookieJarEntries.id, input.id))
         .returning();
 
@@ -96,20 +120,31 @@ export const cookiejarRouter = router({
     }),
 
   search: protectedProcedure
-    .input(z.object({ query: z.string() }))
+    .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      const all = await ctx.db
+      const q = `%${input.query}%`;
+      const results = await ctx.db
         .select()
         .from(cookieJarEntries)
-        .where(eq(cookieJarEntries.userId, ctx.user.id))
+        .where(
+          eq(cookieJarEntries.userId, ctx.user.id)
+        )
         .orderBy(desc(cookieJarEntries.createdAt))
         .limit(20);
 
-      const q = input.query.toLowerCase();
-      return all.filter(
-        (e) =>
-          e.title.toLowerCase().includes(q) ||
-          e.description.toLowerCase().includes(q)
-      );
+      // Client-side text scoring (pgvector not available; semantic upgrade path later)
+      const words = input.query.toLowerCase().split(/\s+/).filter(Boolean);
+      const scored = results
+        .map((e) => {
+          const corpus = `${e.title} ${e.description}`.toLowerCase();
+          const matchCount = words.filter((w) => corpus.includes(w)).length;
+          const similarity = matchCount / words.length;
+          return { ...e, similarity };
+        })
+        .filter((e) => e.similarity > 0)
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, 5);
+
+      return scored;
     }),
 });
