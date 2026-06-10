@@ -1,5 +1,5 @@
 # MindForge — Phase-by-Phase Build Guide
-**Version:** 1.1 | **Based on PRD v1.0** | **Total Timeline: 90 Days**
+**Version:** 1.2 | **Based on PRD v1.0** | **Total Timeline: 90 Days**
 
 This file contains every prompt needed to build MindForge end-to-end, organized by phase. Each prompt is self-contained and references the PRD for full spec details. Paste each prompt directly into your AI coding agent to complete that step.
 
@@ -754,7 +754,6 @@ habits.logCompletion: Protected mutation. Input: { habitId, localDate (DATE stri
 - Call recalculateStreak(habitId, userId, localDate)
 - If completed: call awardXP(userId, 20, 'Habit completed', 'habit_complete')
 - Call recalculateForgeScore(userId)
-- If completed and streak becomes ≥7: check and award 'seven_day_streak' badge (use PRD badge key) — but wait: per PRD the 'seven_day_streak' badge is not in the v1 badge list. See Phase 5 for correct badge logic.
 - If NOT completed and streak WAS ≥7 before this miss: return triggerFortyPercent: true
 - Return: { streak, forgeScore, xpAwarded, leveledUp, triggerFortyPercent }
 
@@ -762,7 +761,7 @@ habits.getCompletionHistory: Protected query. Input: { habitId, days: number }. 
 
 CREATE lib/streak.ts:
 async function recalculateStreak(habitId: string, userId: string, localDate: string): Promise<number>
-- Query habit_completions for this habit, last 90 days, ordered by local_date DESC
+- Query habit_completions for this habit, last 60 days, ordered by local_date DESC
 - Walk back from localDate counting consecutive days where completed = true
 - Stop at first gap (non-completed day counts as a gap; future dates are not a gap)
 - Update habit_streaks: { current_streak, longest_streak: max(current, existing_longest), last_completed_date }
@@ -918,6 +917,7 @@ checkins.submit: Protected mutation. Input: { text: string (min 50 chars for dai
 checkins.updateMetadata: Protected mutation. Input: { checkinId, honestyScore, moodSignal, aiResponse? }
 - Verify checkin belongs to user
 - Update daily_checkins: set honesty_score, mood_signal, ai_response (if provided)
+- If moodSignal === 'crushing': call awardXP(userId, 20, 'Crushing check-in bonus', 'checkin_bonus') — this is the bonus 20 XP from the PRD XP table. Do NOT award it on 'owning', only 'crushing'.
 
 checkins.getToday: Protected query. Input: { localDate: string }. Return today's check-in or null.
 
@@ -1226,12 +1226,12 @@ IMPORTANT: The challenges DB schema uses duration_minutes (not duration_days) an
 Create supabase/seed.sql with 20 challenges:
 
 INSERT INTO challenges (title, description, difficulty, category, duration_minutes, xp_reward) VALUES
--- Difficulty 1-2 (Free tier accessible)
-('Cold Shower Protocol', 'End every shower with 60 seconds of cold water for 7 days straight. No warming back up. No exceptions. Cold exposure activates the noradrenergic system — this is a measurable intervention, not just discomfort.', 2, 'cold', 10080, 75),
+-- Difficulty 1 (Free tier accessible — exactly 5, per PRD Feature 11)
+('Cold Shower Protocol', 'End every shower with 60 seconds of cold water for 7 days straight. No warming back up. No exceptions. Cold exposure activates the noradrenergic system — this is a measurable intervention, not just discomfort.', 1, 'cold', 10080, 75),
 ('Phone-Free Morning', 'No phone for the first 60 minutes after waking. Every day for 7 days. The morning cortisol spike is your highest-focus window. You are currently handing it to an algorithm.', 1, 'screen', 10080, 50),
-('No Complaint Protocol', 'Go an entire day without complaining — verbally or mentally. Restart if you slip. The point is not silence — it is rewiring the default toward agency.', 1, 'physical', 1440, 50),
-('The Hard Conversation', 'Have one difficult conversation you have been avoiding. Complete it within 48 hours. Name the conversation before you begin.', 2, 'social', 2880, 75),
-('5AM Wake Protocol', 'Wake at 5AM every day for 5 days. No snooze. Get out of bed immediately. You are not a morning person — you are a discipline person.', 2, 'physical', 7200, 75),
+('No Complaint Protocol', 'Go an entire day without complaining — verbally or mentally. Restart if you slip. The point is not silence — it is rewiring the default toward agency.', 1, 'social', 1440, 50),
+('The Hard Conversation', 'Have one difficult conversation you have been avoiding. Complete it within 48 hours. Name the conversation before you begin.', 1, 'social', 2880, 75),
+('5AM Wake Protocol', 'Wake at 5AM every day for 5 days. No snooze. Get out of bed immediately. You are not a morning person — you are a discipline person.', 1, 'physical', 7200, 75),
 -- Difficulty 3
 ('Dopamine Detox Weekend', 'No social media, no streaming, no alcohol, no junk food for 48 hours. Only books, exercise, and intentional work. This is a reset, not a punishment.', 3, 'screen', 2880, 100),
 ('10K This Week', 'Run or walk 10 kilometers total within 7 days. Track every kilometer. No weather excuses — you have legs.', 3, 'physical', 10080, 100),
@@ -1507,7 +1507,7 @@ SECTIONS (in order):
 CREATE app/api/cron/weekly-report/route.ts:
 - Verify Authorization header = `Bearer ${process.env.CRON_SECRET}`. Return 401 if invalid.
 - Fetch all Pro/Elite users: users where tier IN ('pro','elite') AND onboarding_complete = true
-- For each user (batches of 50, with 200ms delay between batches per PRD spec):
+- For each user (batches of 50, with 200ms delay between users per PRD spec — not between batches):
   WRAP EACH USER in try/catch — one failure must not stop others
   1. Query past 7 days data via analytics queries (habit completions, check-in scores, forge score delta, XP earned, top streak)
   2. Fetch user's why_statement and identity_declaration
