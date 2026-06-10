@@ -1,5 +1,5 @@
 # MindForge — Phase-by-Phase Build Guide
-**Version:** 1.0 | **Based on PRD v1.0** | **Total Timeline: 90 Days**
+**Version:** 1.1 | **Based on PRD v1.0** | **Total Timeline: 90 Days**
 
 This file contains every prompt needed to build MindForge end-to-end, organized by phase. Each prompt is self-contained and references the PRD for full spec details. Paste each prompt directly into your AI coding agent to complete that step.
 
@@ -79,7 +79,10 @@ ACCEPTANCE: `npm run dev` starts without errors. Page shows "MindForge — Comin
 ### Step 1.2 — Supabase Database Schema
 
 ```
-Set up the complete Supabase database schema for MindForge. Create the file supabase/migrations/001_initial_schema.sql with the following tables, all with Row Level Security enabled:
+Set up the complete Supabase database schema for MindForge. Create the file supabase/migrations/001_initial_schema.sql with the following tables, all with Row Level Security enabled.
+
+Enable the pgvector extension at the very top:
+CREATE EXTENSION IF NOT EXISTS vector;
 
 TABLE: users
 - id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
@@ -91,15 +94,26 @@ TABLE: users
 - onboarding_complete BOOLEAN NOT NULL DEFAULT false
 - why_statement TEXT
 - identity_declaration TEXT
+- coach_intensity TEXT NOT NULL DEFAULT 'hard' CHECK (coach_intensity IN ('hard', 'firm'))
+- timezone TEXT NOT NULL DEFAULT 'UTC'
 - environment_audit JSONB DEFAULT '[]'
 - forge_score INTEGER NOT NULL DEFAULT 0
-- xp_total INTEGER NOT NULL DEFAULT 0
-- xp_level INTEGER NOT NULL DEFAULT 1
+- xp INTEGER NOT NULL DEFAULT 0
+- level INTEGER NOT NULL DEFAULT 1
 - current_streak_days INTEGER NOT NULL DEFAULT 0
-- lemonsqueezy_customer_id TEXT
-- lemonsqueezy_subscription_id TEXT
-- subscription_status TEXT DEFAULT 'inactive'
 - is_deleted BOOLEAN NOT NULL DEFAULT false
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+- updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: subscriptions
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- UNIQUE(user_id)
+- lemonsqueezy_customer_id TEXT UNIQUE
+- lemonsqueezy_subscription_id TEXT UNIQUE
+- tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'elite'))
+- status TEXT NOT NULL DEFAULT 'inactive' CHECK (status IN ('active', 'cancelled', 'past_due', 'expired', 'inactive'))
+- current_period_end TIMESTAMPTZ
 - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 - updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
@@ -109,7 +123,9 @@ TABLE: habits
 - name TEXT NOT NULL CHECK (char_length(name) <= 60)
 - category TEXT NOT NULL CHECK (category IN ('health', 'mind', 'avoid', 'perform'))
 - habit_type TEXT NOT NULL CHECK (habit_type IN ('build', 'avoid'))
-- frequency_days INTEGER[] NOT NULL DEFAULT '{0,1,2,3,4,5,6}' -- 0=Sun, 6=Sat
+- target_frequency TEXT NOT NULL DEFAULT 'daily' CHECK (target_frequency IN ('daily', 'weekdays', 'custom'))
+- target_days INTEGER[] NOT NULL DEFAULT '{0,1,2,3,4,5,6}' -- 0=Sun, 6=Sat
+- sort_order INTEGER NOT NULL DEFAULT 0
 - is_active BOOLEAN NOT NULL DEFAULT true
 - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
@@ -119,10 +135,11 @@ TABLE: habit_completions
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 - local_date DATE NOT NULL
 - completed BOOLEAN NOT NULL
-- logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+- notes TEXT
+- completion_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
 - UNIQUE(habit_id, local_date)
 
-TABLE: habit_streaks (cache table)
+TABLE: habit_streaks (cache table — always updated alongside habit_completions)
 - habit_id UUID PRIMARY KEY REFERENCES habits(id) ON DELETE CASCADE
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 - current_streak INTEGER NOT NULL DEFAULT 0
@@ -134,74 +151,85 @@ TABLE: daily_checkins
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 - local_date DATE NOT NULL
-- raw_text TEXT NOT NULL
+- raw_reflection TEXT NOT NULL
 - ai_response TEXT
-- mood_signal TEXT CHECK (mood_signal IN ('crushing', 'steady', 'struggling', 'excusing', 'deflecting'))
+- mood_signal TEXT CHECK (mood_signal IN ('excusing', 'deflecting', 'owning', 'crushing'))
 - honesty_score INTEGER CHECK (honesty_score BETWEEN 1 AND 10)
-- is_onboarding_mirror BOOLEAN NOT NULL DEFAULT false
+- forge_score_delta INTEGER NOT NULL DEFAULT 0
+- onboarding_mirror BOOLEAN NOT NULL DEFAULT false
 - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-- UNIQUE(user_id, local_date) -- one check-in per day
+- UNIQUE(user_id, local_date) WHERE (onboarding_mirror = false) -- partial unique: allows one mirror + one real check-in on the same day
 
-TABLE: coach_sessions
+TABLE: coaching_sessions
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 - checkin_id UUID REFERENCES daily_checkins(id)
-- session_type TEXT NOT NULL CHECK (session_type IN ('onboarding_mirror', 'why_excavation', 'checkin_debrief', 'direct_chat', 'forty_percent', 'challenge_reflection'))
-- messages JSONB NOT NULL DEFAULT '[]' -- [{role: 'user'|'coach', content: string, timestamp: string}]
+- session_type TEXT NOT NULL CHECK (session_type IN ('onboarding_mirror', 'why_excavation', 'daily_checkin', 'forty_percent_rule', 'direct_chat'))
+- messages JSONB NOT NULL DEFAULT '[]' -- [{role: 'user'|'model', content: string}]
+- session_summary TEXT
+- forge_score_delta INTEGER NOT NULL DEFAULT 0
 - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
-TABLE: memories
+TABLE: user_memories
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 - content TEXT NOT NULL
-- category TEXT NOT NULL CHECK (category IN ('trigger', 'victory', 'pattern', 'identity', 'goal', 'obstacle'))
-- source_session_id UUID REFERENCES coach_sessions(id)
-- embedding vector(768) -- pgvector: text-embedding-004 dimensions
+- memory_type TEXT NOT NULL CHECK (memory_type IN ('preference', 'trigger', 'victory', 'fear', 'identity', 'pattern'))
+- embedding vector(768) -- pgvector: text-embedding-004 produces 768-dimension vectors
+- last_accessed TIMESTAMPTZ
 - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
-TABLE: cookie_jar
+TABLE: cookie_jar_entries
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- title TEXT NOT NULL CHECK (char_length(title) <= 100)
-- description TEXT NOT NULL
+- title TEXT NOT NULL CHECK (char_length(title) <= 80)
+- description TEXT NOT NULL CHECK (char_length(description) <= 500)
 - date_of_victory DATE
 - embedding vector(768)
 - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
-TABLE: callousing_challenges
+TABLE: challenges
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 - title TEXT NOT NULL
 - description TEXT NOT NULL
 - difficulty INTEGER NOT NULL CHECK (difficulty BETWEEN 1 AND 5)
-- category TEXT NOT NULL CHECK (category IN ('physical', 'mental', 'social', 'digital'))
-- duration_days INTEGER NOT NULL DEFAULT 1
-- min_tier TEXT NOT NULL DEFAULT 'free' CHECK (min_tier IN ('free', 'pro', 'elite'))
+- category TEXT NOT NULL CHECK (category IN ('cold', 'screen', 'physical', 'fast', 'social'))
+- duration_minutes INTEGER NOT NULL
+- xp_reward INTEGER NOT NULL DEFAULT 100
 - is_active BOOLEAN NOT NULL DEFAULT true
 
 TABLE: user_challenges
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- challenge_id UUID NOT NULL REFERENCES callousing_challenges(id)
+- challenge_id UUID NOT NULL REFERENCES challenges(id)
 - status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'failed'))
-- started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-- completed_at TIMESTAMPTZ
 - reflection TEXT
+- started_at TIMESTAMPTZ
+- completed_at TIMESTAMPTZ
 - UNIQUE(user_id, challenge_id)
 
 TABLE: xp_events
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- amount INTEGER NOT NULL
+- xp_amount INTEGER NOT NULL
 - reason TEXT NOT NULL
-- reference_id UUID -- generic reference to the triggering entity
+- event_type TEXT NOT NULL CHECK (event_type IN ('habit_complete', 'checkin', 'checkin_bonus', 'challenge', 'forty_percent', 'cookie_jar', 'environment', 'onboarding'))
 - created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
-TABLE: badges
+TABLE: user_badges
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 - user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- badge_type TEXT NOT NULL CHECK (badge_type IN ('identity_locked', 'first_habit_logged', 'seven_day_streak', 'cookie_jar_first', 'first_challenge_complete', 'thirty_day_member'))
+- badge_key TEXT NOT NULL CHECK (badge_key IN ('identity_locked', 'mirror_gazer', 'cookie_jar_founder', 'forty_percent_survivor', 'cold_mind', 'tempered'))
 - earned_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-- UNIQUE(user_id, badge_type)
+- UNIQUE(user_id, badge_key)
+
+TABLE: rule_forty_events
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- triggered_by TEXT NOT NULL CHECK (triggered_by IN ('auto_habit', 'auto_checkin', 'manual'))
+- habit_id UUID REFERENCES habits(id)
+- choice TEXT NOT NULL CHECK (choice IN ('took_step', 'declined'))
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
 TABLE: forge_score_history
 - id UUID PRIMARY KEY DEFAULT gen_random_uuid()
@@ -209,24 +237,49 @@ TABLE: forge_score_history
 - score INTEGER NOT NULL
 - recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 
+TABLE: weekly_reports
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- week_start_date DATE NOT NULL
+- forge_score_change INTEGER NOT NULL DEFAULT 0
+- habit_completion_rate INTEGER NOT NULL DEFAULT 0
+- best_streak_this_week TEXT
+- behavioral_arc TEXT
+- key_insight TEXT
+- next_week_challenge TEXT
+- email_sent BOOLEAN NOT NULL DEFAULT false
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
 Enable RLS on every table. Add these policies:
-- For all user-data tables: `ENABLE ROW LEVEL SECURITY`, then `CREATE POLICY "Users can only access own data" ON [table] FOR ALL USING (auth.uid() = user_id);`
-- For callousing_challenges (read-only public): `CREATE POLICY "Anyone authenticated can read challenges" ON callousing_challenges FOR SELECT USING (auth.role() = 'authenticated');`
+- For all user-data tables (users, subscriptions, habits, habit_completions, habit_streaks, daily_checkins, coaching_sessions, user_memories, cookie_jar_entries, user_challenges, xp_events, user_badges, rule_forty_events, forge_score_history, weekly_reports):
+  ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "Users can only access own data" ON [table] FOR ALL USING (auth.uid() = user_id);
+- For challenges (read-only for authenticated users): ENABLE ROW LEVEL SECURITY; CREATE POLICY "Authenticated users can read challenges" ON challenges FOR SELECT USING (auth.role() = 'authenticated');
 
 Add indexes:
 - habits: (user_id, is_active)
 - habit_completions: (habit_id, local_date), (user_id, local_date)
 - daily_checkins: (user_id, local_date)
-- memories: (user_id, category), use ivfflat for embedding: `CREATE INDEX memories_embedding_idx ON memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);`
-- cookie_jar: (user_id), ivfflat index on embedding
+- user_memories: (user_id, memory_type); ivfflat for embedding: CREATE INDEX memories_embedding_idx ON user_memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+- cookie_jar_entries: (user_id); ivfflat index on embedding: CREATE INDEX cookie_jar_embedding_idx ON cookie_jar_entries USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 - forge_score_history: (user_id, recorded_at DESC)
-
-Enable the pgvector extension at the top: `CREATE EXTENSION IF NOT EXISTS vector;`
+- rule_forty_events: (user_id, created_at DESC)
 
 Add a trigger to auto-update users.updated_at on row changes.
-Add a trigger to auto-create a users row when a new auth.users record is inserted (via AFTER INSERT ON auth.users trigger, INSERT INTO public.users(id, email) VALUES (NEW.id, NEW.email)).
+Add a trigger to auto-create a users row when a new auth.users record is inserted:
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (id, email) VALUES (NEW.id, NEW.email);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
-ACCEPTANCE: Migration runs successfully in Supabase dashboard. All tables visible. RLS enabled on all tables (shown by lock icon in Supabase table editor).
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+ACCEPTANCE: Migration runs without errors in Supabase SQL editor. All tables visible in Table Editor. RLS shows lock icon on all tables. pgvector extension is active.
 ```
 
 ---
@@ -249,12 +302,17 @@ Uses cookies() from next/headers. Exports async function createClient().
 CREATE middleware.ts (root level):
 - Use createServerClient from @supabase/ssr with request/response cookie handling
 - Get session via supabase.auth.getUser()
-- If no session AND path starts with /app: redirect to /login
+- If no session AND path starts with /dashboard, /habits, /checkin, /coach, /cookie-jar, /challenges, /analytics, /settings, /upgrade: redirect to /login
 - If session AND path is /login: redirect based on onboarding status:
   - Fetch users.onboarding_complete and users.onboarding_step for the user
   - If onboarding_complete = false: redirect to /onboarding/[onboarding_step]
-  - If onboarding_complete = true: redirect to /app/dashboard
+  - If onboarding_complete = true: redirect to /dashboard
 - Apply middleware to: matcher: ['/((?!_next/static|_next/image|favicon.ico|api/billing/webhook).*)']
+
+Note on routes: The app uses Next.js route groups — (auth), (onboarding), and (app) — which are folder groupings only. The actual URLs do NOT include the group name:
+- app/(app)/dashboard/page.tsx → URL: /dashboard
+- app/(onboarding)/mirror/page.tsx → URL: /onboarding/mirror
+- app/(auth)/login/page.tsx → URL: /login
 
 CREATE app/(auth)/login/page.tsx:
 - Full dark background (#0A0908)
@@ -270,10 +328,10 @@ CREATE app/(auth)/login/page.tsx:
 
 CREATE app/(auth)/callback/route.ts:
 - Exchange code for session via supabase.auth.exchangeCodeForSession(code)
-- On success: redirect to /app/dashboard (middleware will redirect to onboarding if needed)
+- On success: redirect to /dashboard (middleware will redirect to onboarding if needed)
 - On error: redirect to /login?error=auth_error
 
-ACCEPTANCE: Magic link email is received. Clicking it logs the user in. Unauthenticated /app/* access redirects to /login. Google OAuth button initiates OAuth flow.
+ACCEPTANCE: Magic link email is received. Clicking it logs the user in. Unauthenticated /dashboard access redirects to /login. Google OAuth button initiates OAuth flow.
 ```
 
 ---
@@ -283,28 +341,29 @@ ACCEPTANCE: Magic link email is received. Clicking it logs the user in. Unauthen
 ```
 Set up tRPC for MindForge with full type-safe server/client communication.
 
-INSTALL: @trpc/server @trpc/client @trpc/react-query @trpc/next @tanstack/react-query zod
+INSTALL: @trpc/server @trpc/client @trpc/react-query @trpc/next @tanstack/react-query zod superjson
 
 CREATE server/trpc/context.ts:
 - Export createTRPCContext that:
   - Creates Supabase server client
   - Gets user from supabase.auth.getUser()
-  - Fetches users row (id, tier, onboarding_complete) if authenticated
+  - Fetches users row (id, tier, onboarding_complete, coach_intensity) if authenticated
   - Returns { supabase, user: authUser | null, userProfile: dbUser | null }
 
 CREATE server/trpc/trpc.ts:
-- Initialize tRPC with context
+- Initialize tRPC with context and superjson transformer
 - Create base router and procedure
 - Create protectedProcedure: throws UNAUTHORIZED if no user
 - Create requireTier helper: requireTier(ctx, 'pro') — throws FORBIDDEN if user.tier is insufficient (free < pro < elite)
 
 CREATE server/trpc/router.ts (root router):
-- Import and merge: habits, checkins, cookiejar, challenges, analytics, user, pods routers
+- Import and merge: habits, checkins, cookiejar, challenges, analytics, user, dashboard, pods routers
 - Export type AppRouter
 
 CREATE server/trpc/routers/user.ts (stub):
-- updateProfile mutation (name, why_statement, identity_declaration)
 - getProfile query
+- updateProfile mutation (displayName?, coachIntensity?, timezone?)
+- updateWhy mutation (whyStatement, identityDeclaration)
 - submitEnvironmentAudit mutation (stub — returns empty array for now)
 - markEnvironmentItemDone mutation (stub)
 
@@ -314,38 +373,44 @@ CREATE server/trpc/routers/habits.ts (stub):
 - update mutation (stub)
 - archive mutation (stub)
 - logCompletion mutation (stub)
+- getCompletionHistory query (stub)
 
 CREATE server/trpc/routers/checkins.ts (stub):
 - submit mutation (stub)
 - getToday query (stub)
+- updateMetadata mutation (stub)
 - getHistory query (stub)
 
 CREATE server/trpc/routers/cookiejar.ts (stub):
-- list query, create mutation, delete mutation (all stubs)
+- list query, add mutation, edit mutation, delete mutation, search query (all stubs)
 
 CREATE server/trpc/routers/challenges.ts (stub):
 - list query, activate mutation, complete mutation (all stubs)
 
 CREATE server/trpc/routers/analytics.ts (stub):
-- getForgeScoreHistory query (stub)
-- getHabitStats query (stub)
+- forgeScoreHistory query (stub)
+- habitCompletionRates query (stub)
+- checkinHonestyTrend query (stub)
+- xpHistory query (stub)
+- getLatestWeeklyReport query (stub)
+
+CREATE server/trpc/routers/dashboard.ts (stub):
+- getAll query (stub — returns placeholder data)
 
 CREATE server/trpc/routers/pods.ts (stub):
-- Empty router with a comment "// Accountability Pods — v2 feature, deferred"
+- Empty router with comment "// Accountability Pods — P1 feature, deferred to Month 4 post-launch"
 
 CREATE app/api/trpc/[trpc]/route.ts:
 - Standard Next.js tRPC handler using fetchRequestHandler
 
 CREATE lib/trpc/client.ts:
-- tRPC React Query client setup with transformer (superjson)
+- tRPC React Query client setup with superjson transformer
 - Export api (typed tRPC client hooks)
 
 CREATE lib/trpc/provider.tsx:
 - QueryClient + tRPC provider component for app/layout.tsx
 
 Add TRPCProvider to app/layout.tsx wrapping children.
-
-INSTALL: superjson @trpc/server/adapters/fetch
 
 ACCEPTANCE: No TypeScript errors on `tsc --noEmit`. The tRPC handler responds at /api/trpc/user.getProfile (should return 401 when unauthenticated). All stub routers compile cleanly.
 ```
@@ -357,18 +422,21 @@ ACCEPTANCE: No TypeScript errors on `tsc --noEmit`. The tRPC handler responds at
 ```
 Build the app shell layout components for MindForge.
 
+Note: All app routes live under the (app) route group. The actual URLs are /dashboard, /habits, /checkin, etc. — NOT /app/dashboard. The route group (app) is a folder convention only.
+
 CREATE components/layout/Sidebar.tsx:
 Navigation items (with icons from lucide-react):
-- Dashboard (LayoutDashboard icon) → /app/dashboard
-- Habits (CheckSquare icon) → /app/habits
-- Daily Mirror (BookOpen icon) → /app/checkin
-- AI Coach (Brain icon) → /app/coach [Pro badge shown]
-- Cookie Jar (Cookie icon) → /app/cookie-jar
-- Challenges (Zap icon) → /app/challenges
-- Analytics (BarChart2 icon) → /app/analytics
-- Settings (Settings icon) → /app/settings
+- Dashboard (LayoutDashboard icon) → /dashboard
+- Habits (CheckSquare icon) → /habits
+- Daily Mirror (BookOpen icon) → /checkin
+- AI Coach (Brain icon) → /coach [show "Pro" badge if user is free tier]
+- Cookie Jar (Cookie icon) → /cookie-jar
+- Challenges (Zap icon) → /challenges
+- Analytics (BarChart2 icon) → /analytics
+- Settings (Settings icon) → /settings
+- "40% Rule" button (Flame icon) — persistent at the bottom of the sidebar nav, always visible, orange text. Clicking triggers the 40% Rule overlay manually. This is per the PRD: users can manually trigger the 40% Rule at any time.
 
-Styling: fixed left sidebar, width 240px on desktop. Background #111110. Each nav item: flex row, icon + label, padding 12px 16px, text-muted default, text-primary on hover, bg #1A1918 on hover, border-left 2px solid transparent, border-left-color orange on active route. Use usePathname() from next/navigation for active state.
+Styling: fixed left sidebar, width 240px on desktop. Background #111110. Each nav item: flex row, icon + label, padding 12px 16px, text-muted default, text-primary on hover, bg #1A1918 on hover, border-left 2px solid transparent, border-left-color #FF6B2B on active route. Use usePathname() from next/navigation for active state.
 
 Mobile: hidden on < lg breakpoint (MobileNav handles mobile).
 
@@ -376,6 +444,7 @@ CREATE components/layout/MobileNav.tsx:
 Fixed bottom navigation for mobile (visible only below lg breakpoint).
 Show 5 items: Dashboard, Habits, Mirror, Cookie Jar, Settings.
 Background #111110, border-top #2A2927. Icons + labels. Active state: orange icon + label.
+Add `padding-bottom: env(safe-area-inset-bottom)` for iOS safe area.
 
 CREATE components/layout/Header.tsx:
 Top bar, height 56px, background #111110, border-bottom #2A2927.
@@ -385,22 +454,23 @@ Right: ForgeScore widget (import ForgeScore component) + user avatar (if availab
 CREATE components/forge/ForgeScore.tsx:
 Displays the user's Forge Score.
 Layout: small label "FORGE SCORE" (text-xs, text-muted, tracking-widest), large number below (text-display font size, text-primary, tabular nums, Geist font).
-Animate score changes using Framer Motion useSpring + useTransform for count-up over 300ms.
-On score increase: apply box-shadow glow (rgba(255,107,43,0.15)) via ::after opacity animation — NOT direct box-shadow.
+Also show the level label below the score (e.g., "Raw" or "Tempered") in text-xs, text-muted.
+Animate score changes using Framer Motion useSpring + useTransform for count-up over 500ms (PRD specifies 500ms).
+On score increase: apply box-shadow glow (rgba(255,107,43,0.15)) via ::after opacity animation — NOT direct box-shadow property (performance requirement per PRD).
 For now accept score as prop (will be wired to real data in Phase 5).
 
 CREATE app/(app)/layout.tsx:
-App shell layout for all /app/* routes.
-- Sidebar on left (desktop only)
+App shell layout for all routes that use the app shell.
+- Sidebar on left (desktop only, lg+)
 - Main content area: flex-1, overflow-y-auto, bg #0A0908
 - Header at top of main area
 - MobileNav at bottom (mobile only)
-- Wrap with a <div> that has padding-left 240px on lg+, padding-bottom 64px on mobile for the bottom nav
+- Wrap with a <div> that has padding-left 240px on lg+, padding-bottom 64px on mobile for bottom nav
 
 CREATE app/(app)/dashboard/page.tsx (stub):
-Simple placeholder: "Dashboard — Coming Soon" with the forge color scheme. This confirms the layout shell works.
+Simple placeholder: "Dashboard — Coming Soon" with the forge color scheme. Confirms the layout shell works.
 
-ACCEPTANCE: Navigating to /app/dashboard (after logging in) shows the sidebar + header + placeholder content. Sidebar highlights the active route. Header shows "FORGE SCORE 0". Mobile view shows bottom nav.
+ACCEPTANCE: Navigating to /dashboard (after logging in) shows the sidebar + header + placeholder content. Sidebar highlights the active route. Header shows "FORGE SCORE 0". The "40% Rule" button is visible at the bottom of the sidebar. Mobile view shows bottom nav.
 ```
 
 ---
@@ -418,7 +488,7 @@ Set up the Google Gemini AI client for MindForge.
 INSTALL: @google/generative-ai
 
 CREATE lib/gemini/client.ts:
-- Initialize GoogleGenerativeAI with GEMINI_API_KEY
+- Initialize GoogleGenerativeAI with GEMINI_API_KEY (server-only env var — no NEXT_PUBLIC_ prefix)
 - Export geminiPro: getGenerativeModel({ model: 'gemini-2.5-pro' })
 - Export geminiFlash: getGenerativeModel({ model: 'gemini-2.5-flash' })
 - Export embeddingModel: getGenerativeModel({ model: 'text-embedding-004' })
@@ -427,68 +497,104 @@ CREATE lib/gemini/prompts.ts:
 Define and export all system prompts as constants (versioned with a comment // v1.0):
 
 FORGE_COACH_BASE_SYSTEM_PROMPT:
-"You are the Forge Coach — an AI built on neuroscience, behavioral psychology, and the philosophy of peak performers like David Goggins and Jocko Willink. You do NOT coddle. You do NOT offer participation trophies. You tell the truth, even when it's uncomfortable. You treat the user as a capable adult who is here to change their life, not be comforted. Your responses are direct, specific, and grounded in what the user has actually written. You never use hollow affirmations ('great job!', 'you've got this!'). You acknowledge genuine wins with respect, not cheerleading. You identify excuse patterns when you see them — label them clearly and redirect. You end coaching sessions with one actionable next step or one probing question, never both."
+"You are the Forge Coach — an AI built on neuroscience, behavioral psychology, and the philosophy of peak performers like David Goggins and Jocko Willink. You do NOT coddle. You do NOT offer participation trophies. You tell the truth, even when it's uncomfortable. You treat the user as a capable adult who is here to change their life, not be comforted. Your responses are direct, specific, and grounded in what the user has actually written. You NEVER use hollow affirmations ('Great job!', 'You're doing amazing!', 'I'm proud of you') and you never use emojis. You acknowledge genuine wins with respect, not cheerleading. You identify excuse patterns when you see them — label them clearly and redirect. You never reference being an AI unless directly asked. You end responses with one actionable next step or one probing question, never both."
+
+FORGE_COACH_FIRM_PROMPT (used when coach_intensity = 'firm'):
+Same as base but add: "Deliver feedback with firmness and directness, but soften the language slightly. Still honest, still specific, still no empty encouragement — but without the hardest edges. Think: a mentor who tells you the truth, not a drill instructor."
 
 ONBOARDING_MIRROR_SYSTEM_PROMPT (extends base):
-Add: "This is the user's first interaction. They have just written a raw, honest accountability mirror entry. Your job: Read it carefully. Identify the central pattern — is this person avoiding responsibility, or genuinely facing themselves? Respond in 150–300 words. Be honest. If they are making excuses, name the excuses specifically (quote their words back). If they show genuine self-awareness, acknowledge it without praising it. End with exactly one probing question that will make them think differently about their situation."
+Add: "This is the user's first interaction. They have just written a raw, honest accountability mirror entry. Your job: Read it carefully. Identify the central pattern — is this person avoiding responsibility, or genuinely facing themselves? Respond in 150–300 words. Be honest. If they are making excuses, name the excuses specifically (quote their words back). If they show genuine self-awareness, acknowledge it without praising it. End with exactly one probing question that will make them think differently about their situation. Do NOT extract memories or reference past sessions — this is the starting baseline."
 
 WHY_EXCAVATION_SYSTEM_PROMPT (extends base):
 Add: "You are conducting a Why Excavation — a structured Socratic dialogue to uncover the user's deepest identity-level motivation. Use the 5 Whys method. Each turn: acknowledge what they said, then ask one deeper 'why' question. After 4–6 turns, synthesize their answers into a single 'Why Statement' in this format: 'You want to [identity goal] — someone who [specific character trait implied by their answers].' Present this statement and ask them to accept or refine it. Then ask for one Identity Declaration: 'Complete this: I am someone who...'"
 
 CHECKIN_DEBRIEF_SYSTEM_PROMPT:
-"You are the Forge Coach reviewing the user's daily accountability mirror entry. Prior memories about this user: {MEMORIES}. Today's entry: analyze it against their stated why ({WHY_STATEMENT}) and identity declaration ({IDENTITY_DECLARATION}). Classify their mood signal (crushing/steady/struggling/excusing/deflecting) and give them a direct debrief in 150–250 words: what patterns you see, whether their actions match their identity, and one specific next step. If they are excusing or deflecting, name it directly."
+"You are the Forge Coach reviewing the user's daily accountability mirror entry.
+
+User profile:
+- Why Statement: {WHY_STATEMENT}
+- Identity Declaration: {IDENTITY_DECLARATION}
+- Current Forge Score: {FORGE_SCORE}
+
+Relevant memories about this user:
+{MEMORIES}
+
+Today's entry: analyze it against their stated why and identity declaration. Your response must be 150–250 words. Identify at least one excuse or deflection pattern if present. Acknowledge genuine wins without over-praising. Surface one specific observation. End with one concrete challenge or question for the day. If mood is 'excusing' or 'deflecting', name it directly."
 
 FORTY_PERCENT_RULE_SYSTEM_PROMPT:
-"The user is at their mental limit and about to quit or miss a commitment. Research shows humans give up at 40% of their true capacity. Your job: deliver a direct, specific intervention in 100–150 words. Reference their Why Statement. Name the exact choice they're making. Give them one micro-step they can take in the next 5 minutes. Do not be gentle. Do not offer an exit. Give them a way through."
+"The user is at their mental limit. Context: {TRIGGER_CONTEXT}. Their most relevant past victory: {COOKIE_JAR_ENTRY}. Their Why Statement: {WHY_STATEMENT}. Their current Forge Score: {FORGE_SCORE}.
+
+Deliver a direct intervention in 150–200 words. The heading reads 'YOUR MIND IS LYING TO YOU' — your text continues from that. Tell them research shows they are at 40% of their true capacity. Reference their specific triggered habit or check-in pattern. Pull from their cookie jar victory if relevant. End with: one concrete next step they can take in the next 5 minutes. Do not be gentle. Do not offer an exit."
 
 CREATE lib/gemini/embeddings.ts:
 - Export async function generateEmbedding(text: string): Promise<number[]>
 - Uses embeddingModel.embedContent(text)
-- Returns the embedding values array
-- Include error handling with retry (1 retry on failure)
+- Returns embedding.values array
+- Include error handling with 1 retry on failure
 
-ACCEPTANCE: No TypeScript errors. Importing from lib/gemini/client.ts works without runtime errors (API key not needed for compilation check).
+ACCEPTANCE: No TypeScript errors. Importing from lib/gemini/client.ts works without runtime errors.
 ```
 
 ---
 
-### Step 2.2 — SSE Streaming Endpoint
+### Step 2.2 — SSE Streaming Endpoint + Classify Endpoint
 
 ```
-Build the Server-Sent Events (SSE) streaming endpoint for AI coaching responses.
+Build the Server-Sent Events streaming endpoint and the mood classification endpoint for AI coaching responses.
 
 CREATE app/api/coach/stream/route.ts:
 
 This is a POST endpoint that:
-1. Authenticates the user via Supabase server client
-2. Parses the request body: { session_type, messages, context }
-   - session_type: 'onboarding_mirror' | 'why_excavation' | 'checkin_debrief' | 'direct_chat' | 'forty_percent' | 'challenge_reflection'
+1. Authenticates the user via Supabase server client (return 401 if not authenticated)
+2. For session_type 'direct_chat' and 'daily_checkin': verify user is Pro/Elite tier; return 403 if Free
+3. Parses the request body: { session_type, messages, context }
+   - session_type: 'onboarding_mirror' | 'why_excavation' | 'daily_checkin' | 'forty_percent_rule' | 'direct_chat'
    - messages: Array<{role: 'user'|'model', parts: [{text: string}]}>
-   - context: { why_statement?, identity_declaration?, memories? }
-3. Selects the appropriate system prompt from lib/gemini/prompts.ts based on session_type
-4. For checkin_debrief: interpolates WHY_STATEMENT, IDENTITY_DECLARATION, MEMORIES into the prompt
-5. Calls geminiPro.startChat({ history: messages, systemInstruction: systemPrompt })
-6. Calls chat.sendMessageStream(lastUserMessage)
-7. Returns a ReadableStream (SSE format):
+   - context: { why_statement?, identity_declaration?, forge_score?, memories?, trigger_context?, cookie_jar_entry? }
+4. Selects the appropriate system prompt from lib/gemini/prompts.ts based on session_type
+5. If coach_intensity = 'firm': use FORGE_COACH_FIRM_PROMPT as base instead of FORGE_COACH_BASE_SYSTEM_PROMPT
+6. For daily_checkin and forty_percent_rule: interpolate context variables into the prompt
+7. Calls geminiPro.startChat({ history: messages[0..-2], systemInstruction: systemPrompt })
+8. Calls chat.sendMessageStream(lastUserMessage)
+9. Returns a ReadableStream (SSE format):
    - Each chunk: `data: ${JSON.stringify({ text: chunk.text() })}\n\n`
    - On completion: `data: [DONE]\n\n`
    - On error: `data: ${JSON.stringify({ error: 'Coach unavailable' })}\n\n`
 
-Response headers: Content-Type: text/event-stream, Cache-Control: no-cache, Connection: keep-alive
+Response headers: Content-Type: text/event-stream, Cache-Control: no-cache, Connection: keep-alive, X-Accel-Buffering: no
 
-Rate limiting: Check a simple in-memory counter per userId (20 requests/hour). If exceeded return 429 with { error: 'Rate limit exceeded. Try again in an hour.' }
+Rate limiting: 20 requests/hour per user. Track in a server-side Map (user_id → {count, resetAt}). Return 429 if exceeded.
 
-Note: For onboarding_mirror session_type, do NOT trigger memory extraction after the response completes.
+CREATE app/api/coach/classify/route.ts:
+
+This is a POST endpoint for non-streaming mood/honesty classification (separate from the streaming endpoint per PRD spec):
+1. Authenticate user
+2. Parse body: { checkin_id, text }
+3. Call Gemini 2.5 Flash (NOT Pro — this is a cheap/fast classification call) with prompt:
+   "Analyze this daily check-in text and return JSON with exactly these two fields:
+   1. honesty_score: integer 1–10 (1=entirely avoidant/deflecting, 10=radically self-aware and accountable)
+   2. mood_signal: one of exactly: 'excusing' | 'deflecting' | 'owning' | 'crushing'
+   
+   Definitions:
+   - excusing: user is rationalizing failures, blaming circumstances
+   - deflecting: user is changing the subject, avoiding the real issue
+   - owning: user is acknowledging their actions honestly, neither great nor bad
+   - crushing: user is genuinely thriving, high accountability + positive results
+   
+   Text: {text}
+   
+   Return ONLY valid JSON, no other text."
+4. Use responseMimeType: 'application/json' for structured output
+5. Return { honesty_score, mood_signal }
 
 CREATE a client-side hook lib/hooks/useStreamingResponse.ts:
 - Takes endpoint URL and request body
 - Manages streaming state: { text: string, isStreaming: boolean, isComplete: boolean, error: string | null }
-- Uses fetch with ReadableStream reader
-- Parses SSE data lines
-- Handles [DONE] signal
+- Uses fetch with ReadableStream reader to parse SSE data lines
+- Handles [DONE] signal to set isComplete=true
 - Exports: { streamedText, isStreaming, isComplete, error, startStream }
 
-ACCEPTANCE: POST to /api/coach/stream with a valid session and test message returns a streaming SSE response. The hook correctly accumulates streamed text chunks.
+ACCEPTANCE: POST to /api/coach/stream with session_type='onboarding_mirror' returns SSE stream. POST to /api/coach/classify returns { honesty_score: number, mood_signal: string }. Free user gets 403 on 'daily_checkin' session type.
 ```
 
 ---
@@ -499,32 +605,33 @@ ACCEPTANCE: POST to /api/coach/stream with a valid session and test message retu
 Build the Onboarding Step 1 — Accountability Mirror page.
 
 CREATE app/(onboarding)/mirror/page.tsx:
+(URL: /onboarding/mirror)
 
 LAYOUT: Full-screen dark layout (#0A0908). No sidebar. No header nav.
 Centered content, max-width 720px, padding 48px 24px.
 
 TOP: Small breadcrumb "Step 1 of 3" (text-xs, text-muted). Below: "Face the Mirror" (text-4xl, font-heading, text-primary). Below: "Write the truth about where you are right now. Your failures. Your excuses. Your wasted potential. Don't filter it." (text-base, text-secondary, max-width 560px).
 
-TEXTAREA: width 100%, height 60vh minimum, background #161514, border 1px solid #2A2927, text-primary, text-base, line-height 1.65, padding 20px, no border-radius (sharp), placeholder "Start writing..." that disappears on focus. No character counter visible.
+TEXTAREA: width 100%, height 60vh minimum, background #161514, border 1px solid #2A2927, text-primary, text-base, line-height 1.65, padding 20px, no border-radius (sharp), placeholder "Start writing..." that disappears on focus.
 
-SUBMIT BUTTON: "Submit to the Mirror" — full width, bg #FF6B2B, text black, font-bold, sharp corners, disabled + opacity-50 until textarea has ≥100 characters. On hover: bg #FF5214, ::after glow effect.
+SUBMIT BUTTON: "Submit to the Mirror" — full width, bg #FF6B2B, text black, font-bold, sharp corners, disabled + opacity-50 until textarea has ≥100 characters. On hover: bg #FF5214 with ::after glow.
 
 AI RESPONSE AREA (hidden until submit):
 - Appears below the submitted text
-- Has a left border 3px solid #FF6B2B
-- Padding 20px
-- Text streams in character by character (use useStreamingResponse hook)
-- "Forge Coach is thinking..." animated state (pulsing dots) shown while waiting for first token (up to 3 seconds)
-- After streaming completes: "I'm Ready — Continue" button appears (same style as submit button)
-- Clicking Continue: calls tRPC user mutation to set onboarding_step = 'why', then router.push('/onboarding/why')
+- Left border 3px solid #FF6B2B, padding 20px
+- "Forge Coach is thinking..." animated pulsing dots state shown while waiting for first token (up to 3 seconds)
+- Text streams in via useStreamingResponse hook
+- After streaming completes: "I'm Ready — Continue" button appears (same orange style)
+- Clicking Continue: calls tRPC user.updateProfile to set onboarding_step = 'why', then router.push('/onboarding/why')
 
-DATA STORAGE: On submit, call tRPC checkins.submit with { raw_text, is_onboarding_mirror: true, local_date }. Store the AI response via a second tRPC call checkins.updateAiResponse once streaming completes.
+DATA STORAGE:
+- On submit: call tRPC checkins.submit with { text: rawText, localDate, onboarding_mirror: true }
+- Store the AI response by calling tRPC checkins.updateMetadata after stream completes (ai_response field)
+- Do NOT run mood classification or memory extraction for onboarding_mirror entries
 
-STATE MANAGEMENT: submitted (boolean), submittedText (string), streamedResponse (string), isComplete (boolean).
+If user has already completed this step (users.onboarding_step !== 'mirror'), redirect to /onboarding/why immediately.
 
-If user has already completed this step (onboarding_step !== 'mirror'), redirect to /onboarding/why immediately.
-
-ACCEPTANCE: User can type ≥100 chars. Submit button enables. On submit, AI streams a response. After streaming completes, "I'm Ready — Continue" button appears. Clicking it redirects to /onboarding/why.
+ACCEPTANCE: User can type ≥100 chars. Submit button enables. AI streams a response. After streaming completes, "I'm Ready — Continue" appears. Clicking it redirects to /onboarding/why.
 ```
 
 ---
@@ -535,40 +642,39 @@ ACCEPTANCE: User can type ≥100 chars. Submit button enables. On submit, AI str
 Build the Onboarding Step 2 — Why Excavation multi-turn chat page.
 
 CREATE app/(onboarding)/why/page.tsx:
+(URL: /onboarding/why)
 
 LAYOUT: Full-screen dark layout. No sidebar. Centered, max-width 720px.
 Top: "Step 2 of 3" breadcrumb. Title: "Excavate Your Why" (text-4xl, font-heading). Subtitle: "Your coach will guide you to the motivation that won't break." (text-secondary).
 
 CHAT INTERFACE:
 - Messages list: scrollable area, max-height 65vh, overflow-y-auto
-- Coach messages: left-aligned bubble, background #111110, border 1px solid #1A3A6E (blue), text-secondary, padding 16px, max-width 85%
-- User messages: right-aligned bubble, background #1A1918, border 1px solid #2A2927, text-primary, padding 16px, max-width 85%
+- Coach messages: left-aligned, background #111110, border 1px solid #1A3A6E (blue), text-secondary, padding 16px, max-width 85%, no border-radius
+- User messages: right-aligned, background #1A1918, border 1px solid #2A2927, text-primary, padding 16px, max-width 85%
 - Auto-scroll to bottom on new message
 
-INITIAL STATE: On page load, show the coach's opening message streaming in: "What's the one thing you want most to change or achieve? Be specific — not 'be better', but what does better actually look like for you?"
+INITIAL STATE: On page load, coach's opening message streams in:
+"What's the one thing you want most to change or achieve? Be specific — not 'be better', but what does better actually look like for you?"
 
 INPUT AREA: Fixed at bottom. Textarea (1–3 lines, auto-expand). "Send" button (bg orange, sharp). Disable send while coach is streaming.
 
 TURN MANAGEMENT:
 - Track conversation as messages array: Array<{role: 'user'|'coach', content: string}>
-- On each user send: append user message, POST to /api/coach/stream with session_type='why_excavation', full conversation history
-- Stream coach response and append
-- Max 8 turns total
+- On each user send: append message, POST to /api/coach/stream with session_type='why_excavation', full conversation history
+- Max 8 turns total. If not at identity level by turn 6, coach synthesizes from available info.
 
 WHY STATEMENT ACCEPTANCE FLOW:
-- After turn 4–6, the coach will present a Why Statement
-- Detect this by checking if the coach response contains the pattern "You want to..."
-- When detected: show the statement in a highlighted card (border 2px solid #FF6B2B, padding 24px)
-- Two buttons: "This is my truth — Accept" (orange button) and "Refine it" (ghost button, max 2 refinement attempts)
+- Detect when coach response contains the pattern "You want to..." — show that statement in a highlighted card (border 2px solid #FF6B2B, padding 24px, bg #1A0A04)
+- Two buttons: "This is my truth — Accept" (orange) and "Refine it" (ghost, max 2 refinements)
 - On Accept: show Identity Declaration input: "Complete this: I am someone who..." (text input, full width)
-- On Identity Declaration submit: call tRPC user.updateProfile({ why_statement, identity_declaration })
-- Then show "Identity Locked" badge animation (badge icon: scale(0) rotate(-15deg) → scale(1.15) rotate(5deg) → scale(1) with Framer Motion spring stiffness:250 damping:12)
-- Award badge via tRPC (badge_type: 'identity_locked')
-- "Continue to Step 3" button appears → set onboarding_step = 'environment' → redirect to /onboarding/environment
+- On Identity Declaration submit: call tRPC user.updateWhy({ whyStatement, identityDeclaration })
+- Then show "Identity Locked" badge animation: badge icon goes scale(0) rotate(-15deg) → scale(1.15) rotate(5deg) → scale(1) using Framer Motion spring { stiffness: 250, damping: 12 } — total ~500ms
+- Call tRPC to award 'identity_locked' badge and 200 XP (onboarding XP)
+- "Continue to Step 3" button → set onboarding_step = 'environment' → redirect to /onboarding/environment
 
 NO back button. This is a commitment.
 
-ACCEPTANCE: Multi-turn chat works. After 4–6 turns a Why Statement card appears. User can accept or refine (max 2). After accepting and entering Identity Declaration, the badge animation plays. Redirects to Step 3.
+ACCEPTANCE: Multi-turn chat works. After 4–6 turns a Why Statement card appears. User can accept or refine (max 2). Badge animation plays after accepting. Redirects to Step 3.
 ```
 
 ---
@@ -579,37 +685,37 @@ ACCEPTANCE: Multi-turn chat works. After 4–6 turns a Why Statement card appear
 Build the Onboarding Step 3 — Environment Audit page.
 
 CREATE app/(onboarding)/environment/page.tsx:
+(URL: /onboarding/environment)
 
 LAYOUT: Full-screen dark layout. No sidebar. Centered, max-width 640px.
-Top: "Step 3 of 3" breadcrumb + progress bar (1–12 steps, orange fill, height 4px, sharp).
-Title changes per question.
+Progress bar: top of page, 4px height, orange fill, sharp, advances 1/12 steps.
 
 THE 12 QUESTIONS (one per screen, multiple choice 3–4 options):
-1. "Where is your phone at night?" → [On my nightstand, plugged in, In another room, Under my pillow, I don't have a set place]
-2. "Do you have social media apps on your home screen?" → [Yes, multiple, Yes, one or two, No, they're in folders, No, I deleted them]
-3. "Describe your workspace" → [Clean desk, minimal distractions, Somewhat cluttered, Very cluttered / I work from my couch, I don't have a dedicated workspace]
-4. "How accessible is junk food in your home?" → [None in the house, It's there but out of sight, It's visible on the counter, Everywhere and easy to grab]
-5. "Where is your alarm?" → [Phone next to my bed, Across the room / separate alarm clock, I use a phone on a table, No alarm / I wake naturally]
-6. "Do you have books or learning material visible?" → [Books on my desk / shelf I can see, Books exist but stored away, I read digitally only, I don't read regularly]
-7. "How easy is it to drink water in your home?" → [Water bottle always filled and visible, I have to go get water each time, I usually forget to drink water, I prefer other drinks]
+1. "Where is your phone at night?" → [On my nightstand, In another room, Under my pillow, No set place]
+2. "Do you have social media apps on your home screen?" → [Yes, multiple, Yes, one or two, In folders, Deleted them]
+3. "Describe your workspace" → [Clean desk, minimal distractions, Somewhat cluttered, Very cluttered / couch, No dedicated workspace]
+4. "How accessible is junk food in your home?" → [None in the house, There but out of sight, Visible on the counter, Everywhere and easy to grab]
+5. "Where is your alarm?" → [Phone next to my bed, Across the room / separate alarm, I don't use an alarm]
+6. "Do you have books or learning material visible?" → [Books on my desk / shelf, Books stored away, Digital only, I don't read regularly]
+7. "How easy is it to drink water in your home?" → [Water bottle always filled and visible, Have to go get water, Usually forget to drink water]
 8. "Where is your gym bag or workout gear?" → [Ready and visible, Put away but accessible, Have it but rarely use it, I don't have workout gear]
-9. "Do you have a TV in your bedroom?" → [Yes and I watch it most nights, Yes but I rarely use it, No]
-10. "How would you describe your phone notification settings?" → [Most notifications off, only essentials, Many apps send notifications, Everything is on, I've never adjusted them]
-11. "How would you describe your sleep environment?" → [Dark, cool, no screens — optimized, Pretty good but room for improvement, Screens on, not dark enough, Pretty chaotic]
+9. "Do you have a TV in your bedroom?" → [Yes and I watch it most nights, Yes but rarely, No]
+10. "How would you describe your phone notification settings?" → [Most off — only essentials, Many apps send notifications, Everything is on]
+11. "How would you describe your sleep environment?" → [Dark, cool, no screens — optimized, Pretty good but improvable, Screens on / not dark enough, Chaotic]
 12. "What is your biggest environmental trigger for your main bad habit?" → [Social media / phone, Food / kitchen, Certain people or places, Evening / night time, Stress]
 
-UI: Card layout. Question title text-2xl, options as large clickable cards (border #2A2927, bg #111110, hover bg #1A1918, selected: border #FF6B2B bg #1A0A04). Back/Next navigation. "Submit" on step 12.
+UI: Card layout. Each question title text-2xl. Options as large clickable cards (border #2A2927, bg #111110, hover bg #1A1918, selected: border #FF6B2B bg #1A0A04). Back/Next navigation. "Submit" on step 12.
 
 ON SUBMIT:
 - Call tRPC user.submitEnvironmentAudit with all 12 answers
-- This calls Gemini 2.5 Flash with a structured JSON output prompt:
-  "Based on these environment audit answers: {answers}, generate 5–8 specific, actionable environment redesign recommendations. Return JSON array: [{item: string, category: string, done: boolean}]. Each item must be a specific physical action (e.g., 'Move your phone charger to the kitchen tonight' not 'Use your phone less'). Reference the user's specific answers."
+- Server calls Gemini 2.5 Flash with responseMimeType: 'application/json' and this prompt:
+  "Based on these environment audit answers: {answers}, generate 5–8 specific, actionable environment redesign recommendations. Return JSON array: [{item: string, category: string, done: false}]. Each item must be a specific physical action with a specific location (e.g., 'Move your phone charger to the kitchen counter tonight' not 'Use your phone less'). Reference the user's actual answers."
 - Display results as numbered checklist cards
-- Each card has title + "Mark as Done" button (calls tRPC user.markEnvironmentItemDone)
-- Completing any item: award 50 XP
-- "Enter the Forge" button at bottom: sets onboarding_complete = true, onboarding_step = 'complete', redirects to /app/dashboard
+- Each card has item text + "Mark as Done" button (calls tRPC user.markEnvironmentItemDone)
+- Each "Done" item: award 50 XP (event_type: 'environment')
+- "Enter the Forge" button at bottom: sets onboarding_complete = true, onboarding_step = 'complete', redirects to /dashboard
 
-ACCEPTANCE: All 12 questions display with proper navigation. On submit, AI generates personalized recommendations in <10 seconds. "Mark as Done" works. "Enter the Forge" redirects to dashboard.
+ACCEPTANCE: All 12 questions display with proper navigation. On submit, AI generates personalized recommendations. "Mark as Done" awards 50 XP. "Enter the Forge" redirects to /dashboard.
 ```
 
 ---
@@ -626,69 +732,74 @@ Implement full habit management for MindForge.
 
 UPDATE server/trpc/routers/habits.ts with real implementations:
 
-habits.list: Protected query. Fetch all active habits for user (is_active = true). Also fetch today's completion status for each habit from habit_completions where local_date = today. Return: Array<{id, name, category, habit_type, frequency_days, current_streak, longest_streak, today_status: 'pending'|'completed'|'missed'}>
+habits.list: Protected query. Fetch all active habits for user (is_active = true). Also fetch today's completion status for each habit from habit_completions where local_date = input.localDate. Also fetch habit_streaks for each habit. Return: Array<{ id, name, category, habit_type, target_frequency, target_days, sort_order, current_streak, longest_streak, today_status: 'pending'|'completed'|'missed' }>
 
-habits.create: Protected mutation. Input: {name (max 60 chars), category, habit_type, frequency_days}. 
+habits.create: Protected mutation. Input: { name (max 60 chars, required), category, habit_type, target_frequency, target_days? }
 - Free tier check: count active habits — if ≥3, throw FORBIDDEN with { upgradeRequired: true }
-- Insert into habits
-- Insert into habit_streaks with defaults
-- Award badge 'first_habit_logged' if this is their first habit ever (check badge table)
+- Insert into habits table
+- Insert into habit_streaks with current_streak=0, longest_streak=0
 - Return created habit
 
-habits.update: Protected mutation. Input: {id, name?, category?, frequency_days?}. Verify habit belongs to user. Update habits row.
+habits.update: Protected mutation. Input: { id, name?, category?, target_frequency?, target_days? }
+- Verify habit.user_id = ctx.user.id
+- Update habits row
 
-habits.archive: Protected mutation. Input: {id}. Set is_active = false. Habit excluded from all future calculations.
+habits.archive: Protected mutation. Input: { id }
+- Verify ownership
+- Set is_active = false
 
-habits.logCompletion: Protected mutation. Input: {habit_id, local_date (DATE string 'YYYY-MM-DD'), completed (boolean)}.
+habits.logCompletion: Protected mutation. Input: { habitId, localDate (DATE string 'YYYY-MM-DD'), completed (boolean) }
 - Verify habit belongs to user
-- Upsert into habit_completions
-- Call recalculateStreak(habit_id, user_id, local_date)
-- If completed: call awardXP(user_id, 20, 'habit_completed', habit_id)
-- Call recalculateForgeScore(user_id)
-- If completed and streak ≥7: check if 'seven_day_streak' badge already earned; if not, award it
-- If NOT completed and current_streak ≥7 BEFORE this miss: trigger 40% Rule flag (return { triggerFortyPercent: true } in response)
-- Return: { streak: newStreakValue, forgeScore: newScore, xpAwarded: number, leveledUp: boolean, triggerFortyPercent: boolean }
+- Upsert into habit_completions (ON CONFLICT (habit_id, local_date) DO UPDATE SET completed = EXCLUDED.completed, completion_time = NOW())
+- Call recalculateStreak(habitId, userId, localDate)
+- If completed: call awardXP(userId, 20, 'Habit completed', 'habit_complete')
+- Call recalculateForgeScore(userId)
+- If completed and streak becomes ≥7: check and award 'seven_day_streak' badge (use PRD badge key) — but wait: per PRD the 'seven_day_streak' badge is not in the v1 badge list. See Phase 5 for correct badge logic.
+- If NOT completed and streak WAS ≥7 before this miss: return triggerFortyPercent: true
+- Return: { streak, forgeScore, xpAwarded, leveledUp, triggerFortyPercent }
+
+habits.getCompletionHistory: Protected query. Input: { habitId, days: number }. Return habit_completions for that habit for the last N days.
 
 CREATE lib/streak.ts:
-recalculateStreak(habit_id, user_id, local_date):
+async function recalculateStreak(habitId: string, userId: string, localDate: string): Promise<number>
 - Query habit_completions for this habit, last 90 days, ordered by local_date DESC
-- Walk back from local_date counting consecutive days where completed = true
-- Stop at first gap or missed day
-- Update habit_streaks: { current_streak, longest_streak (max of current and existing), last_completed_date }
+- Walk back from localDate counting consecutive days where completed = true
+- Stop at first gap (non-completed day counts as a gap; future dates are not a gap)
+- Update habit_streaks: { current_streak, longest_streak: max(current, existing_longest), last_completed_date }
 - Return current_streak
 
 CREATE app/(app)/habits/page.tsx:
+(URL: /habits)
 List of all habits. "New Habit" button top right.
 Each habit shown as HabitCard component.
-If user is on free tier and has 3 habits: show upgrade banner.
+Pass today's local date (client-side: new Date().toLocaleDateString('en-CA', { timeZone: userTimezone })) to habits.list query.
+If free tier user has 3 habits: show upgrade banner above list.
 
 CREATE components/forge/HabitCard.tsx:
-Props: habit object (name, category, habit_type, today_status, current_streak).
-Sharp rectangular card, background #111110, border-left 3px solid:
+Props: habit (name, category, habit_type, today_status, current_streak).
+Sharp card, background #111110, border-left 3px solid:
 - Completed: #22C55E (green)
-- Missed: #EF4444 (red)  
+- Missed: #EF4444 (red)
 - Pending: #FF6B2B (orange)
-Name (text-xl, font-heading), category badge (text-xs, rounded-sm), streak info (text-sm, text-muted).
-Two buttons: "Completed" (bg green, text white) and "Missed" (bg red, text white). 
-Disable both if already logged today. Show logged state instead.
-On "Completed" click: optimistic update (instant UI change) + POST to habits.logCompletion.
-Forge Spark animation on completion: 6–8 CSS particles (orange, random ±30px x, -20 to -60px y, scale to 0, 400ms, staggered 30ms delays). Implement as pure CSS @keyframes.
+Name text-xl font-heading, category badge text-xs, streak (text-sm text-muted).
+Two buttons: "Completed" (bg #22C55E, text white) and "Missed" (bg #EF4444, text white). Both disabled + locked state if already logged today.
+On "Completed" click: optimistic update immediately + call habits.logCompletion.
+Forge Spark animation on completion: 6–8 CSS particles (pure CSS @keyframes, NOT a JS animation library). Each particle: orange (#FF6B2B), starts at card center, moves ±30px x and -20 to -60px y, scale to 0, 400ms total, staggered at 0/30/60/90/120/150/180/210ms delays. Randomize particle count (6–8, not fixed) for variable reward.
 
 CREATE app/(app)/habits/[id]/page.tsx:
-Habit detail page.
-Top: habit name + category + edit/archive buttons.
-Stats row: Current Streak, Longest Streak, Completion Rate % (text-display size, orange numbers).
+(URL: /habits/[id])
+Habit detail: name + edit/archive buttons. Stats row: Current Streak, Longest Streak, Completion Rate % (text-display, orange numbers, tabular-nums). HabitGrid component below.
 
 CREATE components/forge/HabitGrid.tsx:
-Calendar grid showing last 90 days.
-7 columns (Mon–Sun). Each cell is a 12x12px square.
-Colors: green (#22C55E) = completed, red (#EF4444) = missed, charcoal (#2A2927) = pending/no-data.
-Hover tooltip: "March 15 — Completed" (use Radix UI Tooltip).
+Calendar grid of last 90 days. 7 columns (Sun–Sat). Each cell 12×12px square.
+Colors: #22C55E = completed, #EF4444 = missed, #2A2927 = no data/future.
+Hover: Radix UI Tooltip showing "June 10 — Completed".
 
-CREATE the habit create modal (or /app/habits/new page):
-Form: Name input, Category select (health/mind/avoid/perform), Type select (build/avoid), Frequency multi-select (Mon–Sun checkboxes). Submit creates habit via tRPC.
+CREATE app/(app)/habits/new/page.tsx:
+(URL: /habits/new)
+Form: Name input (max 60 chars), Category select (health/mind/avoid/perform), Type select (build/avoid), Frequency: daily / weekdays / custom. If custom: Mon–Sun checkbox grid. Submit creates habit via tRPC habits.create.
 
-ACCEPTANCE: User can create, view, complete, and miss habits. Streak increments correctly. Forge Spark animation fires on completion. Calendar grid shows history correctly.
+ACCEPTANCE: User can create, view, complete, and miss habits. Streak increments correctly. Forge Spark animation fires on completion. Calendar grid shows history correctly. Free tier enforced at 3 habits.
 ```
 
 ---
@@ -699,46 +810,59 @@ ACCEPTANCE: User can create, view, complete, and miss habits. Streak increments 
 Update the dashboard to show today's habits and key metrics.
 
 UPDATE app/(app)/dashboard/page.tsx:
+(URL: /dashboard)
 
 LAYOUT: Two-column on desktop (lg+), single column on mobile.
-Left column (2/3 width): Habit cards for today + check-in CTA.
-Right column (1/3 width): Forge Score widget + XP bar + quick stats.
+Left column (2/3 width): Check-in CTA + habit cards.
+Right column (1/3 width): Forge Score + XP bar + active challenge (if any) + quick stats.
+
+Use a single tRPC call: dashboard.getAll({ localDate: today }) returning: { user, habits, todayCheckin, activeChallenge, forgeScore, xp, level, topStreaks, recentCookieJar }.
+
+Wrap the entire data-dependent area with React Suspense + skeleton loaders.
 
 SECTIONS:
 
-1. DAILY MIRROR CTA CARD (if no check-in today):
-Background #111110, border-left 3px solid #FF6B2B.
-Text: "The Mirror is waiting — face it" (text-xl, font-heading, text-primary).
-Subtext: "Daily reflection keeps your coach sharp." (text-sm, text-muted).
-Button: "Open the Mirror" → /app/checkin.
-If check-in already done today: show "Mirror complete today ✓" (green text, text-sm).
+1. DAILY MIRROR CTA CARD:
+If no check-in today: Background #111110, border-left 3px solid #FF6B2B. Text: "The Mirror is waiting — face it" (text-xl, font-heading). Subtext: "Daily reflection keeps your coach sharp." (text-sm, text-muted). "Open the Mirror" button → /checkin.
+If check-in done today: show "Mirror complete today" in green (text-sm, no emoji per PRD — use a text checkmark or status badge).
 
 2. TODAY'S HABITS section:
 "Today's Habits" heading (text-2xl, font-heading).
-Render HabitCard for each active habit (pending habits for today's frequency_days).
-If no habits yet: empty state card with "Add your first habit" CTA → /app/habits/new.
+Render HabitCard for each active habit scheduled for today (check target_days matches today's day-of-week).
+If no habits: empty state card with "Add your first habit" CTA → /habits/new.
 
 3. RIGHT COLUMN — Forge Score widget:
-Large ForgeScore component (score number in display size, orange).
-Below: "Identity: [identity_declaration]" in text-xs text-muted (truncated to 60 chars).
+Large ForgeScore component. Score number in text-display, orange. Level label below (e.g., "Raw", "Tempered"). Delta indicator: "+12 today" in green or "-8 today" in red (text-sm).
 
 4. RIGHT COLUMN — XP Bar:
 CREATE components/forge/XPBar.tsx:
-Shows level name + XP progress.
-Level formula: level = Math.floor(xp_total / 500) + 1. XP needed for next level = (level * 500) - xp_total.
-Progress bar: full width, height 8px, background #2A2927, fill #FF6B2B, sharp corners.
+Shows current level name + XP progress toward next level.
+Level thresholds (from PRD — non-linear, not uniform 500 XP):
+  - Level 1 (Raw):       0–499 XP
+  - Level 2 (Tempered):  500–1,499 XP
+  - Level 3 (Forged):    1,500–3,499 XP
+  - Level 4 (Hardened):  3,500–7,499 XP
+  - Level 5 (Unbreakable): 7,500–14,999 XP
+  - Level 6 (Legendary): 15,000+ XP
+Level calculation function (in lib/xp.ts):
+  function getLevelFromXP(xp: number): { level: number, name: string, progressPct: number }
+  Use the thresholds above. progressPct = progress within current level band.
+Progress bar: full width, height 8px, bg #2A2927, fill #FF6B2B, sharp corners.
 CSS width transition from old % to new % over 300ms cubic-bezier(0.16, 1, 0.3, 1).
-Level-up animation: bar fills to 100%, 200ms pause, resets to 0%, fills to new %.
-Level names: 1=Raw Iron, 2=Forged Steel, 3=Tempered Blade, 4=Battle-Hardened, 5=Unbreakable, 6=Iron Mind, 7=Forge Master, 8=Legendary.
+Level-up animation: bar fills 100%, 200ms pause, resets to 0% (instant), fills to new level %.
 
-5. RIGHT COLUMN — Streak summary:
-Active habits sorted by current streak, show top 3 with flame emoji + streak count.
+5. RIGHT COLUMN — Active Challenge:
+If user has an active challenge: show a card with challenge title, status "Active", and a countdown.
 
-Data fetching: Use a single tRPC query (create dashboard.getAll query) that returns: { habits, todayCheckin, forgeScore, xpTotal, xpLevel, topStreaks }. Use React Suspense + skeleton loaders for async state.
+6. RIGHT COLUMN — Recent Cookie Jar:
+Show last 3 cookie_jar_entries. Title only, text-sm, text-muted.
 
-CREATE skeleton loader components matching exact card dimensions (SkeletonHabitCard, SkeletonForgeScore, SkeletonXPBar).
+CREATE skeleton loader components: SkeletonHabitCard, SkeletonForgeScore, SkeletonXPBar (all match exact dimensions with animate-pulse).
 
-ACCEPTANCE: Dashboard shows today's habits, check-in CTA, Forge Score, XP bar. Completing a habit from the dashboard updates the card state instantly (optimistic UI) and the Forge Score animates up.
+UPDATE server/trpc/routers/dashboard.ts:
+- getAll query: single round-trip fetching user, today's habits + completion status, today check-in, active challenge (if any), forge score, xp/level, top streaks, recent cookie jar (last 3). Use Promise.all for parallel queries.
+
+ACCEPTANCE: Dashboard loads in <1.5s (React Suspense + single tRPC query). Completing a habit from dashboard updates state instantly (optimistic). Forge Score animates up with count-up. XP bar fills with correct level thresholds.
 ```
 
 ---
@@ -754,43 +878,66 @@ ACCEPTANCE: Dashboard shows today's habits, check-in CTA, Forge Score, XP bar. C
 Build the Daily Accountability Mirror check-in page.
 
 CREATE app/(app)/checkin/page.tsx:
+(URL: /checkin)
 
-LAYOUT: Centered, max-width 720px, padding 48px 24px. No special full-screen treatment (uses app shell).
+LAYOUT: Centered, max-width 720px, padding 48px 24px. Uses the app shell (sidebar + header).
+
+PAGE HEADING: "The Mirror — [Today's Date formatted as 'Tuesday, June 10']" (text-3xl, font-heading)
 
 STATES:
 A) No check-in today (default):
-- Title: "Daily Accountability Mirror" (text-3xl, font-heading)
-- Subtitle: current date formatted as "Tuesday, June 10" (text-sm, text-muted)
-- Textarea: same styling as onboarding mirror. Placeholder: "What's the honest truth about today? What did you do? What did you avoid? No excuses — just facts." Min 50 characters for submit.
-- "Submit to the Mirror" button (orange, full width, disabled until 50+ chars)
-- On submit: POST to SSE endpoint, stream AI debrief response below
-- If Free tier: show upgrade prompt instead of AI debrief: "Unlock your AI debrief — upgrade to Pro to get daily coaching from your Forge Coach."
+- Textarea: same dark styling as onboarding mirror. Placeholder: "What actually happened? Be honest." Character count shown bottom-right (text-xs, text-muted). Min 50 characters for submit.
+- "Submit to the Mirror" button (full width, orange, disabled until 50+ chars)
+- On submit: call tRPC checkins.submit({ text, localDate }), then start SSE stream to /api/coach/stream with session_type='daily_checkin'
+- Free tier: no SSE call. Instead show upgrade prompt: "Upgrade to Pro to unlock your AI debrief."
+- Award 30 XP on submit (event_type: 'checkin')
 
-B) Check-in submitted, AI streaming:
-- Submitted text shown above (background #1A1918, padding 16px, text-secondary)
-- "Forge Coach is analyzing..." state with animated dots
-- AI debrief streams in below with orange left border
+B) Check-in submitted, AI streaming (Pro):
+- Submitted text shown above in muted card (bg #1A1918, padding 16px, text-secondary)
+- "Forge Coach is analyzing..." pulsing dots
+- AI debrief streams in below with orange left border, blinking cursor until complete
+- After streaming: show honesty score badge "Honesty: X/10" (call /api/coach/classify, then tRPC checkins.updateMetadata)
+- If mood_signal is 'excusing' or 'deflecting': automatically show 40% Rule overlay (RuleForty component)
 
 C) Check-in complete for today:
 - Show submitted text (read-only)
 - Show AI debrief (if Pro)
-- "Check-in complete for today" green badge
-- "View yesterday's check-in" link (if prior check-in exists)
+- Honesty score badge visible
+- "Check-in complete for today" status indicator
+- Link to yesterday's check-in if it exists
 
 UPDATE server/trpc/routers/checkins.ts with real implementations:
-- submit: Insert into daily_checkins. After AI response is stored, trigger:
-  1. Mood classification (Gemini Flash) — classify as crushing/steady/struggling/excusing/deflecting + honesty_score 1–10. Update daily_checkins row.
-  2. Memory extraction (async, non-blocking) — call lib/gemini/memory.ts extractMemories(user_id, session_id, text)
-- getToday: Fetch today's check-in for user (null if none)
-- getHistory: Fetch last 30 check-ins for user
+
+checkins.submit: Protected mutation. Input: { text: string (min 50 chars for daily, min 100 for onboarding_mirror), localDate: string, onboarding_mirror?: boolean }
+- Validate text length server-side (return BAD_REQUEST if too short)
+- Insert into daily_checkins with field name raw_reflection (NOT raw_text per PRD data model)
+- Award XP 30 (event_type: 'checkin') for regular check-ins (not onboarding_mirror)
+- Trigger Forge Score recalculation
+- Return the created daily_checkin row
+
+checkins.updateMetadata: Protected mutation. Input: { checkinId, honestyScore, moodSignal, aiResponse? }
+- Verify checkin belongs to user
+- Update daily_checkins: set honesty_score, mood_signal, ai_response (if provided)
+
+checkins.getToday: Protected query. Input: { localDate: string }. Return today's check-in or null.
+
+checkins.getHistory: Protected query. Returns last 30 check-ins for user.
 
 CREATE lib/gemini/memory.ts:
-extractMemories(user_id, user_id, sessionId, checkInText):
-- Call Gemini 2.5 Flash with prompt: "Extract 0–3 atomic memory facts from this coaching session text. Return JSON array: [{content: string, category: 'trigger'|'victory'|'pattern'|'identity'|'goal'|'obstacle'}]. Only extract genuinely new information. Do not extract generic statements. Examples of good memories: 'User wakes up at 6am', 'User struggles with night snacking after 10pm', 'User completed their first 5K'. Text: {text}"
-- For each extracted memory: generate embedding via generateEmbedding(content), insert into memories table
-- Run asynchronously — do not block check-in response
+async function extractAndStoreMemories(userId: string, sessionId: string, text: string):
+- Call Gemini 2.5 Flash with prompt:
+  "Extract 0–3 atomic memory facts from this text. Return JSON array: [{content: string, memory_type: 'preference'|'trigger'|'victory'|'fear'|'identity'|'pattern'}].
+  Only extract genuinely new, specific facts. Skip generic statements.
+  Good examples: 'User wakes at 6am', 'User struggles with night snacking after 10pm', 'User fears disappointing their family'.
+  Text: {text}"
+  Use responseMimeType: 'application/json'
+- For each extracted memory: call generateEmbedding(content), insert into user_memories table
+- Store source_session_id reference
+- Run this function ASYNCHRONOUSLY after check-in response — do not block the user
 
-ACCEPTANCE: User can submit a daily check-in. AI debrief streams in (Pro). Free users see upgrade prompt. Check-in is read-only after submission. Mood classification is stored in DB after submission.
+Call extractAndStoreMemories after each successful check-in debrief AND after each direct coach conversation (not for onboarding_mirror).
+
+ACCEPTANCE: User can submit a daily check-in. AI debrief streams in (Pro). Honesty score appears after stream. Free users see upgrade prompt. Mood signal 'excusing' triggers 40% Rule overlay. Memory extraction runs in background.
 ```
 
 ---
@@ -800,56 +947,56 @@ ACCEPTANCE: User can submit a daily check-in. AI debrief streams in (Pro). Free 
 ```
 Implement the persistent memory and RAG retrieval system for the AI Forge Coach.
 
-This is the core AI differentiation feature — the coach remembers users across sessions.
-
 UPDATE lib/gemini/coach.ts:
 
-CREATE async function buildCoachContext(user_id: string):
-- Fetch user profile: why_statement, identity_declaration, xp_level, current_streak_days, forge_score
-- Fetch recent memories: SELECT content, category FROM memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 20
-- Return formatted context string:
-  "User profile:
-  - Why Statement: {why_statement}
-  - Identity Declaration: {identity_declaration}
-  - Current Forge Score: {forge_score}
-  - Current Streak: {current_streak_days} days
-  
-  Remembered facts about this user:
-  {memories formatted as bullet points by category}"
+CREATE async function buildCoachSystemPrompt(userId: string, currentMessage: string, sessionType: string): Promise<string>
+Steps (run in parallel with Promise.all):
+1. Fetch user profile: why_statement, identity_declaration, level, forge_score, coach_intensity
+2. Fetch active habits + current streaks (top 5 by streak length)
+3. Embed currentMessage with generateEmbedding(currentMessage)
+4. Query user_memories by semantic similarity (top 5):
+   SELECT content, memory_type, 1 - (embedding <=> $embeddingParam) as similarity
+   FROM user_memories
+   WHERE user_id = $userId
+   ORDER BY embedding <=> $embeddingParam
+   LIMIT 5
+5. Query cookie_jar_entries by semantic similarity (top 3):
+   SELECT title, description, 1 - (embedding <=> $embeddingParam) as similarity
+   FROM cookie_jar_entries
+   WHERE user_id = $userId
+   ORDER BY embedding <=> $embeddingParam
+   LIMIT 3
 
-CREATE async function retrieveRelevantMemories(user_id: string, queryText: string, limit: number = 5):
-- Generate embedding for queryText
-- Run pgvector similarity search:
-  SELECT content, category, 1 - (embedding <=> $1) as similarity
-  FROM memories
-  WHERE user_id = $2
-  ORDER BY embedding <=> $1
-  LIMIT $3
-- Returns array of { content, category, similarity }
-- Used for RAG retrieval when building check-in debrief context
+Build the system prompt string combining:
+- The base Forge Coach persona (or firm version based on coach_intensity)
+- The appropriate session-type prompt (CHECKIN_DEBRIEF_SYSTEM_PROMPT or direct chat instructions)
+- User profile section: Why Statement, Identity Declaration, Forge Score, Level, Active habits + streaks
+- Top 3 Cookie Jar victories
+- Top 5 semantic memories labeled by memory_type
 
 UPDATE app/api/coach/stream/route.ts:
-- For checkin_debrief and direct_chat session types:
-  1. Call buildCoachContext(user_id) — get full profile context
-  2. Call retrieveRelevantMemories(user_id, lastUserMessage) — get 5 most relevant memories
-  3. Inject both into the system prompt via interpolation before streaming
+For session_type 'daily_checkin' and 'direct_chat':
+1. Call buildCoachSystemPrompt(userId, lastUserMessage, sessionType)
+2. Use the enriched system prompt for the Gemini call
+For 'forty_percent_rule': also fetch top-1 cookie jar entry semantically matching the trigger context.
 
 CREATE app/(app)/coach/page.tsx (Pro-gated):
-Direct AI Coach chat page.
+(URL: /coach)
 
-TIER CHECK: If user is not Pro/Elite tier:
-- Show locked state: centered card, "Your Coach is waiting."  title, "The Forge Coach builds a persistent memory of your patterns, triggers, and victories — and uses them to coach you like no app ever has." description, "Unlock with Pro" orange button → /app/upgrade.
+TIER CHECK: If user is Free tier:
+- Show centered locked-state card: "Your coach is waiting." title, description of the memory system, "Unlock with Pro" orange button → /upgrade.
 
 IF PRO/ELITE:
-- Full-page chat interface similar to why_excavation but ongoing
-- Coach opening message loaded on page mount: a personalized greeting using buildCoachContext (streams in)
-- Message history: last 50 messages from coach_sessions table
-- Input at bottom, send on Enter or button click
+- Full-page chat interface
+- On mount: stream an opening personalized greeting (session_type='direct_chat', opening message from coach)
+- Message history: fetch last 50 messages from coaching_sessions table for this user (direct_chat type)
+- Input at bottom fixed, send on Enter (with Shift+Enter for newline) or "Send" button
 - Session type: 'direct_chat'
-- Each conversation stored in coach_sessions table
-- "Memory" indicator: small "(Coach remembers you)" badge near header, clicking it shows a modal with the user's stored memories
+- Each full conversation stored in coaching_sessions table (append to messages JSONB)
+- After conversation ends (user navigates away): trigger extractAndStoreMemories in background
+- "Memory" badge near header: clicking opens a modal showing user's stored memories from user_memories table, grouped by memory_type
 
-ACCEPTANCE: Check-in debriefs include references to past memories (after a few check-ins). /app/coach is gated by tier. Pro users can have freeform coach conversations with memory context.
+ACCEPTANCE: /coach is gated (Free tier sees locked state). Pro users get personalized opening message. Coach references past memories in responses. Memory extraction runs after sessions.
 ```
 
 ---
@@ -866,117 +1013,145 @@ Implement the full Forge Score calculation system.
 
 CREATE lib/forge-score.ts:
 
-FORGE SCORE FORMULA:
-The Forge Score (0–1000) is calculated from 5 weighted components:
-1. Habit Adherence Score (40% weight, max 400 pts):
-   - Last 14 days of habit completions
-   - completion_rate = completed_count / total_scheduled_count
-   - Score = completion_rate * 400
-   - Penalty: for each habit with streak broken in last 7 days, -20 pts
+FORGE SCORE FORMULA (per PRD Feature 8 — use this exactly):
+The Forge Score is an integer 0–1000. Always floor(), never round up.
 
-2. Check-In Consistency Score (25% weight, max 250 pts):
-   - Last 14 days of check-ins submitted
-   - checkin_rate = checkins_submitted / 14
-   - Score = checkin_rate * 250
+COMPONENT 1 — Streak Consistency (40% weight, max 400 points):
+- For each active habit: ratio = current_streak / max(longest_streak, 7), capped at 1.0
+- streak_score = average of all ratios across all active habits (if no habits: 0)
+- Points = floor(streak_score × 400)
 
-3. Honesty Score (15% weight, max 150 pts):
-   - Average honesty_score from last 7 check-ins (where not null)
-   - Score = (avg_honesty / 10) * 150
+COMPONENT 2 — Check-in Honesty Depth (20% weight, max 200 points):
+- Rolling 14-day average of honesty_score / 10 from daily_checkins (exclude null honesty_score rows)
+- If no check-ins: 0
+- Points = floor(average_ratio × 200)
 
-4. Challenge Activity Score (10% weight, max 100 pts):
-   - Active challenges: +50 pts
-   - Completed challenges: +10 pts each (max 5 additional challenges counted)
-   - Cap at 100 pts
+COMPONENT 3 — Challenge Completion (20% weight, max 200 points):
+- challenges_completed_this_month = count from user_challenges where status='completed' and completed_at >= start of current calendar month
+- challenges_available = count from challenges table (total active challenges accessible by user's tier)
+- ratio = challenges_completed_this_month / max(challenges_available, 1), capped at 1.0
+- Points = floor(ratio × 200)
 
-5. Environment Score (10% weight, max 100 pts):
-   - Count of environment_audit items marked done
-   - Score = (done_count / total_count) * 100
+COMPONENT 4 — Cookie Jar Growth (10% weight, max 100 points):
+- count = total cookie_jar_entries for user
+- ratio = min(count / 20, 1.0) — reaches max at 20 entries
+- Points = floor(ratio × 100)
 
-TOTAL = sum of all 5 components, rounded to nearest integer, capped at 1000, minimum 0.
+COMPONENT 5 — Environment Improvements (10% weight, max 100 points):
+- Parse users.environment_audit JSONB array
+- done_count = items where done = true; total_count = total items
+- ratio = done_count / max(total_count, 1), capped at 1.0
+- Points = floor(ratio × 100)
 
-CREATE async function recalculateForgeScore(user_id: string): Promise<number>:
-- Fetch all required data in parallel (use Promise.all for all 5 component queries)
-- Calculate each component
-- Sum and cap at 1000
-- Update users.forge_score
-- Insert into forge_score_history with current timestamp
-- Return new score
+TOTAL = floor(C1 + C2 + C3 + C4 + C5), min 0, max 1000
 
-This function must complete in <200ms — use indexed queries only, no N+1 patterns.
+CREATE async function recalculateForgeScore(userId: string): Promise<number>:
+- Fetch ALL required data in a SINGLE Promise.all (no N+1 queries):
+  - habit_streaks for user's active habits
+  - daily_checkins honesty scores (last 14 days)
+  - user_challenges completed this month
+  - count of active challenges (accessible by tier)
+  - cookie_jar_entries count
+  - users.environment_audit
+- Compute each component using the exact formula above
+- TOTAL must use floor(), NOT Math.round()
+- Update users.forge_score = TOTAL
+- Insert into forge_score_history: { user_id, score: TOTAL, recorded_at: now }
+- This function must complete in <200ms. Profile with EXPLAIN ANALYZE if slow.
+- Return TOTAL
 
-UPDATE server/trpc/routers/analytics.ts:
-- getForgeScoreHistory: Fetch last 90 days of forge_score_history for user, return as timeseries array [{date, score}]
+UPDATE server/trpc/routers/analytics.ts with real implementations:
+- forgeScoreHistory: { days: number } → SELECT score, recorded_at FROM forge_score_history WHERE user_id = ? AND recorded_at >= NOW() - interval '{days} days' ORDER BY recorded_at ASC → return [{date, score}]
 - getDashboardStats: Return { forgeScore, habitStats, checkinStreak, avgHonestyScore }
 ```
 
 ---
 
-### Step 5.2 — XP, Badges, and Gamification
+### Step 5.2 — XP, Levels, Badges, and 40% Rule Engine
 
 ```
-Implement XP system, all 6 badges, and the 40% Rule Engine.
+Implement the full XP system, all 6 badges, and the 40% Rule Engine component.
 
 CREATE lib/xp.ts:
 
-XP AWARD TABLE:
-- Habit completed: 20 XP
-- Daily check-in submitted: 30 XP
-- AI debrief received: 20 XP (Pro only)
-- Environment item marked done: 50 XP
-- Challenge completed: 100 XP
-- Cookie Jar entry added: 15 XP
-- 7-day streak milestone: 100 XP bonus
-- 30-day streak milestone: 300 XP bonus
+XP AWARD TABLE (per PRD Feature 13 — use these exact values):
+- Habit completed: 20 XP (event_type: 'habit_complete')
+- Daily check-in submitted: 30 XP (event_type: 'checkin')
+- Check-in with mood_signal = 'crushing': bonus 20 XP (event_type: 'checkin_bonus')
+- Callousing Challenge completed: challenge.xp_reward (varies 50–200 per challenge row) (event_type: 'challenge')
+- 40% Rule "I'll take that step" selected: 15 XP (event_type: 'forty_percent')
+- Cookie Jar entry added: 25 XP (event_type: 'cookie_jar')
+- Environment item marked done: 50 XP (event_type: 'environment')
+- Onboarding completed (Why Excavation + Environment Audit): 200 XP one-time (event_type: 'onboarding')
 
-CREATE async function awardXP(user_id: string, amount: number, reason: string, reference_id?: string):
-- Insert into xp_events
-- Update users.xp_total += amount
-- Calculate new level: Math.floor(new_xp_total / 500) + 1
-- If new level > old level: update users.xp_level, return { leveledUp: true, newLevel, levelName }
-- Return { leveledUp: boolean, newLevel: number, levelName: string, xpAwarded: number }
+DO NOT invent other XP sources not listed here. No "AI debrief received" XP. No flat "7-day streak bonus". These are not in the PRD.
 
-LEVEL NAMES MAP:
-1=Raw Iron, 2=Forged Steel, 3=Tempered Blade, 4=Battle-Hardened, 5=Unbreakable, 6=Iron Mind, 7=Forge Master, 8=Legendary
+LEVEL THRESHOLDS (per PRD — non-linear, use these exact boundaries):
+- Level 1 (Raw):        0–499 XP
+- Level 2 (Tempered):   500–1,499 XP
+- Level 3 (Forged):     1,500–3,499 XP
+- Level 4 (Hardened):   3,500–7,499 XP
+- Level 5 (Unbreakable):7,500–14,999 XP
+- Level 6 (Legendary):  15,000+ XP
+
+CREATE function getLevelFromXP(xp: number): { level: number, name: string, currentLevelMin: number, nextLevelMin: number | null, progressPct: number }
+- Iterates threshold table to find current level
+- progressPct = (xp - currentLevelMin) / (nextLevelMin - currentLevelMin) × 100 (for level 6: 100%)
+
+CREATE async function awardXP(userId: string, amount: number, reason: string, eventType: XPEventType): Promise<{ leveledUp: boolean, newLevel: number, levelName: string, xpAwarded: number }>
+- Insert into xp_events (xp_amount, reason, event_type)
+- Fetch users.xp (current total)
+- Update users.xp += amount
+- old_level = getLevelFromXP(oldXP).level
+- new_level = getLevelFromXP(oldXP + amount).level
+- If new_level > old_level: update users.level = new_level, return leveledUp: true
+- Return { leveledUp, newLevel, levelName: getLevelFromXP(oldXP + amount).name, xpAwarded: amount }
 
 CREATE lib/badges.ts:
 
-SIX v1 BADGES:
-1. identity_locked: Earned on completing Why Excavation onboarding
-2. first_habit_logged: Earned on logging a habit completion for the first time ever
-3. seven_day_streak: Earned when any habit reaches a 7-day consecutive streak
-4. cookie_jar_first: Earned on adding first Cookie Jar entry
-5. first_challenge_complete: Earned on completing a Callousing Challenge for the first time
-6. thirty_day_member: Earned on the 30th day after account creation
+SIX v1 BADGES (per PRD Feature 13 — these are the exact badge_key values and trigger conditions):
+1. 'identity_locked' — Why Excavation completed (onboarding Step 2)
+2. 'mirror_gazer' — 30-day daily check-in streak (check: 30 consecutive days of check-ins)
+3. 'cookie_jar_founder' — 10 or more Cookie Jar entries logged (not just the first)
+4. 'forty_percent_survivor' — Selected "I'll take that step" 5 times total (count rule_forty_events where choice='took_step')
+5. 'cold_mind' — 7 cold-category challenges completed in lifetime (count user_challenges joined to challenges where category='cold' and status='completed')
+6. 'tempered' — Reached Tempered level (500 XP total, i.e., level 2)
 
-CREATE async function checkAndAwardBadge(user_id: string, badge_type: BadgeType):
-- Check if badge already exists in badges table for this user (idempotent)
-- If not: INSERT into badges, award 50 XP with reason 'badge_earned'
-- Return { awarded: boolean, badge_type }
+CREATE async function checkAndAwardBadge(userId: string, badgeKey: BadgeKey): Promise<{ awarded: boolean }>
+- SELECT 1 FROM user_badges WHERE user_id = ? AND badge_key = ? (idempotent check)
+- If not yet awarded: INSERT into user_badges, call awardXP(userId, 50, 'Badge earned: ' + badgeKey, 'onboarding')
+- Return { awarded: true/false }
 
-CREATE async function checkThirtyDayBadge(user_id: string):
-- Fetch users.created_at
-- If (now - created_at) >= 30 days AND badge not yet awarded: award it
-- This runs on every daily check-in submission
+Badge trigger locations:
+- 'identity_locked': in onboarding Step 2 on Why Statement accept
+- 'mirror_gazer': in checkins.submit — check if last 30 days all have a check-in
+- 'cookie_jar_founder': in cookiejar.add — check if count >= 10
+- 'forty_percent_survivor': in rule_forty_events insert when choice='took_step' — check if total took_step count = 5
+- 'cold_mind': in challenges.complete — check cold-category completions >= 7
+- 'tempered': in awardXP whenever new xp >= 500 — check and award if just crossed threshold
 
 CREATE components/forge/RuleForty.tsx (40% Rule Engine):
 
-TRIGGER CONDITIONS (checked in habits.logCompletion and checkins.submit):
-- Habit missed AND current streak was ≥7 before the miss
-- Mood signal classified as 'excusing' or 'deflecting' on check-in
-- Max 1 auto-trigger per day (check daily_rule_triggers count in users metadata)
+TRIGGER CONDITIONS:
+Auto-trigger 1: habits.logCompletion returns triggerFortyPercent: true (habit missed, streak was ≥7)
+Auto-trigger 2: /api/coach/classify returns mood_signal of 'excusing' or 'deflecting'
+Manual trigger: "40% Rule" button in Sidebar
+Limit: max 3 auto-triggers per day (track count in localStorage or in users metadata JSONB field)
 
-COMPONENT:
-- Full-screen overlay: pure black background (#000000) snaps in at 80ms (no animation — instant, urgency)
-- Text fades in 100ms after overlay appears
-- Header: "40% RULE" in text-4xl, font-heading, orange (#FF6B2B)
-- Subtext: "You are at your limit. Research shows you have given 40% of your true capacity. The other 60% is still in there." (text-base, text-secondary)
-- Streams a personalized intervention from Forge Coach (session_type: 'forty_percent') referencing the user's Why Statement
-- Two buttons after stream completes:
-  - "I'll take the next step" (orange, full width) — closes modal, logs user chose to continue
-  - "I need to stop for now" (ghost, full width, text-muted) — closes modal, logs user chose to stop
-- Store choice in coach_sessions
+COMPONENT (as a full-screen overlay Portal, mounted on body):
+- Background: pure #000000 snaps in at 80ms (NO fade — instant feel = urgency per PRD)
+- Text content fades in 100ms AFTER overlay appears
+- Large heading: "YOUR MIND IS LYING TO YOU" (text-4xl, font-heading, text-primary, center)
+- Subheading: "You've only used 40% of your capacity." (text-xl, text-accent — orange text)
+- Stream Forge Coach intervention via /api/coach/stream (session_type='forty_percent_rule') — streams below
+- Cannot be dismissed by clicking outside or pressing Escape (per PRD spec)
+- Two buttons appear ONLY after streaming completes (or on manual trigger: immediately):
+  - "I'll take that step" (full width, bg #FF6B2B, text black) — closes modal, inserts rule_forty_events with choice='took_step', awards 15 XP, checks 'forty_percent_survivor' badge
+  - "I still can't" (full width, ghost, border #3D3B39, text-muted) — closes modal, inserts rule_forty_events with choice='declined', no XP
 
-ACCEPTANCE: Forge Score calculates correctly and updates within 200ms. XP and level-ups work. All 6 badges can be earned. 40% Rule modal appears correctly and streams an intervention.
+Store rule_forty_events in the table created in Step 1.2 (NOT in coach_sessions).
+
+ACCEPTANCE: Forge Score formula matches PRD exactly (floor, 5 components, correct weights). XP amounts match PRD. Level thresholds are non-linear (Raw/Tempered/Forged/Hardened/Unbreakable/Legendary). All 6 PRD badges can be earned with correct trigger conditions. 40% Rule overlay is instant black snap, heading reads "YOUR MIND IS LYING TO YOU", cannot be escaped except via the two buttons.
 ```
 
 ---
@@ -991,49 +1166,52 @@ ACCEPTANCE: Forge Score calculates correctly and updates within 200ms. XP and le
 ```
 Build the Cookie Jar victory archive feature.
 
-The Cookie Jar is inspired by David Goggins' concept of storing past victories to draw from when you're struggling.
-
 UPDATE server/trpc/routers/cookiejar.ts with real implementations:
 
-cookiejar.list: Protected query. Fetch all cookie_jar entries for user, ordered by created_at DESC. Return with similarity scores if search query provided.
+cookiejar.list: Protected query. Fetch all cookie_jar_entries for user, ordered by created_at DESC.
 
-cookiejar.create: Protected mutation. Input: {title (max 100 chars), description, date_of_victory (optional DATE)}.
+cookiejar.add: Protected mutation. Input: { title (required, max 80 chars per PRD), description (required, max 500 chars per PRD), dateOfVictory?: string }
 - Free tier check: count entries — if ≥5, throw FORBIDDEN with { upgradeRequired: true }
-- Insert into cookie_jar
-- Generate embedding: await generateEmbedding(title + ' ' + description)
-- Update cookie_jar row with embedding
-- Award badge 'cookie_jar_first' if first entry
-- Award XP 15
-- Return created entry
+- Insert into cookie_jar_entries
+- Call generateEmbedding(title + '. ' + description), update cookie_jar_entries.embedding
+- Award 25 XP (event_type: 'cookie_jar') — PRD specifies 25 XP, not 15
+- Check badge 'cookie_jar_founder': if total entries for user is now ≥10, award it
+- Return created entry (without embedding vector)
 
-cookiejar.delete: Protected mutation. Input: {id}. Verify ownership. Delete row.
+cookiejar.edit: Protected mutation. Input: { id, title?, description?, dateOfVictory? }
+- Verify ownership
+- Update cookie_jar_entries
+- Regenerate embedding if title or description changed
 
-cookiejar.search: Protected query. Input: {query: string}.
-- Generate embedding for query
-- Run pgvector similarity search against user's cookie jar entries
-- Return top 5 most similar entries with similarity scores
-- Used by coach to surface relevant past victories during struggling moments
+cookiejar.delete: Protected mutation. Input: { id }. Verify ownership. Delete row.
+
+cookiejar.search: Protected query. Input: { query: string }
+- Call generateEmbedding(query)
+- SELECT id, title, description, date_of_victory, 1 - (embedding <=> $queryEmbedding) as similarity FROM cookie_jar_entries WHERE user_id = ? ORDER BY embedding <=> $queryEmbedding LIMIT 5
+- Return results with similarity score
 
 CREATE app/(app)/cookie-jar/page.tsx:
+(URL: /cookie-jar)
 
-HEADER: "Cookie Jar" title + "Add Victory" button (orange).
-Search bar: text input, on type searches semantic matches (debounced 300ms).
-If search active: show semantic matches with similarity indicator.
+HEADER: "Cookie Jar" title (text-3xl, font-heading) + "Add Victory" button (orange, right).
+Search bar: full-width, debounced 500ms (per PRD), placeholder "Search your victories...". Results update on Enter or after 500ms debounce.
+If search active: show semantic results with similarity score badge.
+Otherwise: show all entries grid.
 
 CREATE components/forge/CookieJarEntry.tsx:
-Card: background #111110, border #2A2927, hover border #3D3B39.
-Victory title (text-xl, font-heading), date badge (text-xs, text-muted, if provided), description (text-base, text-secondary, truncated to 3 lines with expand).
-Delete button (icon, shows on hover, red, with confirmation).
+Dark card (#111110), border #2A2927, hover border #3D3B39, orange corner accent.
+Title (text-xl, font-heading, white), date badge (text-xs, text-muted, if provided), description (text-base, text-secondary, 3 lines, expand on click).
+Edit + Delete icons on hover. Delete requires confirmation.
 
-ADD VICTORY MODAL/DRAWER:
-- Title input (max 100 chars, required)
-- Description textarea (no limit, required)
+ADD VICTORY MODAL:
+- Title input (max 80 chars, NOT 100 — per PRD), char counter visible
+- Description textarea (max 500 chars), char counter visible
 - Date of Victory: optional date picker (shadcn Calendar)
 - "Lock It In" submit button (orange)
 
-Free tier empty state (≥5 entries): "You have 5 victories stored. Upgrade to Pro to save unlimited victories." with upgrade CTA.
+Free tier limit state (≥5 entries): "You have 5 victories stored. Upgrade to Pro to save unlimited victories." — upgrade CTA.
 
-ACCEPTANCE: User can add, view, search (semantic), and delete cookie jar entries. Free tier caps at 5. Semantic search returns relevant past victories.
+ACCEPTANCE: User can add, edit, view, search (semantic), and delete entries. Free tier caps at 5. Adding awards 25 XP. At 10 entries the 'cookie_jar_founder' badge is awarded. Semantic search returns relevant results.
 ```
 
 ---
@@ -1043,65 +1221,69 @@ ACCEPTANCE: User can add, view, search (semantic), and delete cookie jar entries
 ```
 Build the Callousing Challenge system and seed the challenge library.
 
-First, create a Supabase seed file supabase/seed.sql with 20 challenges:
+IMPORTANT: The challenges DB schema uses duration_minutes (not duration_days) and has an xp_reward field per the PRD data model. Challenge categories are: 'cold' | 'screen' | 'physical' | 'fast' | 'social' (per PRD data model — NOT 'mental'/'digital').
 
-INSERT INTO callousing_challenges (title, description, difficulty, category, duration_days, min_tier) VALUES
--- Free challenges (difficulty 1-2)
-('Cold Shower Protocol', 'End every shower with 60 seconds of cold water for 7 days straight. No warming back up. No exceptions.', 2, 'physical', 7, 'free'),
-('Phone-Free Morning', 'No phone for the first 60 minutes after waking. Every day for 7 days.', 1, 'digital', 7, 'free'),
-('5AM Wake Protocol', 'Wake at 5AM every day for 5 days. No snooze. Get out of bed immediately.', 2, 'physical', 5, 'free'),
-('No Complaint Day', 'Go an entire day without complaining — verbally or mentally. Restart if you slip.', 1, 'mental', 1, 'free'),
-('The Hard Conversation', 'Have one difficult conversation you have been avoiding. Do it within 48 hours.', 2, 'social', 2, 'free'),
--- Pro challenges (difficulty 3)
-('Dopamine Detox Weekend', 'No social media, no streaming, no alcohol, no junk food for 48 hours. Only books, exercise, and meaningful work.', 3, 'digital', 2, 'pro'),
-('10K in 7 Days', 'Run or walk 10 kilometers within 7 days. Track it. No excuses for weather.', 3, 'physical', 7, 'pro'),
-('30-Day No Algorithm Feed', 'Delete all social media apps for 30 days. Not muted — deleted.', 3, 'digital', 30, 'pro'),
-('Public Rejection Training', 'Ask for something unreasonable in public (a discount, an impossible request) 3 times in one week. Train yourself to handle rejection.', 3, 'social', 7, 'pro'),
-('Sleep Discipline Protocol', 'In bed by 10:30PM, awake by 5:30AM, every day for 14 days. Non-negotiable.', 3, 'physical', 14, 'pro'),
-('Silence Practice', '60 minutes of complete silence daily — no music, no podcasts, no conversation — for 7 days.', 3, 'mental', 7, 'pro'),
-('Single-Tasking Week', 'No multitasking for 7 days. One thing at a time. No phone while eating. No background noise while working.', 3, 'mental', 7, 'pro'),
--- Elite challenges (difficulty 4-5)
-('The 75 Hard Challenge', 'Follow the Andy Frisella 75 Hard protocol for 75 days: 2 workouts/day, diet, no alcohol, 1 gallon water, 10 pages reading, progress photo.', 5, 'physical', 75, 'elite'),
-('No Entertainment Month', 'Zero passive entertainment for 30 days: no TV, no streaming, no social media, no gaming. Only creation and learning.', 4, 'digital', 30, 'elite'),
-('Deliberate Discomfort Daily', 'Every day for 21 days, do one thing that makes you genuinely uncomfortable. Document it.', 4, 'mental', 21, 'elite'),
-('Zero Complaint Month', '30 days without a single complaint. Wear a rubber band, snap it every time you complain, restart the count.', 4, 'mental', 30, 'elite'),
-('Cold Immersion Protocol', 'Cold shower every morning + cold outdoor exposure (if accessible) for 21 days. Minimum 2 minutes cold per day.', 4, 'physical', 21, 'elite'),
-('Financial Purge', 'Track every penny spent for 30 days. Cut all non-essential subscriptions. No eating out for 14 days.', 3, 'mental', 30, 'elite'),
-('Digital Identity Audit', 'Audit every digital account, app, and subscription you own. Delete accounts you do not use. Unfollowing everyone who does not make you better.', 3, 'digital', 7, 'elite'),
-('The 1000-Rep Week', 'Complete 1,000 total reps of any bodyweight exercises in one week. Track every rep.', 4, 'physical', 7, 'elite');
+Create supabase/seed.sql with 20 challenges:
+
+INSERT INTO challenges (title, description, difficulty, category, duration_minutes, xp_reward) VALUES
+-- Difficulty 1-2 (Free tier accessible)
+('Cold Shower Protocol', 'End every shower with 60 seconds of cold water for 7 days straight. No warming back up. No exceptions. Cold exposure activates the noradrenergic system — this is a measurable intervention, not just discomfort.', 2, 'cold', 10080, 75),
+('Phone-Free Morning', 'No phone for the first 60 minutes after waking. Every day for 7 days. The morning cortisol spike is your highest-focus window. You are currently handing it to an algorithm.', 1, 'screen', 10080, 50),
+('No Complaint Protocol', 'Go an entire day without complaining — verbally or mentally. Restart if you slip. The point is not silence — it is rewiring the default toward agency.', 1, 'physical', 1440, 50),
+('The Hard Conversation', 'Have one difficult conversation you have been avoiding. Complete it within 48 hours. Name the conversation before you begin.', 2, 'social', 2880, 75),
+('5AM Wake Protocol', 'Wake at 5AM every day for 5 days. No snooze. Get out of bed immediately. You are not a morning person — you are a discipline person.', 2, 'physical', 7200, 75),
+-- Difficulty 3
+('Dopamine Detox Weekend', 'No social media, no streaming, no alcohol, no junk food for 48 hours. Only books, exercise, and intentional work. This is a reset, not a punishment.', 3, 'screen', 2880, 100),
+('10K This Week', 'Run or walk 10 kilometers total within 7 days. Track every kilometer. No weather excuses — you have legs.', 3, 'physical', 10080, 100),
+('Cold Immersion Week', 'Cold shower every morning for 7 days. Minimum 90 seconds cold. No warm water beforehand — cold from the start.', 3, 'cold', 10080, 100),
+('Public Rejection Training', 'Ask for something unreasonable in public 3 times this week — a discount, an impossible request. Train yourself to tolerate rejection. The fear is worse than the reality.', 3, 'social', 10080, 100),
+('Single-Tasking Week', 'No multitasking for 7 days. One thing at a time. No phone while eating. No background noise while working. This is harder than it sounds.', 3, 'screen', 10080, 100),
+('Social Media Elimination', 'Delete all social media apps for 14 days. Not muted — deleted. Reinstall after the 14 days if you choose. But experience the two weeks first.', 3, 'screen', 20160, 100),
+('Water-Only Week', 'No coffee, no alcohol, no juice, no soda for 7 days. Water and herbal tea only. Identify which dependencies are habits vs. choices.', 3, 'fast', 10080, 100),
+-- Difficulty 4
+('30-Day No Algorithm Feed', 'Delete all social media apps for 30 days. Keep a journal of what you do with the time instead. Most people discover they were using the apps to avoid something.', 4, 'screen', 43200, 150),
+('Sleep Discipline Protocol', 'In bed by 10:30PM, awake by 5:30AM, every day for 14 days. Non-negotiable. Track your HRV or subjective energy daily.', 4, 'physical', 20160, 150),
+('Deliberate Discomfort Daily', 'Every day for 21 days, do one thing that makes you genuinely uncomfortable. Document it in your check-in. Comfort is the enemy of growth.', 4, 'physical', 30240, 150),
+('Zero Complaint Month', '30 days without a single complaint. Wear a rubber band on your wrist. Snap it every time you catch yourself complaining. Restart the count.', 4, 'social', 43200, 150),
+('One-Meal-a-Day Week', 'Eat one meal per day for 7 days. This is not about weight — it is about learning that discomfort is not an emergency. Consult a physician if you have health conditions.', 4, 'fast', 10080, 150),
+-- Difficulty 5
+('The 75 Hard Protocol', 'Follow the Andy Frisella 75 Hard protocol for 75 days: two 45-minute workouts per day (one outdoor), diet, no alcohol, one gallon of water, 10 pages of nonfiction reading, progress photo. Restart from day 1 if you miss anything. This is the benchmark.', 5, 'physical', 108000, 200),
+('No Entertainment Month', 'Zero passive entertainment for 30 days: no TV, no streaming, no social media, no gaming. Only creation, learning, work, and relationships. Most people discover who they are without the noise.', 5, 'screen', 43200, 200),
+('Cold Water Protocol — 21 Days', 'Cold shower every morning, minimum 3 minutes cold, for 21 days. No exceptions for illness (reduce duration if sick, do not skip). Cold adaptation is neurological — you are literally rewiring your stress response.', 5, 'cold', 30240, 200);
+
+Note on tier access: Per PRD Feature 11, Free tier users can VIEW all challenges but can only ACTIVATE difficulty-1 challenges (the 5 easiest). Pro tier unlocks the full library.
 
 UPDATE server/trpc/routers/challenges.ts with real implementations:
 
-challenges.list: Protected query. Fetch all active challenges. Filter by user's tier (free users see min_tier='free' only). Include user's progress for each (from user_challenges join).
+challenges.list: Protected query. Fetch all active challenges. Join with user_challenges to get each challenge's status for this user. Return challenges with {userStatus: 'none'|'active'|'completed'|'failed', userChallenge?: UserChallenge}.
 
-challenges.activate: Protected mutation. Input: {challenge_id}.
-- Check tier access
-- Free tier: max 2 active challenges at a time
-- Upsert into user_challenges (status='active', started_at=now)
+challenges.activate: Protected mutation. Input: { challengeId }
+- Free tier: only allow if challenge.difficulty === 1; else throw FORBIDDEN { upgradeRequired: true }
+- Per PRD: user can have max 1 active challenge at a time. Check user_challenges where status='active'. If exists, throw CONFLICT { message: 'Complete or abandon your current challenge first.' }
+- Insert into user_challenges (status='active', started_at=now)
 
-challenges.complete: Protected mutation. Input: {challenge_id, reflection (required, min 50 chars)}.
-- Verify challenge is active for user
-- Update user_challenges: status='complete', completed_at=now, reflection
-- Award XP: 100 XP
-- Check and award 'first_challenge_complete' badge
-- Call recalculateForgeScore(user_id)
-- Return { xpAwarded, badgeAwarded, newForgeScore }
+challenges.complete: Protected mutation. Input: { userChallengeId, reflection (required, min 50 chars) }
+- Verify user_challenge belongs to user and status='active'
+- Update user_challenges: status='completed', completed_at=now, reflection
+- Award xp = challenge.xp_reward (from challenges table — NOT a flat 100)
+- Check badge 'cold_mind': count cold-category completions for user
+- Check badge 'first_challenge_complete': if this is user's first completed challenge — note: this badge is NOT in the v1 PRD badge list. Do NOT create it. Skip this check.
+- Call recalculateForgeScore(userId)
+- Return { xpAwarded: challenge.xp_reward, badgesAwarded: string[], newForgeScore }
+
+Challenge expiry (per PRD): A challenge expires (auto-fails) if not completed within duration_minutes × 3. Implement a check in challenges.list — if started_at + duration_minutes × 3 minutes has passed and status is still 'active', update status to 'failed'.
 
 CREATE app/(app)/challenges/page.tsx:
-
-Tabs: "Available" | "Active" | "Completed"
-Each challenge as ChallengeCard component.
-Difficulty shown as 1–5 filled lightning bolt icons (orange).
-Duration badge. Category badge. "Accept Challenge" button.
-Active challenges show a progress timer and "Complete" button.
-Completing a challenge requires entering a reflection (≥50 chars) — stream it to the coach for feedback.
+(URL: /challenges)
+Tabs: "Available" | "My Active" | "Completed"
+Free tier sees all challenges but difficulty > 1 shows lock icon with "Pro" badge.
 
 CREATE components/forge/ChallengeCard.tsx:
-Card with sharp corners, background #111110.
-Title (text-xl), description (text-sm, text-secondary, 3 lines truncated), difficulty icons (Zap icons, orange fill for filled, muted for empty), duration + category row.
-Status badge: Available (border blue), Active (border orange, pulsing dot), Completed (border green, checkmark).
+Title (text-xl), description (text-sm, text-secondary, 3 lines truncated), difficulty shown as 1–5 filled squares (like signal bars — use Square icon, filled vs. empty), duration formatted (e.g., "7 days"), XP reward badge.
+Status: Available (border #2A2927), Active (border #FF6B2B, pulsing dot indicator), Completed (border #22C55E).
+Active challenge: shows countdown timer (expires at started_at + duration_minutes × 3).
 
-ACCEPTANCE: 20 challenges seeded. Free users see only free challenges. Activating and completing challenges works. XP and Forge Score update. Challenge reflection streams to coach.
+ACCEPTANCE: 20 challenges seeded. Free users see all but can only activate difficulty-1. Only 1 active challenge allowed at a time. XP awarded equals challenge.xp_reward (variable, not flat 100). Challenge expiry auto-fails after duration_minutes × 3.
 ```
 
 ---
@@ -1116,77 +1298,79 @@ ACCEPTANCE: 20 challenges seeded. Free users see only free challenges. Activatin
 ```
 Implement Lemon Squeezy billing for MindForge.
 
-INSTALL: @lemonsqueezy/lemonsqueezy.js crypto (built-in)
+INSTALL: @lemonsqueezy/lemonsqueezy.js
 
 CREATE lib/lemonsqueezy.ts:
 
-Initialize Lemon Squeezy with LEMONSQUEEZY_API_KEY.
+Initialize Lemon Squeezy with LEMONSQUEEZY_API_KEY (server-only, no NEXT_PUBLIC_ prefix).
 
-CREATE async function createCheckoutUrl(user_id: string, email: string, variant_id: string): Promise<string>:
-- Create a checkout via Lemon Squeezy API
-- Set custom_data: { user_id } for webhook to match back to user
-- Set checkout_data.email to prefill the email field
+CREATE async function createCheckoutUrl(userId: string, email: string, variantId: string): Promise<string>
+- Create checkout via Lemon Squeezy API POST /v1/checkouts
+- Set custom_data: { user_id: userId } for webhook attribution
+- Set checkout_data.email to prefill
 - Return the checkout URL
 
-CREATE async function verifyWebhookSignature(payload: string, signature: string): boolean:
-- HMAC-SHA256 verify using LEMONSQUEEZY_WEBHOOK_SECRET
-- Return true if valid
+CREATE function verifyWebhookSignature(rawBody: string, signature: string): boolean
+- HMAC-SHA256 with LEMONSQUEEZY_WEBHOOK_SECRET using Node.js crypto (built-in)
+- Return true if signatures match
 
-TIER MAPPING:
+TIER MAPPING from variant IDs:
 - LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID → tier: 'pro'
 - LEMONSQUEEZY_PRO_ANNUAL_VARIANT_ID → tier: 'pro'
 - LEMONSQUEEZY_ELITE_MONTHLY_VARIANT_ID → tier: 'elite'
 - LEMONSQUEEZY_ELITE_ANNUAL_VARIANT_ID → tier: 'elite'
 
 CREATE app/api/billing/create-checkout/route.ts:
-POST. Authenticated. Body: { variant_id }.
-Call createCheckoutUrl. Return { checkoutUrl }.
+POST. Authenticated. Body: { variantId }.
+Call createCheckoutUrl. Return { checkoutUrl }. Redirect not done server-side — client redirects to checkoutUrl.
 
 CREATE app/api/billing/webhook/route.ts:
-POST. No auth (public webhook endpoint — authenticated by signature).
-1. Read raw body as text
-2. Verify HMAC signature (return 401 if invalid, log to Sentry)
-3. Parse event. Handle these event types:
-   - subscription_created: Update users set tier=mapped_tier, lemonsqueezy_subscription_id, subscription_status='active'
-   - subscription_updated: Update subscription_status
-   - subscription_cancelled: Update subscription_status='cancelled', do NOT downgrade tier immediately (user paid through period end)
-   - subscription_expired: Downgrade tier to 'free', subscription_status='expired'
-4. All DB operations use service role key (bypasses RLS)
-5. Idempotent: check lemonsqueezy_subscription_id before updating
-6. Return 200 OK
+POST. Public endpoint (authenticated by HMAC signature only).
+1. Read raw body as text (important: use request.text(), not request.json() — signature is computed on raw bytes)
+2. Get x-signature header
+3. Verify HMAC signature — return 401 immediately if invalid. Log to Sentry.
+4. Parse JSON from raw body string
+5. Handle these event_name values:
+   - 'subscription_created': upsert subscriptions table { user_id (from custom_data.user_id), lemonsqueezy_customer_id, lemonsqueezy_subscription_id, tier: mapVariantToTier(variant_id), status: 'active', current_period_end }; update users.tier
+   - 'subscription_updated': update subscriptions status + current_period_end
+   - 'subscription_cancelled': update subscriptions.status = 'cancelled'; do NOT change tier or current_period_end yet
+   - 'subscription_expired': update subscriptions.status = 'expired'; update users.tier = 'free'
+6. All DB writes use service role key (bypasses RLS — necessary because webhook has no user session)
+7. Idempotent: use ON CONFLICT (lemonsqueezy_subscription_id) DO UPDATE for subscriptions upsert
+8. Return { received: true } with 200 status
 
 CREATE app/(app)/upgrade/page.tsx:
+(URL: /upgrade)
 
-Pricing table with 3 tiers:
+Pricing table with 3 tiers. IMPORTANT: Use the correct prices from the PRD (Feature 12):
 
-FREE ($0/month):
-- 3 habits max
-- 5 cookie jar entries
-- 5 challenges (free tier only)
+FREE ($0):
+- Up to 3 active habits
+- Up to 5 Cookie Jar entries
+- Activate difficulty-1 challenges only
 - Daily check-in (no AI debrief)
-- No coach chat
+- No direct coach chat
 
-PRO ($19/month or $149/year — "Save 35%"):
+PRO ($12/month or $89/year — "Save 38%"):
 - Unlimited habits
-- Unlimited cookie jar
-- All challenges
+- Unlimited Cookie Jar entries
+- Full challenge library
 - AI daily debrief after every check-in
-- Direct coach chat (unlimited)
+- Direct Forge Coach chat (unlimited)
 - Weekly Neural Report email
-- Memory system active
+- Persistent memory system active
 
-ELITE ($39/month or $299/year — "Save 37%"):
+ELITE ($29/month or $219/year — "Save 37%"):
 - Everything in Pro
-- Weekly group coaching session (AI-facilitated)
-- Priority AI response (<1 second)
-- Identity reset (one-time why excavation redo)
+- Weekly AI-facilitated group coaching session
+- Priority AI response speed
+- One-time Identity Reset (redo Why Excavation)
 - Founding member badge
 
-Current tier highlighted with "Current Plan" badge.
-Upgrade buttons call the checkout endpoint and redirect to Lemon Squeezy.
-Monthly/Annual toggle with savings percentage shown.
+Annual pricing shown by default with monthly toggle. Pro column has orange highlight border. Current plan shows "Current Plan" badge.
+Upgrade buttons POST to /api/billing/create-checkout with correct variantId, then window.location.href = checkoutUrl.
 
-ACCEPTANCE: Checkout redirects to Lemon Squeezy. Webhook verifies correctly. Subscription created event upgrades the user's tier in the database. Expired event downgrades to free.
+ACCEPTANCE: Prices shown correctly ($12/$29 monthly). Checkout redirects to Lemon Squeezy. Webhook verifies HMAC signature. subscription_created updates users.tier. subscription_expired downgrades to free. subscriptions.current_period_end is stored.
 ```
 
 ---
@@ -1197,36 +1381,38 @@ ACCEPTANCE: Checkout redirects to Lemon Squeezy. Webhook verifies correctly. Sub
 Build the Settings page.
 
 CREATE app/(app)/settings/page.tsx:
+(URL: /settings)
 
-SECTIONS (use Tabs or accordion):
+SECTIONS (use Tabs):
 
 1. PROFILE:
-- Display name input
-- Email (read-only, shown from auth)
-- Avatar (placeholder for now — just initials circle)
-- "Save changes" button
+- Display name input (updateable)
+- Email (read-only, from Supabase auth)
+- "Save changes" button → calls tRPC user.updateProfile({ displayName })
 
-2. SUBSCRIPTION:
-- Current tier badge
-- Subscription status (active/cancelled/expired)
-- "Manage Billing" button → links to Lemon Squeezy customer portal URL
-- If Free: "Upgrade to Pro" CTA → /app/upgrade
-- Cancellation note: "Cancelling keeps Pro access until your billing period ends."
+2. IDENTITY:
+- Why Statement display (read-only in v1) — show current users.why_statement
+- Identity Declaration display (read-only in v1) — show current users.identity_declaration
+- Note: "Why Excavation reset is available on the Elite plan. Contact support to request it."
+- Show earned badges: grid of user_badges, earned showing colored icon + earned date, unearned showing grayscale + lock icon + requirement
 
-3. IDENTITY:
-- Why Statement (read-only in v1, shows current value)
-- Identity Declaration (read-only in v1)
-- Note: "Contact support to reset your identity foundation."
+3. COACH PREFERENCES:
+- Coach Intensity toggle: "Hard Truth" (default) / "Firm but Kind" — calls tRPC user.updateProfile({ coachIntensity: 'hard'|'firm' })
+- Timezone select: dropdown of IANA timezone strings (common ones at top) → tRPC user.updateProfile({ timezone })
+- Email notifications toggle: Weekly Neural Report (Pro only — show locked + upgrade CTA if Free)
 
-4. PREFERENCES:
-- Timezone select (dropdown of major timezones — stored in users table, add timezone TEXT column if not exists)
-- Email notifications toggle: Weekly Neural Report (Pro only)
+4. SUBSCRIPTION:
+- Current tier badge (Free / Pro / Elite) with status (active/cancelled/expired)
+- If Pro/Elite: "Manage Billing" link → Lemon Squeezy customer portal URL
+- If Free: "Upgrade to Pro" button → /upgrade
+- If cancelled: "Your Pro access continues until [current_period_end date]"
+- If elite: show Identity Reset option (one-time): "Reset Why Excavation" button → sets onboarding_step = 'why', redirects to /onboarding/why (Elite only)
 
 5. DATA:
-- "Export my data" button → triggers a background job that emails the user a JSON export of all their data (habits, check-ins, coach sessions, memories, cookie jar). Stub this for now — show "We'll email you your data within 24 hours."
-- "Delete my account" button (destructive, red, requires typing "DELETE" to confirm) → soft delete flow: set is_deleted=true, schedule anonymization
+- "Export My Data" button → GET /api/user/export — returns JSON download of check-ins, cookie jar, habits
+- "Delete My Account" button (destructive, red) → confirmation modal requiring user to type "DELETE" → soft-delete flow: users.is_deleted = true, anonymize email, cancel subscription via Lemon Squeezy API
 
-ACCEPTANCE: Profile updates save correctly. Billing portal link works. Delete account requires confirmation text. Timezone preference is saved.
+ACCEPTANCE: Coach intensity toggle saves and affects system prompt on next coaching session. Timezone saves. Billing portal link works for Pro/Elite. Delete account requires "DELETE" confirmation. Elite tier sees Identity Reset option.
 ```
 
 ---
@@ -1241,51 +1427,57 @@ ACCEPTANCE: Profile updates save correctly. Billing portal link works. Delete ac
 ```
 Build the Analytics page.
 
-INSTALL: recharts
+INSTALL: recharts (already installed in Step 1.1)
 
 CREATE app/(app)/analytics/page.tsx:
+(URL: /analytics)
 
-HEADER: "Your Neural Progress" (text-3xl, font-heading). Date range: "Last 30 Days" (default, dropdown for 7/30/90 days).
+HEADER: "Your Neural Progress" (text-3xl, font-heading). Date range selector: dropdown for "Last 7 Days" / "Last 30 Days" / "Last 90 Days" (default: 30 days).
 
-CHARTS (use Recharts, all dark themed):
+Fetch all data with a single tRPC call using Promise.all in the server handler.
 
-1. FORGE SCORE HISTORY (Area chart):
-- X-axis: dates (last 30 days)
-- Y-axis: 0–1000
-- Area fill: orange gradient (#FF6B2B 20% opacity at top → transparent at bottom)
-- Line: #FF6B2B, strokeWidth 2
-- Tooltip: "June 10: 342 points"
+CHARTS (use Recharts, all dark themed with no emojis in tooltips per PRD):
 
-2. HABIT COMPLETION BARS (Grouped bar chart):
-- X-axis: last 14 days dates
-- Y-axis: 0–100% completion rate
-- Bar color: green (#22C55E), red for missed days
-- One bar per day showing that day's overall completion rate across all habits
+1. FORGE SCORE HISTORY (Area chart, full width):
+- Data: analytics.forgeScoreHistory({ days: 30 })
+- X-axis: dates, Y-axis: 0–1000
+- Area fill: linear gradient — #FF6B2B at 20% opacity top, transparent bottom
+- Line stroke: #FF6B2B, strokeWidth 2
+- Tooltip: "June 10 — 342 pts"
+
+2. HABIT COMPLETION RATE (Bar chart per habit):
+- Data: analytics.habitCompletionRates({ days: 30 })
+- One group per habit: shows % of scheduled days completed
+- Bar color: #22C55E. Background bar: #2A2927.
+- X-axis: habit names (truncated to 12 chars)
 
 3. CHECK-IN HONESTY TREND (Line chart):
-- X-axis: last 14 days
-- Y-axis: 1–10 honesty score
-- Line: blue (#3B82F6), strokeWidth 2
-- Dots on data points
+- Data: analytics.checkinHonestyTrend({ days: 30 })
+- X-axis: dates, Y-axis: 1–10
+- Line stroke: #3B82F6, strokeWidth 2, dots on data points
 
-4. XP EARNED TIMELINE (Bar chart):
-- X-axis: last 14 days
-- Y-axis: XP earned per day
-- Bar color: #FF6B2B with 60% opacity
+4. TOTAL XP OVER TIME (Area/line chart):
+- Data: analytics.xpHistory({ days: 90 })
+- Shows cumulative XP as a line
+- Color: #FF6B2B
 
-STATS ROW (above charts):
-- Total Check-Ins: count
+STATS ROW (above charts, 4 cards in a row):
+- Check-ins this period: count
 - Average Honesty Score: X.X/10
-- Habits Completed This Month: count
-- Current Forge Score: big number
+- Habits Completed: count
+- Current Forge Score: big number (text-display, orange)
 
-All charts must render on a dark background (#111110 card background). Override Recharts default styles: cartesianGrid stroke '#2A2927', tick color '#87857F', tooltip background '#232220' border '#3D3B39'.
+WEEKLY REPORT CARD (if Pro, at top):
+- Fetch analytics.getLatestWeeklyReport()
+- If exists: show expandable card with behavioral_arc, key_insight, next_week_challenge
+- If not yet: show "Your first weekly report arrives next Sunday"
 
-UPDATE server/trpc/routers/analytics.ts with real implementations:
-- getAll: Returns all analytics data for selected date range in a single query
-- Uses Supabase queries with date range filters
+All Recharts components: override styles via props — CartesianGrid stroke='#2A2927', Tick fill='#87857F', Tooltip contentStyle={{ background: '#232220', border: '1px solid #3D3B39', borderRadius: 0, color: '#C2C0BE' }}.
 
-ACCEPTANCE: All 4 charts render with real data. Dark theme applied correctly. Date range selector updates all charts.
+UPDATE server/trpc/routers/analytics.ts with all real implementations:
+- forgeScoreHistory, habitCompletionRates, checkinHonestyTrend, xpHistory, getLatestWeeklyReport
+
+ACCEPTANCE: All 4 charts render with real data. Dark theme applied. No tooltip emojis. Weekly report card shows if Pro user has received a report.
 ```
 
 ---
@@ -1299,29 +1491,34 @@ INSTALL: resend @react-email/components @react-email/render
 
 CREATE emails/WeeklyNeuralReport.tsx (React Email template):
 
-EMAIL DESIGN: Dark background (#0A0908), full-width. Width 600px.
+EMAIL DESIGN: Background #0A0908, max-width 600px, centered.
 
-SECTIONS:
-1. Header: MindForge logo text (orange, bold) + "Weekly Neural Report" subtitle + week dates
-2. Forge Score: Large score number with week-over-week change (+/-X points, colored green/red)
-3. "This Week's Forge Summary": 3 bullet stats (habits completed, check-ins submitted, XP earned)
-4. AI-Generated Insight (150–200 words): Personalized analysis of the week's patterns from Gemini Pro
-5. Top Streak: Highest streak habit highlighted
-6. One Challenge for Next Week: AI-selected challenge from the library matching user's current level
-7. Cookie Jar Reminder: "Remember this?" — one random cookie jar entry surfaced
-8. Footer: "Unsubscribe" link, "View in App" CTA button (orange)
+SECTIONS (in order):
+1. Header: "MINDFORGE" logotype in orange + "Weekly Neural Report" subtitle + week date range
+2. Forge Score: Large score number + delta indicator (+X this week in green, -X in red)
+3. "This Week" stats: 3 columns — check-in count, habits completed count, XP earned
+4. Behavioral Arc: 2–3 sentence AI-generated narrative of the week's pattern (behavioral_arc field)
+5. Key Insight: One specific honest observation (key_insight field — bold, orange accent)
+6. Best Streak: "[Habit Name] — [N] days" highlighted
+7. Next Week Challenge: Specific action challenge (next_week_challenge field)
+8. Cookie Jar Reminder (if user has entries): "Remember this?" with one random cookie jar entry title
+9. Footer: Unsubscribe link + "View in App" CTA button (orange, links to /dashboard)
 
 CREATE app/api/cron/weekly-report/route.ts:
-- Verify Authorization header: `Bearer ${CRON_SECRET}` — return 401 if invalid
-- Fetch all Pro/Elite users who have onboarding_complete = true and email notifications enabled
-- For each user (process in batches of 10, with try/catch per user):
-  1. Fetch user's stats for the past 7 days via analytics queries
+- Verify Authorization header = `Bearer ${process.env.CRON_SECRET}`. Return 401 if invalid.
+- Fetch all Pro/Elite users: users where tier IN ('pro','elite') AND onboarding_complete = true
+- For each user (batches of 50, with 200ms delay between batches per PRD spec):
+  WRAP EACH USER in try/catch — one failure must not stop others
+  1. Query past 7 days data via analytics queries (habit completions, check-in scores, forge score delta, XP earned, top streak)
   2. Fetch user's why_statement and identity_declaration
-  3. Call Gemini 2.5 Pro with structured output prompt to generate the weekly insight JSON:
-     { insight_text: string, challenge_recommendation: {title, description}, standout_moment: string }
-  4. Render WeeklyNeuralReport email template with all data
-  5. Send via Resend: from RESEND_FROM_EMAIL, to user.email, subject "Your Weekly Neural Report — [date range]"
-  6. Log success/failure per user to Sentry
+  3. Call Gemini 2.5 Pro with responseMimeType: 'application/json' to generate structured report:
+     Prompt: "Generate a weekly neural report for this user based on their week's data: {weekData}. Their Why Statement: {why}. Return JSON: { forge_score_change: number, habit_completion_rate: number, best_streak_this_week: string, behavioral_arc: string, key_insight: string, next_week_challenge: string }"
+  4. Insert into weekly_reports table
+  5. Render WeeklyNeuralReport email with all data
+  6. Send via Resend: from 'MindForge <forge@mindforge.app>', to user.email, subject 'Your Weekly Neural Report — [Mon date] to [Sun date]'
+  7. Update weekly_reports.email_sent = true
+  8. Log result (success or error reason) to Sentry
+
 - Return { processed: N, failed: M }
 
 CREATE vercel.json:
@@ -1333,15 +1530,15 @@ CREATE vercel.json:
     }
   ]
 }
-(Every Sunday at 8AM UTC)
+This runs every Sunday at 8:00AM UTC. Note: Vercel cron requires Vercel Pro plan. As a fallback, Supabase pg_cron extension can be used.
 
-ACCEPTANCE: Email template renders correctly in email client preview. Cron endpoint returns 401 without CRON_SECRET. With valid secret, it processes users and sends emails via Resend dashboard.
+ACCEPTANCE: Email template renders with dark theme in email preview. Cron endpoint returns 401 without CRON_SECRET. With valid secret and seeded user data, reports generate and send. weekly_reports row inserted per user.
 ```
 
 ---
 
 ## PHASE 9: Polish + Launch Prep (Days 85–90)
-*Goal: Error handling, performance, mobile, tracking, landing page, launch.*
+*Goal: Error handling, performance, mobile, tracking, landing page, GDPR, launch.*
 
 ---
 
@@ -1353,35 +1550,35 @@ Add comprehensive error handling and skeleton loading states throughout MindForg
 ERROR BOUNDARIES:
 Create components/ErrorBoundary.tsx (React class component error boundary).
 Wrap each page in app/(app)/ with this boundary.
-Error UI: centered card, "Something went wrong" title, error message (non-technical), "Refresh" button. Dark themed, forge style.
+Error UI: centered dark card, "Something went wrong" title, non-technical message, "Refresh page" button.
 
 SKELETON LOADERS — create matching skeletons for all async components:
-- SkeletonHabitCard: matches HabitCard exact dimensions, use animated shimmer (bg-forge-border via CSS animation: pulse 1.5s ease-in-out infinite)
-- SkeletonForgeScore: rectangle matching score widget size
-- SkeletonXPBar: rectangle matching XP bar
+- SkeletonHabitCard: matches HabitCard exact dimensions
+- SkeletonForgeScore: matches score widget
+- SkeletonXPBar: matches XP bar
 - SkeletonCheckinCard: matches check-in CTA card
 - SkeletonChallengeCard: matches ChallengeCard
 - SkeletonCookieJarEntry: matches CookieJarEntry
 
-All skeletons use the Tailwind animate-pulse class with bg-forge-border (#2A2927) color blocks.
+All skeletons: bg-forge-border (#2A2927) blocks with Tailwind animate-pulse (1.5s ease-in-out infinite). No shimmer gradient — plain pulse only (simpler, less distracting).
 
-Wrap all page data fetches with React Suspense using matching skeleton fallbacks.
+Wrap all page data fetches with React Suspense using matching skeleton fallbacks. No blank white flash between states.
 
 TOAST NOTIFICATIONS:
-Install sonner (drop-in toast library with dark mode support).
-Add Toaster component to app/(app)/layout.tsx.
-Replace all alert() calls and inline success/error states with toast notifications.
-Use toast.success for positive actions (habit logged, check-in submitted, badge earned).
-Use toast.error for failures.
-Style with forge dark theme (dark background, orange accent for success).
+Install sonner.
+Add <Toaster theme="dark" /> to app/(app)/layout.tsx.
+Use toast.success / toast.error / toast.info throughout — never use alert() or inline success/error states.
+Style: dark background (#232220), orange success accent (#FF6B2B), no emojis in toast text.
 
-MEANINGFUL ERROR MESSAGES:
-- Habit limit (Free): "You've reached 3 habits on the free plan. Upgrade to Pro for unlimited habits." [Upgrade button in toast]
-- Rate limit: "You've reached today's coaching limit. Your coach resets in X hours."
-- Gemini unavailable: "Your coach is temporarily unavailable. Your entry has been saved. Debrief will be generated shortly."
-- Auth expired: "Your session expired. Redirecting to login..."
+Canonical error messages (these specific strings, per PRD error handling spec):
+- Free habit limit: "You've reached 3 habits on the free plan. Upgrade to Pro for unlimited habits." [Upgrade button]
+- Gemini unavailable: "Your coach is temporarily unavailable. Your reflection has been saved. We'll generate your debrief shortly."
+- Gemini stream interrupted: "Your debrief was interrupted. Resubmit to generate it." [Resubmit button, same-day only]
+- Duplicate habit log: "You've already logged this habit today."
+- Rate limit exceeded: "You've reached the coaching limit. Your coach resets in X hours."
+- Session expired: "Your session expired. Redirecting to login..."
 
-ACCEPTANCE: All pages show skeleton loaders before data loads. Error boundary catches failures gracefully. Toast notifications work throughout.
+ACCEPTANCE: All pages show skeletons before data loads. Error boundary catches page-level failures. All toasts use forge dark theme. No emojis in toasts.
 ```
 
 ---
@@ -1394,33 +1591,34 @@ Add PostHog analytics and Sentry error tracking.
 INSTALL: posthog-js posthog-node @sentry/nextjs
 
 POSTHOG SETUP:
-Create lib/posthog.ts with PostHog browser client (NEXT_PUBLIC_POSTHOG_KEY, NEXT_PUBLIC_POSTHOG_HOST).
-Create components/PostHogProvider.tsx wrapping the app.
+Create lib/posthog/client.ts with PostHog browser client using NEXT_PUBLIC_POSTHOG_KEY and NEXT_PUBLIC_POSTHOG_HOST.
+Create components/PostHogProvider.tsx and add to app/layout.tsx.
+Create lib/posthog/server.ts using posthog-node for server-side events (webhooks, cron).
 
-Track these events (use posthog.capture in the appropriate locations):
-- 'sign_up': On first-ever login (check if users row is newly created)
-- 'onboarding_complete': When onboarding_complete is set to true
-- 'habit_created': When a new habit is created (include category, habit_type)
-- 'habit_logged': When a habit is completed or missed (include completed: boolean)
-- 'checkin_submitted': When a daily check-in is submitted (include has_ai_debrief: boolean)
-- 'coach_message_sent': When a message is sent to direct coach (Pro)
-- 'upgrade_clicked': When any upgrade/pro CTA is clicked (include source: string)
-- 'subscription_created': In the webhook handler (server-side, use posthog-node)
-- 'challenge_activated': When a challenge is started
-- 'challenge_completed': When a challenge is completed
-- 'cookie_jar_entry_added': When a victory is added
-- 'badge_earned': When any badge is awarded (include badge_type)
-- 'forty_percent_triggered': When 40% Rule modal fires
-- 'forty_percent_accepted': When user clicks "I'll take the next step"
+Track these exact events (from PRD Section 15):
+- 'sign_up': On first-ever login (trigger when users row is newly inserted via DB trigger)
+- 'onboarding_complete': When users.onboarding_complete is set to true
+- 'habit_created': On habits.create success ({ category, habit_type })
+- 'habit_logged': On habits.logCompletion success ({ completed: boolean })
+- 'checkin_submitted': On checkins.submit success ({ has_ai_debrief: user.tier !== 'free' })
+- 'coach_message_sent': On direct chat message send (Pro only) — server-side
+- 'upgrade_clicked': On any upgrade CTA click ({ source: 'habit_limit'|'coach_locked'|'upgrade_page'|'settings' })
+- 'subscription_created': In webhook handler (server-side with posthog-node)
+- 'challenge_activated': On challenges.activate success
+- 'challenge_completed': On challenges.complete success
+- 'cookie_jar_entry_added': On cookiejar.add success
+- 'badge_earned': On checkAndAwardBadge returning awarded:true ({ badge_key })
+- 'forty_percent_triggered': On RuleForty overlay opening ({ triggered_by })
+- 'forty_percent_accepted': On "I'll take that step" button click
 
 SENTRY SETUP:
 Run: npx @sentry/wizard@latest -i nextjs
 Add NEXT_PUBLIC_SENTRY_DSN to env vars.
-Wrap all API route handlers with Sentry.withSentry.
-Add custom error context: user_id, tier, page for all captured exceptions.
-Set tracesSampleRate: 0.1 (10% of transactions).
+Wrap API routes with Sentry error capturing.
+Add custom context: user_id, tier on all Sentry captures.
+Set tracesSampleRate: 0.1 in production.
 
-ACCEPTANCE: PostHog dashboard shows sign_up events when a new user registers. Sentry dashboard shows test error when thrown. No console errors from tracking code.
+ACCEPTANCE: PostHog shows sign_up event on new registration. Sentry captures thrown test error. No console errors from tracking code.
 ```
 
 ---
@@ -1428,41 +1626,39 @@ ACCEPTANCE: PostHog dashboard shows sign_up events when a new user registers. Se
 ### Step 9.3 — Mobile Responsiveness Audit
 
 ```
-Perform a full mobile responsiveness audit of all MindForge pages.
+Perform a full mobile responsiveness audit.
 
-Test and fix at these breakpoints: 375px (iPhone SE), 390px (iPhone 14), 430px (iPhone 14 Pro Max).
+Target viewports: 375px (iPhone SE), 390px (iPhone 14), 430px (iPhone 14 Pro Max).
 
-KNOWN ISSUES TO ADDRESS:
+ISSUES TO FIX:
 
-1. SIDEBAR: Hidden on mobile (< lg). Replaced by MobileNav (bottom nav). Verify no layout shift when sidebar hides.
+1. SIDEBAR: Hidden on mobile (< lg). Verify no layout shift. Verify padding-left 240px only applies on lg+.
 
-2. HABIT CARDS: "Completed" and "Missed" buttons must be minimum 44px tall for touch targets (iOS HIG requirement). Verify tap area is large enough.
+2. HABIT CARD BUTTONS: "Completed" and "Missed" buttons must be min-height 44px (iOS HIG). Add min-h-[44px] class.
 
-3. FORGE SCORE: The display-size number (49px) may overflow on 375px. Cap at text-4xl on mobile.
+3. FORGE SCORE NUMBER: text-display (49px) may overflow on 375px. Use text-4xl on mobile: class="text-4xl lg:text-display".
 
-4. ANALYTICS CHARTS: Recharts responsive container must work at 375px width. Test each chart. Reduce tick density on mobile (fewer x-axis labels).
+4. ANALYTICS CHARTS: Add <ResponsiveContainer width="100%" height={200}> on mobile. Reduce x-axis tick count to 4 on mobile using interval calculation.
 
-5. COACH PAGE: Input textarea at bottom must not be covered by iOS keyboard. Use `env(safe-area-inset-bottom)` for padding on the input container.
+5. COACH PAGE INPUT: Input area at bottom must not be covered by iOS keyboard. Apply pb-[env(safe-area-inset-bottom)] and use CSS viewport units (dvh not vh) for the message container height.
 
-6. ONBOARDING: Textarea height should be 50vh on mobile (vs 60vh on desktop) to leave room for keyboard.
+6. ONBOARDING TEXTAREA: height 50vh on mobile, 60vh on desktop: class="h-[50vh] lg:h-[60vh]".
 
-7. COOKIE JAR SEARCH: Full-width on mobile.
+7. MODALS (40% Rule, badge): Must be full-screen on mobile. Use fixed inset-0 for all modal overlays.
 
-8. MODALS (40% Rule, badge earn): Must be full-screen on mobile. No small floating dialogs.
+8. HEADER on mobile: Show only score number, not "FORGE SCORE" label: class="hidden lg:block" on the label.
 
-9. HEADER: Forge Score number in header should show compact version on mobile (e.g., "342" without the "FORGE SCORE" label).
+9. COOKIE JAR SEARCH: Full-width search bar on all viewports.
 
-10. NAVIGATION: MobileNav bottom bar must account for iOS safe area: add `padding-bottom: env(safe-area-inset-bottom)` to the nav.
+10. CHECK-IN PAGE: On mobile, textarea should use dvh so it doesn't overflow when keyboard appears.
 
-For each issue found: fix it. Use Tailwind responsive prefixes (sm:, md:, lg:) to apply different styles at each breakpoint.
+Verify these core flows at 375px:
+- Login → complete onboarding (all 3 steps, including textarea input)
+- Dashboard → complete a habit (spark animation fires, Forge Score updates)
+- Submit daily check-in with AI debrief streaming
+- Add a Cookie Jar entry + run semantic search
 
-After fixes, verify all core flows work on mobile:
-- Login → Onboarding (all 3 steps)
-- Dashboard habit completion with Forge Spark animation
-- Daily check-in with AI streaming
-- Cookie Jar add + semantic search
-
-ACCEPTANCE: All core flows work at 375px. Touch targets meet 44px minimum. No horizontal scroll. No keyboard coverage issues.
+ACCEPTANCE: All core flows complete at 375px. No horizontal scroll on any page. Buttons are ≥44px. Keyboard does not cover inputs.
 ```
 
 ---
@@ -1470,134 +1666,132 @@ ACCEPTANCE: All core flows work at 375px. Touch targets meet 44px minimum. No ho
 ### Step 9.4 — Landing Page
 
 ```
-Build the MindForge marketing landing page at app/page.tsx.
+Build the MindForge marketing landing page.
 
-DESIGN PRINCIPLES: Dark, high-energy, direct. No soft language. No generic SaaS copy. This is for people who are serious about changing their life.
+CREATE app/page.tsx:
+This is a static marketing page — no 'use client' at page level. No tRPC providers needed. Use static rendering.
+
+TONE: Dark, direct, serious. No soft language. No SaaS clichés. No emojis anywhere on this page.
 
 SECTIONS:
 
-1. HERO:
-Full viewport height. Background: #0A0908. Optional: subtle radial gradient from orange at center (rgba(255,107,43,0.04) → transparent).
-Eyebrow: "THE FIRST ACCOUNTABILITY SYSTEM THAT TELLS YOU THE TRUTH" (text-xs, letter-spacing wide, text-muted, uppercase).
-Headline: "Stop being soft with yourself." (text-display, font-heading, text-primary, split across 2 lines for impact).
-Sub-headline: "MindForge combines neuroscience-backed behavior change with an AI coach that builds a persistent memory of who you are — and holds you to who you said you'd be." (text-xl, text-secondary, max-width 600px).
-CTA: "Start Forging — It's Free" (orange button, large, sharp, width 260px).
+1. HERO (full viewport height, bg #0A0908):
+Optional subtle radial gradient at center: rgba(255,107,43,0.04) → transparent.
+Eyebrow: "THE FIRST ACCOUNTABILITY SYSTEM THAT TELLS YOU THE TRUTH" (text-xs, tracking-widest, text-muted, uppercase).
+Headline: "Stop being soft with yourself." (text-display, font-heading, text-primary).
+Sub-headline: "MindForge uses neuroscience-backed behavior change and an AI coach that builds a persistent memory of who you are — and holds you to who you said you'd be." (text-xl, text-secondary, max-w-[600px]).
+CTA: "Start Forging — It's Free" (orange button, sharp, px-8 py-4, links to /login).
 Below CTA: "No credit card. No gentle encouragement. Just accountability." (text-xs, text-muted).
 
-2. PROBLEM SECTION:
-Header: "Every other app is lying to you." (text-3xl, font-heading).
-3 pain points (cards in a row):
-- "Participation trophies" → "They reward showing up, not results. Your brain learns to tolerate failure."
-- "No memory, no coaching" → "Generic reminders aren't coaching. There's no AI that actually knows you."
-- "Surface motivation collapses" → "Without your deepest why, streaks break and you're back to zero."
+2. PROBLEM SECTION (bg #111110):
+Heading: "Every other app is lying to you." (text-3xl, font-heading).
+3 cards (row on desktop, stack on mobile):
+- "Participation trophies" — "They reward showing up, not results. Your brain learns to tolerate failure."
+- "No memory, no coaching" — "Generic reminders are not coaching. No app builds a real relationship with you."
+- "Surface motivation collapses" — "Without your deepest why, streaks break and you abandon the app in two weeks."
 
-3. HOW IT WORKS:
-Header: "The Forge System" (text-3xl, font-heading).
-3 steps as a numbered vertical flow:
-1. "Face the Mirror" — Write the honest truth. Your AI coach responds without softening.
-2. "Excavate your Why" — A Socratic AI dialogue uncovers your identity-level motivation. The anchor that won't break.
-3. "Forge daily" — Log habits honestly, receive brutally honest AI coaching, watch your Forge Score rise.
+3. HOW IT WORKS (bg #0A0908):
+Heading: "The Forge System" (text-3xl, font-heading).
+3 numbered steps (vertical flow, left number in orange, right content):
+1. "Face the Mirror" — Write the honest truth. Your AI coach responds without softening it.
+2. "Excavate Your Why" — A Socratic AI dialogue uncovers your identity-level motivation. The anchor that does not break when motivation fails.
+3. "Forge Daily" — Log habits honestly. Receive direct coaching. Watch your Forge Score reflect the truth of your behavior.
 
-4. KEY FEATURES (icon grid):
-- Forge Score: "A real-time accountability score that tracks your actual behavior — not just effort."
-- AI Memory: "Your coach remembers your patterns, triggers, and past victories across every session."
-- 40% Rule Engine: "When you're about to quit, the system triggers. Research says you're at 40% of your capacity."
-- Cookie Jar: "Store your past victories. Your coach surfaces them when you're struggling."
-- Callousing Challenges: "Graduated discomfort that expands your mental toughness."
-- No Skip Option: "Completed or missed. No grace period. No undo. Just honesty."
+4. FEATURE GRID (bg #111110, 2x3 on desktop, 1 column on mobile):
+- Forge Score: "A real-time accountability score that reflects your actual behavior — not your effort."
+- AI Memory: "Your coach remembers your patterns, triggers, and past victories across every session. No other app does this."
+- 40% Rule Engine: "When you are about to quit, the system triggers. Research shows you are at 40% of your true capacity."
+- Cookie Jar: "Store your past victories. Your coach surfaces them when you are struggling."
+- Callousing Challenges: "A library of graduated discomfort challenges that build real mental toughness."
+- No Skip Option: "Completed or missed. No grace period. No undo. No excuses."
 
-5. PRICING (same 3-tier table as upgrade page, condensed).
+5. PRICING (bg #0A0908):
+Same 3-tier table as upgrade page with correct PRD pricing: Free / Pro $12/month / Elite $29/month.
+Annual toggle. Pro column highlighted with orange border.
 
-6. SOCIAL PROOF PLACEHOLDER:
-Header: "Built for people who are done making excuses."
-3 testimonial card slots — use placeholder text for launch:
-"I've tried 7 habit apps. MindForge is the first one that doesn't let me off the hook." — Marcus, Software Engineer
-"The AI coach actually remembers what I told it 3 weeks ago. That's never happened before." — Priya, Entrepreneur
-"My Forge Score dropped when I missed my workouts. That's the accountability I needed." — James, Founder
+6. SOCIAL PROOF (bg #111110):
+Heading: "Built for people who are done making excuses."
+3 placeholder testimonial cards:
+- "I've tried 7 habit apps. MindForge is the first one that does not let me off the hook." — Marcus, Software Engineer
+- "The AI coach actually remembers what I told it three weeks ago. That has never happened before." — Priya, Entrepreneur
+- "My Forge Score dropped when I missed my workouts. That is the accountability I needed." — James, Founder
 
-7. FINAL CTA:
-"The version of yourself you keep imagining? It's built in the forge."
-"Start Forging — Free for 14 Days" orange button.
+7. FINAL CTA (bg #0A0908, centered, large padding):
+"The version of yourself you keep imagining? It is built in the forge."
+"Start Forging — It's Free" orange button → /login.
 "No credit card required." text below.
 
-8. FOOTER: MindForge logo + tagline, links: Privacy Policy, Terms of Service (stub pages), Contact.
+8. FOOTER: "MINDFORGE" logo text, tagline, links to /privacy and /terms.
 
-PERFORMANCE: This page must achieve Lighthouse score ≥90. Use next/image for any images. Minimize JS on this route (no tRPC providers needed here — it's a static marketing page). Use static rendering (no 'use client' on the page itself).
-
-ACCEPTANCE: Landing page loads at /. All sections render. CTA buttons link to /login. Lighthouse performance score ≥85 on desktop.
+ACCEPTANCE: Landing page loads at /. All 8 sections render. No emojis on page. CTA links go to /login. Pricing shows $12/$29 (correct PRD prices). Lighthouse performance ≥85 on desktop.
 ```
 
 ---
 
-### Step 9.5 — Final Performance + GDPR + Launch Checks
+### Step 9.5 — Final Checks + GDPR + Launch
 
 ```
-Complete the final pre-launch checklist for MindForge.
+Complete the pre-launch checklist for MindForge.
 
-PERFORMANCE AUDIT:
-Run Lighthouse on /app/dashboard route (after login). Target: ≥90 performance score.
-Common fixes needed:
-- Ensure all images use next/image with proper width/height
-- Add loading="lazy" to below-fold content
-- Verify no unused CSS from Tailwind (purge is enabled in production by default)
-- Check for render-blocking resources
-- Verify React Suspense is used for all async data to prevent hydration waterfalls
+PERFORMANCE:
+Run Lighthouse on /dashboard route. Target: ≥90 performance score on desktop.
+- Ensure all images use next/image with width/height specified
+- Verify React Suspense is in place for all async data
+- Check no render-blocking scripts in <head>
+- Confirm Tailwind purge is working (no unused CSS shipped)
 
 GDPR COMPLIANCE:
 1. Data Export endpoint (app/api/user/export/route.ts):
-   - Authenticated GET endpoint
-   - Exports: user profile, habits, habit_completions, daily_checkins, coach_sessions, memories, cookie_jar entries, badges, xp_events
-   - Returns as JSON, or generate a downloadable .json file
+   - Authenticated GET
+   - Exports: user profile, habits, habit_completions (last 90 days), daily_checkins, coaching_sessions, user_memories (content only, no vectors), cookie_jar_entries, user_badges, xp_events
+   - Return as JSON download (Content-Disposition: attachment; filename="mindforge-export.json")
    - Rate limit: 1 export per 24 hours per user
 
-2. Delete Account (already in settings) — verify the soft-delete flow:
+2. Delete Account flow (already in Settings) — verify:
    - Set users.is_deleted = true
    - Anonymize email to deleted_{id}@mindforge.app
-   - Queue data deletion (can be a placeholder that logs to Sentry for manual processing in v1)
-   - Cancel Lemon Squeezy subscription via API if active
+   - If subscription active: call Lemon Squeezy API to cancel subscription
+   - Queue data anonymization (placeholder: log to Sentry for manual processing in v1)
 
-3. Add Privacy Policy page at app/privacy/page.tsx (simple static page with standard SaaS privacy policy content).
-4. Add Terms of Service page at app/terms/page.tsx.
+3. Create app/privacy/page.tsx — static privacy policy page (standard SaaS content, dark theme).
+4. Create app/terms/page.tsx — static terms of service page (standard SaaS content, dark theme).
 
 SECURITY FINAL CHECKS:
-- Verify SUPABASE_SERVICE_ROLE_KEY has no NEXT_PUBLIC_ prefix (must be server-only)
-- Verify GEMINI_API_KEY has no NEXT_PUBLIC_ prefix
-- Verify LEMONSQUEEZY_API_KEY has no NEXT_PUBLIC_ prefix
-- Verify RESEND_API_KEY has no NEXT_PUBLIC_ prefix
-- Run: grep -r "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE" . to confirm no accidental exposure
+- Confirm no env var starting with NEXT_PUBLIC_ contains secrets. Run: grep -r "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE\|NEXT_PUBLIC_GEMINI\|NEXT_PUBLIC_LEMONSQUEEZY\|NEXT_PUBLIC_RESEND" . — must return zero results.
+- Confirm RLS is enabled on all Supabase tables
+- Confirm Lemon Squeezy webhook HMAC verification is active (not bypassed)
+- Confirm rate limiting is active on /api/coach/stream
+
+CREATE .env.local.example with all env vars from Section 5.3 of the PRD, all values as empty strings.
 
 FINAL ACCEPTANCE CHECKLIST:
-- [ ] User can sign up, complete onboarding, and reach dashboard in <5 minutes
-- [ ] Daily check-in submits and AI debrief streams (Pro user)
-- [ ] Habit completion fires Forge Spark animation and updates Forge Score
-- [ ] Forge Score animates up with count-up effect
-- [ ] 40% Rule triggers when a 7+ day streak is broken
-- [ ] Upgrade flow: clicking upgrade → Lemon Squeezy checkout → webhook → tier upgrade
-- [ ] Weekly report cron endpoint works with CRON_SECRET
-- [ ] Mobile: all core flows work at 375px
-- [ ] PostHog shows events in dashboard
-- [ ] Sentry captures test error
-- [ ] Lighthouse dashboard route: ≥85 performance
-- [ ] No TypeScript errors: tsc --noEmit passes clean
-- [ ] All environment variables documented in .env.local.example (with no real values)
+- [ ] New user can sign up, complete onboarding (3 steps), and reach /dashboard
+- [ ] Daily check-in submits and AI debrief streams in (Pro user)
+- [ ] Habit completion fires Forge Spark animation and updates Forge Score (count-up animation, 500ms)
+- [ ] 40% Rule modal: pure black snap-in, heading "YOUR MIND IS LYING TO YOU", cannot escape except via the two buttons
+- [ ] Forge Score formula verified: floor(), 5 components, correct weights (40/20/20/10/10)
+- [ ] XP amounts correct: habit 20, checkin 30, cookie_jar 25, environment 50, onboarding 200
+- [ ] Level thresholds correct: Raw (0), Tempered (500), Forged (1500), Hardened (3500), Unbreakable (7500), Legendary (15000)
+- [ ] All 6 badges match PRD keys: identity_locked, mirror_gazer, cookie_jar_founder, forty_percent_survivor, cold_mind, tempered
+- [ ] Pricing on upgrade page and landing page shows $12/mo Pro, $29/mo Elite
+- [ ] Challenge XP is variable (xp_reward from challenge row), not flat 100
+- [ ] Cookie jar title max is 80 chars (not 100)
+- [ ] mood_signal values are 'excusing'|'deflecting'|'owning'|'crushing' (not 'steady'/'struggling')
+- [ ] Upgrade flow: CTA → checkout → webhook → users.tier updated
+- [ ] Weekly report cron endpoint requires CRON_SECRET and processes in batches of 50
+- [ ] Mobile: all core flows work at 375px, touch targets ≥44px
+- [ ] PostHog events fire on all tracked actions
+- [ ] Sentry captures errors with user_id context
+- [ ] tsc --noEmit passes with no TypeScript errors
+- [ ] Privacy and Terms pages exist
 
-CREATE .env.local.example with all variables listed (from Section 5.3 of PRD) and placeholder values.
-
-DEPLOY to Vercel:
-- Connect GitHub repo to Vercel
-- Set all environment variables in Vercel dashboard
-- Deploy. Verify all routes work on production domain.
-- Configure custom domain if available.
-- Set NEXT_PUBLIC_APP_URL to the production URL.
-
-LAUNCH. 🔥
+DEPLOY:
+Connect repo to Vercel. Set all env vars in Vercel dashboard. Deploy. Verify on production domain. Update NEXT_PUBLIC_APP_URL to production URL.
 ```
 
 ---
 
 ## ENVIRONMENT VARIABLES REFERENCE
-
-Copy from PRD Section 5.3. Set these in `.env.local` for development and in Vercel dashboard for production:
 
 ```
 # Supabase
@@ -1605,10 +1799,10 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
-# Google Gemini AI
+# Google Gemini AI (server-only — no NEXT_PUBLIC_ prefix)
 GEMINI_API_KEY=
 
-# Lemon Squeezy
+# Lemon Squeezy (server-only)
 LEMONSQUEEZY_API_KEY=
 LEMONSQUEEZY_WEBHOOK_SECRET=
 LEMONSQUEEZY_STORE_ID=
@@ -1617,7 +1811,7 @@ LEMONSQUEEZY_PRO_ANNUAL_VARIANT_ID=
 LEMONSQUEEZY_ELITE_MONTHLY_VARIANT_ID=
 LEMONSQUEEZY_ELITE_ANNUAL_VARIANT_ID=
 
-# Resend (Email)
+# Resend Email (server-only)
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=forge@mindforge.app
 
@@ -1639,14 +1833,50 @@ CRON_SECRET=
 
 | Phase | Days | Steps | Key Deliverable |
 |-------|------|-------|-----------------|
-| 1 — Foundation | 1–14 | 1.1–1.5 | Auth, DB schema, tRPC, layout shell |
-| 2 — Onboarding | 15–21 | 2.1–2.5 | 3-step onboarding with AI streaming |
-| 3 — Habit Engine | 22–35 | 3.1–3.2 | Full habit CRUD, streaks, dashboard cards |
-| 4 — Check-In + AI | 36–50 | 4.1–4.2 | Daily check-in, memory system, coach chat |
-| 5 — Forge Score | 51–60 | 5.1–5.2 | Score formula, XP, badges, 40% Rule |
-| 6 — Cookie Jar | 61–70 | 6.1–6.2 | Victory archive, semantic search, challenges |
-| 7 — Billing | 71–77 | 7.1–7.2 | Lemon Squeezy, upgrade page, settings |
-| 8 — Reports | 78–84 | 8.1–8.2 | Analytics charts, weekly email, cron job |
-| 9 — Launch Prep | 85–90 | 9.1–9.5 | Error handling, mobile, tracking, landing page, deploy |
+| 1 — Foundation | 1–14 | 1.1–1.5 | Auth, DB schema (all 16 tables), tRPC, layout shell |
+| 2 — Onboarding | 15–21 | 2.1–2.5 | Gemini client, SSE + classify endpoints, 3-step onboarding |
+| 3 — Habit Engine | 22–35 | 3.1–3.2 | Full habit CRUD, streak algorithm, dashboard |
+| 4 — Check-In + AI | 36–50 | 4.1–4.2 | Daily check-in, memory extraction + RAG, coach chat |
+| 5 — Forge Score | 51–60 | 5.1–5.2 | Exact PRD formula, XP/levels (6 non-linear tiers), 6 PRD badges, 40% Rule |
+| 6 — Cookie Jar + Challenges | 61–70 | 6.1–6.2 | Victory archive (80-char limit, 25 XP), challenge library (variable XP) |
+| 7 — Billing | 71–77 | 7.1–7.2 | Lemon Squeezy ($12/$29 pricing), upgrade page, settings |
+| 8 — Reports | 78–84 | 8.1–8.2 | Analytics charts, weekly email (batches of 50), cron job |
+| 9 — Launch Prep | 85–90 | 9.1–9.5 | Error handling, mobile, tracking, landing page, GDPR, deploy |
 
 **Total: 19 prompts across 9 phases.**
+
+---
+
+## KEY PRD CONSTANTS — QUICK REFERENCE
+
+Use these exact values throughout. Never substitute approximations.
+
+| Constant | Correct Value | Common Mistake |
+|----------|--------------|----------------|
+| Pro pricing | $12/month, $89/year | Wrong: $19/$149 |
+| Elite pricing | $29/month, $219/year | Wrong: $39/$299 |
+| Cookie jar title limit | 80 chars | Wrong: 100 chars |
+| Cookie jar description limit | 500 chars | Wrong: no limit |
+| Cookie jar XP | 25 XP | Wrong: 15 XP |
+| Check-in min chars (daily) | 50 chars | Wrong: 100 chars |
+| Check-in min chars (onboarding mirror) | 100 chars | Correct |
+| Forge Score rounding | floor() always | Wrong: Math.round() |
+| Streak Consistency weight | 40% (max 400) | Wrong formula: adherence rate |
+| Checkin Honesty Depth weight | 20% (max 200) | Wrong: 25%/250 |
+| Challenge Completion weight | 20% (max 200) | Wrong: 10%/100 |
+| mood_signal values | excusing, deflecting, owning, crushing | Wrong: steady, struggling |
+| Badges (6 total) | identity_locked, mirror_gazer, cookie_jar_founder, forty_percent_survivor, cold_mind, tempered | Wrong: first_habit_logged, seven_day_streak, etc. |
+| Level 1 name | Raw | Wrong: "Raw Iron" |
+| Level 2 name | Tempered | Wrong: "Forged Steel" |
+| Level 3 name | Forged | Wrong: "Tempered Blade" |
+| Level 2 XP threshold | 500 XP | Wrong: every 500 XP |
+| Level 3 XP threshold | 1,500 XP | Wrong: 1,000 XP |
+| 40% Rule modal heading | "YOUR MIND IS LYING TO YOU" | Wrong: "40% RULE" |
+| Challenge duration field | duration_minutes | Wrong: duration_days |
+| Challenge categories | cold, screen, physical, fast, social | Wrong: mental, digital |
+| Memory table name | user_memories | Wrong: memories |
+| Cookie jar table name | cookie_jar_entries | Wrong: cookie_jar |
+| Check-in table field | raw_reflection | Wrong: raw_text |
+| Session type for daily check-in | daily_checkin | Wrong: checkin_debrief |
+| Cron batch size | 50 users per batch | Wrong: 10 |
+| Score animation duration | 500ms | Wrong: 300ms |
