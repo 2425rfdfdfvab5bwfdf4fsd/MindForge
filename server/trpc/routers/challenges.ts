@@ -5,6 +5,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { awardXP } from "@/lib/xp";
 import { checkColdMind } from "@/lib/badges";
 import { recalculateForgeScore } from "@/lib/forge-score";
+import { trackServerEvent } from "@/lib/posthog/server";
 import type { Challenge } from "@/types";
 
 export const challengesRouter = router({
@@ -105,6 +106,13 @@ export const challengesRouter = router({
         reflection: null,
       });
 
+      const chalData = chalSnap.data()!;
+      trackServerEvent(ctx.user.id, "challenge_activated", {
+        challenge_id: input.challengeId,
+        category: chalData.category,
+        difficulty: chalData.difficulty,
+      });
+
       const snap = await ref.get();
       return { id: ref.id, ...snap.data() };
     }),
@@ -143,6 +151,11 @@ export const challengesRouter = router({
 
       checkColdMind(ctx.user.id).catch(() => {});
       const newForgeScore = await recalculateForgeScore(ctx.user.id);
+
+      trackServerEvent(ctx.user.id, "challenge_completed", {
+        challenge_id: snap.data()!.challengeId,
+        xp_awarded: xpReward,
+      });
 
       const updated = await ref.get();
       return {

@@ -127,7 +127,7 @@ export function HabitCard({ habit, localDate, onUpdate }: HabitCardProps) {
               </span>
               {habit.current_streak > 0 && (
                 <span className="text-sm text-text-muted">
-                  🔥 {habit.current_streak} day streak
+                  {habit.current_streak} day streak
                 </span>
               )}
             </div>

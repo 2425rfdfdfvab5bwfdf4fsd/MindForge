@@ -23,7 +23,7 @@ function getWeekRange(): { start: string; end: string; label: string } {
   };
 }
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   const authHeader = request.headers.get("Authorization");
   const cronSecret = process.env.CRON_SECRET;
 

@@ -42,7 +42,7 @@ export const checkinsRouter = router({
         await awardXP(ctx.user.id, 30, "Daily check-in submitted", "checkin");
         await recalculateForgeScore(ctx.user.id);
         checkMirrorGazer(ctx.user.id).catch(() => {});
-        trackServerEvent(ctx.user.id, "checkin_submitted", { has_ai_debrief: true });
+        trackServerEvent(ctx.user.id, "checkin_submitted", { has_ai_debrief: (ctx.userProfile?.tier ?? "free") !== "free" });
       }
 
       const snap = await ref.get();
