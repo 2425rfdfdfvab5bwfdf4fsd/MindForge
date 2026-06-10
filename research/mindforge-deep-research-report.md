@@ -112,7 +112,7 @@ The research confirms a clear "golden stack" for solo/small-team SaaS [9][10]:
 - **Frontend**: Next.js 14+ (App Router) + TypeScript + Tailwind CSS + shadcn/ui
 - **Backend**: Next.js API Routes + tRPC (type-safe APIs)
 - **Database**: Supabase (PostgreSQL + pgvector for embeddings + Supabase Auth)
-- **AI Layer**: OpenAI GPT-4o for coaching conversations + text-embedding-3-small for vector search
+- **AI Layer**: Google Gemini 2.5 Pro for coaching conversations + text-embedding-004 for vector search
 - **Payments**: Stripe (with Lemon Squeezy as alternative for global tax handling)
 - **Hosting**: Vercel (seamless Next.js deployment, edge functions)
 - **Email**: Resend
@@ -222,7 +222,7 @@ Longitudinal charts of Forge Score, habit completion rates, streak patterns, coa
 ## AI FEATURES
 
 ### 1. The Forge Coach (Core AI)
-Powered by GPT-4o with a persistent memory architecture (STM + session summaries + LTM vector store). The Forge Coach is not a chatbot — it's a trained persona: honest, direct, knowledgeable in neuroscience, never sycophantic. It:
+Powered by Gemini 2.5 Pro with a persistent memory architecture (STM + session summaries + LTM vector store). The Forge Coach is not a chatbot — it's a trained persona: honest, direct, knowledgeable in neuroscience, never sycophantic. It:
 - Reads every daily check-in and responds with truth
 - Runs 40% Rule interventions when users signal fatigue
 - References cookie jar entries in real time
@@ -387,7 +387,7 @@ Pod-level leaderboards only (not global, to avoid toxic comparison). Ranked by F
 The 90-day MVP delivers:
 - User authentication + onboarding (Accountability Mirror + Why Excavation)
 - Habit Forge Tracker (up to 3 habits, free; unlimited, Pro)
-- Daily Check-In + AI Debrief (GPT-4o)
+- Daily Check-In + AI Debrief (Gemini 2.5 Pro)
 - Cookie Jar
 - Forge Score (basic formula)
 - 40% Rule Intervention (triggered on missed habits)
@@ -418,8 +418,8 @@ The 90-day MVP delivers:
         ┌─────────────────────┼─────────────────────┐
         │                     │                     │
 ┌───────▼───────┐   ┌─────────▼────────┐  ┌────────▼────────┐
-│  Supabase DB   │   │  OpenAI Service  │  │  Stripe Service  │
-│  (PostgreSQL)  │   │  (GPT-4o + RAG)  │  │  (Billing)       │
+│  Supabase DB   │   │  Gemini Service  │  │  Stripe Service  │
+│  (PostgreSQL)  │   │  (Gemini + RAG)  │  │  (Billing)       │
 │  + pgvector    │   └─────────────────┘  └─────────────────┘
 └───────────────┘
         │
@@ -435,7 +435,7 @@ The 90-day MVP delivers:
 User Message
      │
      ▼
-1. Embed query (text-embedding-3-small)
+1. Embed query (text-embedding-004)
      │
      ▼
 2. Vector search pgvector → retrieve top-K memories
@@ -449,7 +449,7 @@ User Message
    - Memories: [retrieved LTM facts]
      │
      ▼
-4. GPT-4o completion (streaming)
+4. Gemini 2.5 Pro completion (streaming)
      │
      ▼
 5. Memory extraction agent:
@@ -472,7 +472,7 @@ User Message
 | API | tRPC | End-to-end type safety, no boilerplate |
 | Database | Supabase (PostgreSQL) | Managed, auth included, pgvector |
 | Vector Search | pgvector (Supabase extension) | AI memory without extra infra |
-| AI | OpenAI GPT-4o + text-embedding-3-small | Best quality/cost for coaching |
+| AI | Google Gemini 2.5 Pro + text-embedding-004 | Best quality/cost for coaching |
 | Auth | Supabase Auth | Built-in, RLS, social login |
 | Payments | Stripe | Industry standard, excellent DX |
 | Email | Resend + React Email | Developer-first, weekly reports |
@@ -695,10 +695,10 @@ CREATE INDEX idx_cookie_jar_embedding ON cookie_jar_entries USING ivfflat (embed
 
 | Model | Use Case | Est. Cost |
 |---|---|---|
-| `gpt-4o` | Daily debriefs, coaching sessions, 40% interventions | ~$0.03–0.12 per session |
-| `gpt-4o-mini` | Memory extraction, mood signal classification, short interactions | ~$0.003 per call |
-| `text-embedding-3-small` | Cookie jar + user memory embeddings | ~$0.00002 per embed |
-| `gpt-4o` (structured output) | Weekly neural report generation | ~$0.05 per report |
+| `gemini-2.5-pro` | Daily debriefs, coaching sessions, 40% interventions | ~$0.03–0.10 per session |
+| `gemini-2.5-flash` | Memory extraction, mood signal classification, short interactions | ~$0.001 per call |
+| `text-embedding-004` | Cookie jar + user memory embeddings | ~$0.00001 per embed |
+| `gemini-2.5-pro` (structured output) | Weekly neural report generation | ~$0.04 per report |
 
 At 1,000 Pro users: estimated AI cost ~$800–1,200/month. Pro tier at $12/month × 1,000 = $12,000 MRR. Healthy margin.
 
@@ -737,7 +737,7 @@ The David Goggins and peak performance community is enormous, active, and unders
 | Week | Milestone |
 |---|---|
 | Week 1–4 | Core infrastructure (auth, DB, habit tracker, check-in) |
-| Week 5–8 | AI coach integration (GPT-4o, memory engine, debrief) |
+| Week 5–8 | AI coach integration (Gemini 2.5 Pro, memory engine, debrief) |
 | Week 9–10 | Forge Score, Cookie Jar, Callousing Challenges |
 | Week 11–12 | Stripe billing, email (Resend), basic analytics |
 | Week 12 | **Soft launch: Founding Forgers waitlist opens** |
@@ -784,7 +784,7 @@ Weekly neural reports get better over time as AI learns more about user → user
 
 1. **Churn from discomfort**: The "hard accountability" philosophy will cause some users to quit. This is by design — the product self-selects for committed users. But it means the free-to-paid funnel must filter clearly. Solution: Strong onboarding that sets expectations before the paywall.
 
-2. **AI cost scaling**: At high volume, GPT-4o costs can compress margins. Solution: Tiered AI usage (gpt-4o-mini for light tasks, gpt-4o for full coaching), usage caps on free tier, and caching common responses.
+2. **AI cost scaling**: At high volume, Gemini API costs can compress margins. Solution: Tiered AI usage (Gemini 2.5 Flash for light tasks, Gemini 2.5 Pro for full coaching), usage caps on free tier, and caching common responses.
 
 3. **Trademark/brand risk**: "Goggins Mode," "Cookie Jar," etc. are associated with a real person. MindForge uses these as *concepts* drawn from publicly documented behavioral science, not as branded products tied to Goggins' personal brand. Legal review recommended before launch.
 
@@ -1141,7 +1141,7 @@ Your coaching sessions and personal reflections are used solely to personalize y
 ## PHASE 2: AI INTEGRATION (Days 31–60)
 
 ### Week 5 — Core AI Coach
-- [ ] Configure OpenAI client (GPT-4o + text-embedding-3-small)
+- [ ] Configure Google Gemini client (gemini-2.5-pro + text-embedding-004)
 - [ ] Build Forge Coach system prompt template
 - [ ] Implement streaming AI response endpoint
 - [ ] Build daily debrief flow (check-in → AI debrief → display)
@@ -1182,7 +1182,7 @@ Your coaching sessions and personal reflections are used solely to personalize y
 
 ### Week 10 — Analytics + Reports
 - [ ] Build analytics dashboard (Forge Score history, habit completion charts, streak calendar)
-- [ ] Implement Weekly Neural Report generation (GPT-4o structured output)
+- [ ] Implement Weekly Neural Report generation (Gemini 2.5 Pro structured output)
 - [ ] Build Resend email template for weekly report
 - [ ] Set up weekly cron job (Vercel cron or Supabase pg_cron)
 - [ ] PostHog integration (page views, feature usage, conversion events)
@@ -1226,7 +1226,7 @@ The closest competitors — Habitica, Fabulous, Streaks — compete on gentlenes
 
 The AI memory moat is the technical defensibility. The honest accountability brand is the cultural defensibility. The neuroscience content is the educational defensibility. The pod community is the social defensibility. Together, they create a product that gets better the longer users stay — and a brand that users wear as an identity badge, not just an app they use.
 
-The timing is right. The content ecosystem (Goggins, Huberman Lab, Jocko Willink) has built an audience of hundreds of millions primed for exactly this product. The technology (GPT-4o, pgvector, Next.js, Supabase) makes it buildable by a solo founder in 90 days. The market size ($7.5–41B) provides room to grow into a significant business.
+The timing is right. The content ecosystem (Goggins, Huberman Lab, Jocko Willink) has built an audience of hundreds of millions primed for exactly this product. The technology (Gemini 2.5 Pro, pgvector, Next.js, Supabase) makes it buildable by a solo founder in 90 days. The market size ($7.5–41B) provides room to grow into a significant business.
 
 ---
 
