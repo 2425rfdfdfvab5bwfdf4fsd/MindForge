@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, desc, count, or, ilike, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { cookieJarEntries } from "@/shared/schema";
 import { awardXP } from "@/lib/xp";
@@ -123,16 +123,26 @@ export const cookiejarRouter = router({
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       const q = `%${input.query}%`;
+
+      // Apply SQL ILIKE filter at the database level so all user entries are
+      // searched — not just the most-recent 20. Client-side scoring is applied
+      // afterwards to rank multi-word matches.
       const results = await ctx.db
         .select()
         .from(cookieJarEntries)
         .where(
-          eq(cookieJarEntries.userId, ctx.user.id)
+          and(
+            eq(cookieJarEntries.userId, ctx.user.id),
+            or(
+              ilike(cookieJarEntries.title, q),
+              ilike(cookieJarEntries.description, q)
+            )
+          )
         )
         .orderBy(desc(cookieJarEntries.createdAt))
         .limit(20);
 
-      // Client-side text scoring (pgvector not available; semantic upgrade path later)
+      // Client-side multi-word scoring (pgvector/semantic upgrade path later)
       const words = input.query.toLowerCase().split(/\s+/).filter(Boolean);
       const scored = results
         .map((e) => {
@@ -141,7 +151,6 @@ export const cookiejarRouter = router({
           const similarity = matchCount / words.length;
           return { ...e, similarity };
         })
-        .filter((e) => e.similarity > 0)
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, 5);
 
