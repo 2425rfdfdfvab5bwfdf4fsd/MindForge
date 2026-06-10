@@ -6,3 +6,9 @@ id = "mFIMUs5X9MzqNZ8XpcAJI"
 uri = "file://research/mindforge-deep-research-report.md"
 type = "text"
 title = "MindForge — Full Research Report, PRD & Launch Blueprint"
+
+[[outputs]]
+id = "nrwbdb6xbSPNrJ_qB6M6R"
+uri = "file://research/mindforge-prd-generator-prompt.md"
+type = "text"
+title = "MindForge — Filled PRD Generator Prompt"
