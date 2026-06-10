@@ -1,0 +1,54 @@
+Implement the full Forge Score calculation system.
+
+CREATE lib/forge-score.ts:
+
+FORGE SCORE FORMULA (per PRD Feature 8 — use this exactly):
+The Forge Score is an integer 0–1000. Always floor(), never round up.
+
+COMPONENT 1 — Streak Consistency (40% weight, max 400 points):
+- For each active habit: ratio = current_streak / max(longest_streak, 7), capped at 1.0
+- streak_score = average of all ratios across all active habits (if no habits: 0)
+- Points = floor(streak_score × 400)
+
+COMPONENT 2 — Check-in Honesty Depth (20% weight, max 200 points):
+- Rolling 14-day average of honesty_score / 10 from daily_checkins (exclude null honesty_score rows)
+- If no check-ins: 0
+- Points = floor(average_ratio × 200)
+
+COMPONENT 3 — Challenge Completion (20% weight, max 200 points):
+- challenges_completed_this_month = count from user_challenges where status='completed' and completed_at >= start of current calendar month
+- challenges_available = count from challenges table (total active challenges accessible by user's tier)
+- ratio = challenges_completed_this_month / max(challenges_available, 1), capped at 1.0
+- Points = floor(ratio × 200)
+
+COMPONENT 4 — Cookie Jar Growth (10% weight, max 100 points):
+- count = total cookie_jar_entries for user
+- ratio = min(count / 20, 1.0) — reaches max at 20 entries
+- Points = floor(ratio × 100)
+
+COMPONENT 5 — Environment Improvements (10% weight, max 100 points):
+- Parse users.environment_audit JSONB array
+- done_count = items where done = true; total_count = total items
+- ratio = done_count / max(total_count, 1), capped at 1.0
+- Points = floor(ratio × 100)
+
+TOTAL = floor(C1 + C2 + C3 + C4 + C5), min 0, max 1000
+
+CREATE async function recalculateForgeScore(userId: string): Promise<number>:
+- Fetch ALL required data in a SINGLE Promise.all (no N+1 queries):
+  - habit_streaks for user's active habits
+  - daily_checkins honesty scores (last 14 days)
+  - user_challenges completed this month
+  - count of active challenges (accessible by tier)
+  - cookie_jar_entries count
+  - users.environment_audit
+- Compute each component using the exact formula above
+- TOTAL must use floor(), NOT Math.round()
+- Update users.forge_score = TOTAL
+- Insert into forge_score_history: { user_id, score: TOTAL, recorded_at: now }
+- This function must complete in <200ms. Profile with EXPLAIN ANALYZE if slow.
+- Return TOTAL
+
+UPDATE server/trpc/routers/analytics.ts with real implementations:
+- forgeScoreHistory: { days: number } → SELECT score, recorded_at FROM forge_score_history WHERE user_id = ? AND recorded_at >= NOW() - interval '{days} days' ORDER BY recorded_at ASC → return [{date, score}]
+- getDashboardStats: Return { forgeScore, habitStats, checkinStreak, avgHonestyScore }

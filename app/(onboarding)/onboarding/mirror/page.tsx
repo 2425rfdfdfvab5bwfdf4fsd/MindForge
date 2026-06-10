@@ -78,7 +78,7 @@ export default function MirrorPage() {
   useEffect(() => {
     if (isComplete && streamedText && checkinId) {
       updateMetadata.mutate({
-        id: checkinId,
+        checkinId: checkinId,
         aiResponse: streamedText,
       });
     }
@@ -94,7 +94,7 @@ export default function MirrorPage() {
     // Store checkin
     const result = await submitCheckin.mutateAsync({
       localDate,
-      rawReflection: text,
+      text,
       onboardingMirror: true,
     });
 

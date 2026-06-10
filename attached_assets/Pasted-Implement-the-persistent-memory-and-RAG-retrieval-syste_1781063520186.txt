@@ -1,0 +1,52 @@
+Implement the persistent memory and RAG retrieval system for the AI Forge Coach.
+
+UPDATE lib/gemini/coach.ts:
+
+CREATE async function buildCoachSystemPrompt(userId: string, currentMessage: string, sessionType: string): Promise<string>
+Steps (run in parallel with Promise.all):
+1. Fetch user profile: why_statement, identity_declaration, level, forge_score, coach_intensity
+2. Fetch active habits + current streaks (top 5 by streak length)
+3. Embed currentMessage with generateEmbedding(currentMessage)
+4. Query user_memories by semantic similarity (top 5):
+   SELECT content, memory_type, 1 - (embedding <=> $embeddingParam) as similarity
+   FROM user_memories
+   WHERE user_id = $userId
+   ORDER BY embedding <=> $embeddingParam
+   LIMIT 5
+5. Query cookie_jar_entries by semantic similarity (top 3):
+   SELECT title, description, 1 - (embedding <=> $embeddingParam) as similarity
+   FROM cookie_jar_entries
+   WHERE user_id = $userId
+   ORDER BY embedding <=> $embeddingParam
+   LIMIT 3
+
+Build the system prompt string combining:
+- The base Forge Coach persona (or firm version based on coach_intensity)
+- The appropriate session-type prompt (CHECKIN_DEBRIEF_SYSTEM_PROMPT or direct chat instructions)
+- User profile section: Why Statement, Identity Declaration, Forge Score, Level, Active habits + streaks
+- Top 3 Cookie Jar victories
+- Top 5 semantic memories labeled by memory_type
+
+UPDATE app/api/coach/stream/route.ts:
+For session_type 'daily_checkin' and 'direct_chat':
+1. Call buildCoachSystemPrompt(userId, lastUserMessage, sessionType)
+2. Use the enriched system prompt for the Gemini call
+For 'forty_percent_rule': also fetch top-1 cookie jar entry semantically matching the trigger context.
+
+CREATE app/(app)/coach/page.tsx (Pro-gated):
+(URL: /coach)
+
+TIER CHECK: If user is Free tier:
+- Show centered locked-state card: "Your coach is waiting." title, description of the memory system, "Unlock with Pro" orange button → /upgrade.
+
+IF PRO/ELITE:
+- Full-page chat interface
+- On mount: stream an opening personalized greeting (session_type='direct_chat', opening message from coach)
+- Message history: fetch last 50 messages from coaching_sessions table for this user (direct_chat type)
+- Input at bottom fixed, send on Enter (with Shift+Enter for newline) or "Send" button
+- Session type: 'direct_chat'
+- Each full conversation stored in coaching_sessions table (append to messages JSONB)
+- After conversation ends (user navigates away): trigger extractAndStoreMemories in background
+- "Memory" badge near header: clicking opens a modal showing user's stored memories from user_memories table, grouped by memory_type
+
+ACCEPTANCE: /coach is gated (Free tier sees locked state). Pro users get personalized opening message. Coach references past memories in responses. Memory extraction runs after sessions.
