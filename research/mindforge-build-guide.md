@@ -1,5 +1,5 @@
 # MindForge — Phase-by-Phase Build Guide
-**Version:** 1.2 | **Based on PRD v1.0** | **Total Timeline: 90 Days**
+**Version:** 1.3 | **Based on PRD v1.0** | **Total Timeline: 90 Days**
 
 This file contains every prompt needed to build MindForge end-to-end, organized by phase. Each prompt is self-contained and references the PRD for full spec details. Paste each prompt directly into your AI coding agent to complete that step.
 
@@ -812,8 +812,9 @@ UPDATE app/(app)/dashboard/page.tsx:
 (URL: /dashboard)
 
 LAYOUT: Two-column on desktop (lg+), single column on mobile.
-Left column (2/3 width): Check-in CTA + habit cards.
-Right column (1/3 width): Forge Score + XP bar + active challenge (if any) + quick stats.
+Desktop: Left column (2/3 width): Check-in CTA + habit cards. Right column (1/3 width): Forge Score + XP bar + active challenge (if any) + quick stats.
+Mobile stacking order (PRD Feature 15 specifies this exact order): Forge Score widget FIRST (full-width), then Check-in CTA, then Habits, then XP bar, then active challenge, then recent cookie jar.
+Implementation: Place the Forge Score widget as a full-width section above the two-column grid, visible on all viewports. On lg+, also show it in the right column (use `hidden lg:block` / `block lg:hidden` pairs, or CSS grid with explicit `order` properties: Forge Score gets `order-first` on mobile). The right column on desktop should then contain XP bar + active challenge + recent cookie jar only.
 
 Use a single tRPC call: dashboard.getAll({ localDate: today }) returning: { user, habits, todayCheckin, activeChallenge, forgeScore, xp, level, topStreaks, recentCookieJar }.
 
@@ -1119,14 +1120,15 @@ SIX v1 BADGES (per PRD Feature 13 — these are the exact badge_key values and t
 
 CREATE async function checkAndAwardBadge(userId: string, badgeKey: BadgeKey): Promise<{ awarded: boolean }>
 - SELECT 1 FROM user_badges WHERE user_id = ? AND badge_key = ? (idempotent check)
-- If not yet awarded: INSERT into user_badges, call awardXP(userId, 50, 'Badge earned: ' + badgeKey, 'onboarding')
+- If not yet awarded: INSERT into user_badges
+- Do NOT call awardXP here — badges are cosmetic achievements. The PRD XP table lists exactly 8 XP sources and badge earning is not one of them. Adding XP for badges would be an unauthorized XP source.
 - Return { awarded: true/false }
 
 Badge trigger locations:
 - 'identity_locked': in onboarding Step 2 on Why Statement accept
 - 'mirror_gazer': in checkins.submit — check if last 30 days all have a check-in
 - 'cookie_jar_founder': in cookiejar.add — check if count >= 10
-- 'forty_percent_survivor': in rule_forty_events insert when choice='took_step' — check if total took_step count = 5
+- 'forty_percent_survivor': in rule_forty_events insert when choice='took_step' — check if total took_step count >= 5 (use >= not = — exact equality risks missing the badge if any event is back-filled or checked slightly out of order; idempotency check in checkAndAwardBadge prevents double-awarding)
 - 'cold_mind': in challenges.complete — check cold-category completions >= 7
 - 'tempered': in awardXP whenever new xp >= 500 — check and award if just crossed threshold
 
