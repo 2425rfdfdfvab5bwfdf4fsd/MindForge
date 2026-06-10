@@ -9,7 +9,6 @@
     "lint": "next lint",
     "seed:challenges": "npx ts-node --project tsconfig.json scripts/seed-challenges.ts"
   },
-
   "dependencies": {
     "@google/genai": "^2.8.0",
     "@google/generative-ai": "^0.24.1",
@@ -26,6 +25,7 @@
     "@trpc/server": "^11.17.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "drizzle-zod": "^0.8.3",
     "firebase": "^12.14.0",
     "firebase-admin": "^13.4.0",
     "framer-motion": "^11.18.2",
