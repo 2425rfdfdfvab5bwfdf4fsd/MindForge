@@ -1,0 +1,64 @@
+Build the Daily Accountability Mirror check-in page.
+
+CREATE app/(app)/checkin/page.tsx:
+(URL: /checkin)
+
+LAYOUT: Centered, max-width 720px, padding 48px 24px. Uses the app shell (sidebar + header).
+
+PAGE HEADING: "The Mirror — [Today's Date formatted as 'Tuesday, June 10']" (text-3xl, font-heading)
+
+STATES:
+A) No check-in today (default):
+- Textarea: same dark styling as onboarding mirror. Placeholder: "What actually happened? Be honest." Character count shown bottom-right (text-xs, text-muted). Min 50 characters for submit.
+- "Submit to the Mirror" button (full width, orange, disabled until 50+ chars)
+- On submit: call tRPC checkins.submit({ text, localDate }), then start SSE stream to /api/coach/stream with session_type='daily_checkin'
+- Free tier: no SSE call. Instead show upgrade prompt: "Upgrade to Pro to unlock your AI debrief."
+- Award 30 XP on submit (event_type: 'checkin')
+
+B) Check-in submitted, AI streaming (Pro):
+- Submitted text shown above in muted card (bg #1A1918, padding 16px, text-secondary)
+- "Forge Coach is analyzing..." pulsing dots
+- AI debrief streams in below with orange left border, blinking cursor until complete
+- After streaming: show honesty score badge "Honesty: X/10" (call /api/coach/classify, then tRPC checkins.updateMetadata)
+- If mood_signal is 'excusing' or 'deflecting': automatically show 40% Rule overlay (RuleForty component)
+
+C) Check-in complete for today:
+- Show submitted text (read-only)
+- Show AI debrief (if Pro)
+- Honesty score badge visible
+- "Check-in complete for today" status indicator
+- Link to yesterday's check-in if it exists
+
+UPDATE server/trpc/routers/checkins.ts with real implementations:
+
+checkins.submit: Protected mutation. Input: { text: string (min 50 chars for daily, min 100 for onboarding_mirror), localDate: string, onboarding_mirror?: boolean }
+- Validate text length server-side (return BAD_REQUEST if too short)
+- Insert into daily_checkins with field name raw_reflection (NOT raw_text per PRD data model)
+- Award XP 30 (event_type: 'checkin') for regular check-ins (not onboarding_mirror)
+- Trigger Forge Score recalculation
+- Return the created daily_checkin row
+
+checkins.updateMetadata: Protected mutation. Input: { checkinId, honestyScore, moodSignal, aiResponse? }
+- Verify checkin belongs to user
+- Update daily_checkins: set honesty_score, mood_signal, ai_response (if provided)
+- If moodSignal === 'crushing': call awardXP(userId, 20, 'Crushing check-in bonus', 'checkin_bonus') — this is the bonus 20 XP from the PRD XP table. Do NOT award it on 'owning', only 'crushing'.
+
+checkins.getToday: Protected query. Input: { localDate: string }. Return today's check-in or null.
+
+checkins.getHistory: Protected query. Returns last 30 check-ins for user.
+
+CREATE lib/gemini/memory.ts:
+async function extractAndStoreMemories(userId: string, sessionId: string, text: string):
+- Call Gemini 2.5 Flash with prompt:
+  "Extract 0–3 atomic memory facts from this text. Return JSON array: [{content: string, memory_type: 'preference'|'trigger'|'victory'|'fear'|'identity'|'pattern'}].
+  Only extract genuinely new, specific facts. Skip generic statements.
+  Good examples: 'User wakes at 6am', 'User struggles with night snacking after 10pm', 'User fears disappointing their family'.
+  Text: {text}"
+  Use responseMimeType: 'application/json'
+- For each extracted memory: call generateEmbedding(content), insert into user_memories table
+- Store source_session_id reference
+- Run this function ASYNCHRONOUSLY after check-in response — do not block the user
+
+Call extractAndStoreMemories after each successful check-in debrief AND after each direct coach conversation (not for onboarding_mirror).
+
+ACCEPTANCE: User can submit a daily check-in. AI debrief streams in (Pro). Honesty score appears after stream. Free users see upgrade prompt. Mood signal 'excusing' triggers 40% Rule overlay. Memory extraction runs in background.
