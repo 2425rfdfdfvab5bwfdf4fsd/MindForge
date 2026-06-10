@@ -4,6 +4,7 @@ import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
 import { awardXP } from "@/lib/xp";
 import { checkCookieJarFounder } from "@/lib/badges";
+import type { CookieJarEntry } from "@/types";
 
 export const cookiejarRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -12,7 +13,7 @@ export const cookiejarRouter = router({
       .where("userId", "==", ctx.user.id)
       .orderBy("createdAt", "desc")
       .get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as CookieJarEntry[];
   }),
 
   add: protectedProcedure
@@ -51,7 +52,7 @@ export const cookiejarRouter = router({
       if (newCount >= 10) checkCookieJarFounder(ctx.user.id).catch(() => {});
 
       const snap = await ref.get();
-      return { id: ref.id, ...snap.data() };
+      return { id: ref.id, ...snap.data() } as CookieJarEntry;
     }),
 
   edit: protectedProcedure
@@ -78,7 +79,7 @@ export const cookiejarRouter = router({
 
       await ref.update(update);
       const updated = await ref.get();
-      return { id: ref.id, ...updated.data() };
+      return { id: ref.id, ...updated.data() } as CookieJarEntry;
     }),
 
   delete: protectedProcedure
@@ -119,6 +120,6 @@ export const cookiejarRouter = router({
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, 5);
 
-      return results;
+      return results as (CookieJarEntry & { similarity: number })[];
     }),
 });

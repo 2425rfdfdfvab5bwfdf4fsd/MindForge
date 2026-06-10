@@ -5,6 +5,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { awardXP } from "@/lib/xp";
 import { checkColdMind } from "@/lib/badges";
 import { recalculateForgeScore } from "@/lib/forge-score";
+import type { Challenge } from "@/types";
 
 export const challengesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -50,7 +51,18 @@ export const challengesRouter = router({
         ).toISOString();
       }
 
-      return { id: c.id, ...cData, userChallenge, expiresAt };
+      return {
+        id: c.id,
+        title: cData.title as string,
+        description: cData.description as string,
+        difficulty: cData.difficulty as 1 | 2 | 3 | 4 | 5,
+        category: cData.category as Challenge["category"],
+        durationMinutes: cData.durationMinutes as number,
+        xpReward: cData.xpReward as number,
+        isActive: cData.isActive as boolean,
+        userChallenge,
+        expiresAt,
+      };
     });
   }),
 

@@ -5,6 +5,7 @@ import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
 import { awardXP } from "@/lib/xp";
 import { checkAndAwardBadge } from "@/lib/badges";
+import type { UserProfile, UserBadge, EnvironmentAuditItem } from "@/types";
 
 const BADGE_KEYS = [
   "identity_locked",
@@ -21,7 +22,7 @@ export const userRouter = router({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const snap = await adminDb.collection("users").doc(ctx.user.id).get();
     if (!snap.exists) return null;
-    return { id: snap.id, ...snap.data() };
+    return { id: snap.id, ...snap.data() } as UserProfile;
   }),
 
   updateProfile: protectedProcedure
@@ -47,7 +48,7 @@ export const userRouter = router({
       const ref = adminDb.collection("users").doc(ctx.user.id);
       await ref.update(update);
       const snap = await ref.get();
-      return { id: snap.id, ...snap.data() };
+      return { id: snap.id, ...snap.data() } as UserProfile;
     }),
 
   updateWhy: protectedProcedure
@@ -65,7 +66,7 @@ export const userRouter = router({
         updatedAt: new Date().toISOString(),
       });
       const snap = await ref.get();
-      return { id: snap.id, ...snap.data() };
+      return { id: snap.id, ...snap.data() } as UserProfile;
     }),
 
   awardBadge: protectedProcedure
@@ -129,7 +130,7 @@ export const userRouter = router({
         ];
       }
 
-      const inserted: Array<Record<string, unknown>> = [];
+      const inserted: EnvironmentAuditItem[] = [];
       for (const it of items) {
         const ref = await adminDb.collection("environment_audit_items").add({
           userId: ctx.user.id,
@@ -138,7 +139,7 @@ export const userRouter = router({
           done: false,
           createdAt: new Date().toISOString(),
         });
-        inserted.push({ id: ref.id, userId: ctx.user.id, ...it, done: false });
+        inserted.push({ id: ref.id, item: it.item, category: it.category, done: false });
       }
 
       return inserted;
@@ -150,7 +151,7 @@ export const userRouter = router({
       .where("userId", "==", ctx.user.id)
       .orderBy("createdAt")
       .get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as EnvironmentAuditItem[];
   }),
 
   markEnvironmentItemDone: protectedProcedure
@@ -196,7 +197,7 @@ export const userRouter = router({
       updatedAt: new Date().toISOString(),
     });
     const snap = await ref.get();
-    return { id: snap.id, ...snap.data() };
+    return { id: snap.id, ...snap.data() } as UserProfile;
   }),
 
   getSubscription: protectedProcedure.query(async ({ ctx }) => {
@@ -206,7 +207,17 @@ export const userRouter = router({
       .limit(1)
       .get();
     if (snap.empty) return null;
-    return { id: snap.docs[0].id, ...snap.docs[0].data() };
+    return { id: snap.docs[0].id, ...snap.docs[0].data() } as {
+      id: string;
+      userId: string;
+      status: "active" | "cancelled" | "expired" | "past_due";
+      currentPeriodEnd?: string | null;
+      lemonsqueezyCustomerId?: string | null;
+      lemonsqueezySubscriptionId?: string | null;
+      variantId?: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
   }),
 
   getBadges: protectedProcedure.query(async ({ ctx }) => {
@@ -215,6 +226,6 @@ export const userRouter = router({
       .doc(ctx.user.id)
       .collection("badges")
       .get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserBadge[];
   }),
 });

@@ -15,15 +15,16 @@ export async function checkAndAwardBadge(
   userId: string,
   badgeKey: BadgeKey
 ): Promise<{ awarded: boolean }> {
-  const badgesRef = adminDb
+  const docRef = adminDb
     .collection("users")
     .doc(userId)
-    .collection("badges");
+    .collection("badges")
+    .doc(badgeKey);
 
-  const existing = await badgesRef.where("badgeKey", "==", badgeKey).limit(1).get();
-  if (!existing.empty) return { awarded: false };
+  const existing = await docRef.get();
+  if (existing.exists) return { awarded: false };
 
-  await badgesRef.add({ badgeKey, earnedAt: new Date().toISOString() });
+  await docRef.set({ badgeKey, earnedAt: new Date().toISOString() });
   return { awarded: true };
 }
 

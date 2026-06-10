@@ -6,6 +6,7 @@ import { recalculateForgeScore } from "@/lib/streak";
 import { awardXP } from "@/lib/xp";
 import { checkMirrorGazer } from "@/lib/badges";
 import { trackServerEvent } from "@/lib/posthog/server";
+import type { DailyCheckin } from "@/types";
 
 export const checkinsRouter = router({
   submit: protectedProcedure
@@ -45,7 +46,7 @@ export const checkinsRouter = router({
       }
 
       const snap = await ref.get();
-      return { id: ref.id, ...snap.data() };
+      return { id: ref.id, ...snap.data() } as DailyCheckin;
     }),
 
   getToday: protectedProcedure
@@ -60,7 +61,7 @@ export const checkinsRouter = router({
         .get();
 
       if (snap.empty) return null;
-      return { id: snap.docs[0].id, ...snap.docs[0].data() };
+      return { id: snap.docs[0].id, ...snap.docs[0].data() } as DailyCheckin;
     }),
 
   updateMetadata: protectedProcedure

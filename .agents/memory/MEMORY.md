@@ -4,3 +4,4 @@
 - [Spec compliance audit](spec-audit.md) — full audit results: nearly 100% compliant; one fix applied (app layout onboarding guard)
 - [Firebase migration](firebase-migration.md) — Firebase Auth + Firestore replaces JWT/Replit Auth + PostgreSQL/Drizzle; key constraints documented
 - [Level utilities split](level-split.md) — getLevelFromXP/getLevelName live in lib/level.ts (client-safe); lib/xp.ts is server-only. Client components must import from lib/level.ts, never lib/xp.ts
+- [Firestore tRPC type pattern](firestore-trpc-types.md) — Firestore .data() returns opaque DocumentData; must cast return values in routers with "as TypeName" so tRPC infers correct client types

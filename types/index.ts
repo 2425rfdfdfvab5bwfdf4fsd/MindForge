@@ -3,8 +3,8 @@
 
 export type UserTier = "free" | "pro" | "elite";
 export type MoodSignal = "excusing" | "deflecting" | "owning" | "crushing";
-export type HabitCategory = "health" | "mind" | "work" | "social" | "custom";
-export type HabitType = "binary" | "count";
+export type HabitCategory = "health" | "mind" | "avoid" | "perform";
+export type HabitType = "build" | "avoid";
 export type ChallengeCategory = "cold" | "screen" | "physical" | "fast" | "social";
 export type XPEventType =
   | "habit_complete"
@@ -30,13 +30,13 @@ export type SessionType =
   | "direct_chat";
 export type RuleFortyChoice = "took_step" | "declined";
 export type RuleFortyTrigger = "auto_habit" | "auto_checkin" | "manual";
-export type MemoryType = "pattern" | "goal" | "blocker" | "strength" | "context";
+export type MemoryType = "preference" | "trigger" | "victory" | "fear" | "identity" | "pattern";
 
 export interface EnvironmentAuditItem {
   id: string;
-  suggestion: string;
+  item: string;
+  category: string;
   done: boolean;
-  priority: "high" | "medium" | "low";
 }
 
 // ── Firestore Collections ──────────────────────────────────────────────────
@@ -45,13 +45,13 @@ export interface UserProfile {
   id: string;
   email: string;
   displayName?: string | null;
-  photoURL?: string | null;
   tier: UserTier;
   onboardingComplete: boolean;
-  identityStatement?: string | null;
-  coreWhy?: string | null;
-  whyDepth?: number | null;
-  environmentAudit?: EnvironmentAuditItem[];
+  onboardingStep?: "mirror" | "why" | "environment" | "complete" | null;
+  coachIntensity?: "hard" | "firm" | null;
+  timezone?: string | null;
+  whyStatement?: string | null;
+  identityDeclaration?: string | null;
   forgeScore: number;
   xp: number;
   level: number;
