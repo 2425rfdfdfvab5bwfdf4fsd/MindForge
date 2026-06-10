@@ -5,7 +5,13 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["pg"],
   },
-  allowedDevOrigins: ["*.replit.dev", "*.sisko.replit.dev"],
+  allowedDevOrigins: [
+    "*.replit.dev",
+    "*.sisko.replit.dev",
+    "*.pike.replit.dev",
+    "*.kirk.replit.dev",
+    "*.worf.replit.dev",
+  ],
 };
 
 export default withSentryConfig(nextConfig, {
