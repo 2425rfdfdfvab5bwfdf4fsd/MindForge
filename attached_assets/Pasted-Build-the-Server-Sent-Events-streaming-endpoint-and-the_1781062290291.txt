@@ -1,0 +1,55 @@
+Build the Server-Sent Events streaming endpoint and the mood classification endpoint for AI coaching responses.
+
+CREATE app/api/coach/stream/route.ts:
+
+This is a POST endpoint that:
+1. Authenticates the user via Supabase server client (return 401 if not authenticated)
+2. For session_type 'direct_chat' and 'daily_checkin': verify user is Pro/Elite tier; return 403 if Free
+3. Parses the request body: { session_type, messages, context }
+   - session_type: 'onboarding_mirror' | 'why_excavation' | 'daily_checkin' | 'forty_percent_rule' | 'direct_chat'
+   - messages: Array<{role: 'user'|'model', parts: [{text: string}]}>
+   - context: { why_statement?, identity_declaration?, forge_score?, memories?, trigger_context?, cookie_jar_entry? }
+4. Selects the appropriate system prompt from lib/gemini/prompts.ts based on session_type
+5. If coach_intensity = 'firm': use FORGE_COACH_FIRM_PROMPT as base instead of FORGE_COACH_BASE_SYSTEM_PROMPT
+6. For daily_checkin and forty_percent_rule: interpolate context variables into the prompt
+7. Calls geminiPro.startChat({ history: messages[0..-2], systemInstruction: systemPrompt })
+8. Calls chat.sendMessageStream(lastUserMessage)
+9. Returns a ReadableStream (SSE format):
+   - Each chunk: `data: ${JSON.stringify({ text: chunk.text() })}\n\n`
+   - On completion: `data: [DONE]\n\n`
+   - On error: `data: ${JSON.stringify({ error: 'Coach unavailable' })}\n\n`
+
+Response headers: Content-Type: text/event-stream, Cache-Control: no-cache, Connection: keep-alive, X-Accel-Buffering: no
+
+Rate limiting: 20 requests/hour per user. Track in a server-side Map (user_id → {count, resetAt}). Return 429 if exceeded.
+
+CREATE app/api/coach/classify/route.ts:
+
+This is a POST endpoint for non-streaming mood/honesty classification (separate from the streaming endpoint per PRD spec):
+1. Authenticate user
+2. Parse body: { checkin_id, text }
+3. Call Gemini 2.5 Flash (NOT Pro — this is a cheap/fast classification call) with prompt:
+   "Analyze this daily check-in text and return JSON with exactly these two fields:
+   1. honesty_score: integer 1–10 (1=entirely avoidant/deflecting, 10=radically self-aware and accountable)
+   2. mood_signal: one of exactly: 'excusing' | 'deflecting' | 'owning' | 'crushing'
+   
+   Definitions:
+   - excusing: user is rationalizing failures, blaming circumstances
+   - deflecting: user is changing the subject, avoiding the real issue
+   - owning: user is acknowledging their actions honestly, neither great nor bad
+   - crushing: user is genuinely thriving, high accountability + positive results
+   
+   Text: {text}
+   
+   Return ONLY valid JSON, no other text."
+4. Use responseMimeType: 'application/json' for structured output
+5. Return { honesty_score, mood_signal }
+
+CREATE a client-side hook lib/hooks/useStreamingResponse.ts:
+- Takes endpoint URL and request body
+- Manages streaming state: { text: string, isStreaming: boolean, isComplete: boolean, error: string | null }
+- Uses fetch with ReadableStream reader to parse SSE data lines
+- Handles [DONE] signal to set isComplete=true
+- Exports: { streamedText, isStreaming, isComplete, error, startStream }
+
+ACCEPTANCE: POST to /api/coach/stream with session_type='onboarding_mirror' returns SSE stream. POST to /api/coach/classify returns { honesty_score: number, mood_signal: string }. Free user gets 403 on 'daily_checkin' session type.

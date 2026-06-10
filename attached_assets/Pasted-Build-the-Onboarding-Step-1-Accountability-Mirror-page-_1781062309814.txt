@@ -1,0 +1,30 @@
+Build the Onboarding Step 1 — Accountability Mirror page.
+
+CREATE app/(onboarding)/mirror/page.tsx:
+(URL: /onboarding/mirror)
+
+LAYOUT: Full-screen dark layout (#0A0908). No sidebar. No header nav.
+Centered content, max-width 720px, padding 48px 24px.
+
+TOP: Small breadcrumb "Step 1 of 3" (text-xs, text-muted). Below: "Face the Mirror" (text-4xl, font-heading, text-primary). Below: "Write the truth about where you are right now. Your failures. Your excuses. Your wasted potential. Don't filter it." (text-base, text-secondary, max-width 560px).
+
+TEXTAREA: width 100%, height 60vh minimum, background #161514, border 1px solid #2A2927, text-primary, text-base, line-height 1.65, padding 20px, no border-radius (sharp), placeholder "Start writing..." that disappears on focus.
+
+SUBMIT BUTTON: "Submit to the Mirror" — full width, bg #FF6B2B, text black, font-bold, sharp corners, disabled + opacity-50 until textarea has ≥100 characters. On hover: bg #FF5214 with ::after glow.
+
+AI RESPONSE AREA (hidden until submit):
+- Appears below the submitted text
+- Left border 3px solid #FF6B2B, padding 20px
+- "Forge Coach is thinking..." animated pulsing dots state shown while waiting for first token (up to 3 seconds)
+- Text streams in via useStreamingResponse hook
+- After streaming completes: "I'm Ready — Continue" button appears (same orange style)
+- Clicking Continue: calls tRPC user.updateProfile to set onboarding_step = 'why', then router.push('/onboarding/why')
+
+DATA STORAGE:
+- On submit: call tRPC checkins.submit with { text: rawText, localDate, onboarding_mirror: true }
+- Store the AI response by calling tRPC checkins.updateMetadata after stream completes (ai_response field)
+- Do NOT run mood classification or memory extraction for onboarding_mirror entries
+
+If user has already completed this step (users.onboarding_step !== 'mirror'), redirect to /onboarding/why immediately.
+
+ACCEPTANCE: User can type ≥100 chars. Submit button enables. AI streams a response. After streaming completes, "I'm Ready — Continue" appears. Clicking it redirects to /onboarding/why.
