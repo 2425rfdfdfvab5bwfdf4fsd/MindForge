@@ -63,7 +63,7 @@ function MemoryModal({
 }: {
   open: boolean;
   onClose: () => void;
-  memories: Record<string, Array<{ id: string; content: string; created_at: string }>>;
+  memories: Record<string, Array<{ id: string; content: string; created_at: Date | string | null }>>;
 }) {
   const types = Object.keys(memories);
   return (
@@ -404,7 +404,7 @@ export default function CoachPage() {
   const memoryCount = Object.values(memories).reduce((sum, arr) => sum + arr.length, 0);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-56px)]">
+    <div className="flex flex-col h-[calc(100dvh-56px)]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/8 flex-shrink-0">
         <div>
@@ -471,7 +471,7 @@ export default function CoachPage() {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 border-t border-white/8 px-4 py-4 bg-[#0D0D0C]">
+      <div className="flex-shrink-0 border-t border-white/8 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-[#0D0D0C]">
         <div className="flex items-end gap-3 max-w-3xl mx-auto">
           <textarea
             ref={textareaRef}

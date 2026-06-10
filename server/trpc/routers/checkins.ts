@@ -6,6 +6,7 @@ import { dailyCheckins } from "@/shared/schema";
 import { recalculateForgeScore } from "@/lib/streak";
 import { awardXP } from "@/lib/xp";
 import { checkMirrorGazer } from "@/lib/badges";
+import { trackServerEvent } from "@/lib/posthog/server";
 
 export const checkinsRouter = router({
   submit: protectedProcedure
@@ -40,6 +41,9 @@ export const checkinsRouter = router({
         await awardXP(ctx.user.id, 30, "Daily check-in submitted", "checkin");
         await recalculateForgeScore(ctx.user.id);
         checkMirrorGazer(ctx.user.id).catch(() => {});
+        trackServerEvent(ctx.user.id, "checkin_submitted", {
+          has_ai_debrief: true,
+        });
       }
 
       return checkin;

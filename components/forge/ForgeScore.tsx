@@ -5,14 +5,15 @@ import { useSpring, useTransform, motion } from "framer-motion";
 
 const LEVEL_LABELS: Record<number, string> = {
   1: "Raw",
-  2: "Forming",
-  3: "Hardening",
-  4: "Tempered",
-  5: "Forged",
+  2: "Tempered",
+  3: "Forged",
+  4: "Hardened",
+  5: "Unbreakable",
+  6: "Legendary",
 };
 
 function getLevelLabel(level: number): string {
-  return LEVEL_LABELS[level] ?? "Forged";
+  return LEVEL_LABELS[level] ?? "Legendary";
 }
 
 interface ForgeScoreProps {
@@ -45,10 +46,10 @@ export function ForgeScore({ score, level = 1, compact = false }: ForgeScoreProp
   if (compact) {
     return (
       <div className="flex flex-col items-end">
-        <span className="font-mono text-xs tracking-widest text-text-muted uppercase">
+        <span className="hidden lg:block font-mono text-xs tracking-widest text-text-muted uppercase">
           Forge Score
         </span>
-        <motion.span className="font-heading tabular-nums text-xl font-bold text-text-primary">
+        <motion.span className="font-heading tabular-nums text-4xl lg:text-xl font-bold text-text-primary">
           {displayed}
         </motion.span>
       </div>

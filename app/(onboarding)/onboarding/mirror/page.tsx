@@ -52,7 +52,7 @@ export default function MirrorPage() {
   });
 
   useEffect(() => {
-    if (profile && profile.onboarding_step !== "mirror") {
+    if (profile && profile.onboardingStep !== "mirror") {
       router.replace("/onboarding/why");
     }
   }, [profile, router]);
@@ -154,7 +154,7 @@ export default function MirrorPage() {
             placeholder="Start writing..."
             className="w-full border border-forge-border bg-forge-input p-5 text-base text-text-primary placeholder-text-disabled outline-none transition focus:border-forge-orange focus:ring-1 focus:ring-forge-orange disabled:opacity-60"
             style={{
-              minHeight: "60vh",
+              minHeight: "clamp(200px, 50vh, 60vh)",
               resize: "vertical",
               lineHeight: "1.65",
               fontFamily: "inherit",

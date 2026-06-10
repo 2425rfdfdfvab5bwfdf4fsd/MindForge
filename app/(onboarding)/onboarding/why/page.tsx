@@ -84,8 +84,8 @@ export default function WhyPage() {
 
   // Redirect guard
   useEffect(() => {
-    if (profile && profile.onboarding_step !== "why") {
-      if (profile.onboarding_step === "mirror") router.replace("/onboarding/mirror");
+    if (profile && profile.onboardingStep !== "why") {
+      if (profile.onboardingStep === "mirror") router.replace("/onboarding/mirror");
       else router.replace("/onboarding/environment");
     }
   }, [profile, router]);

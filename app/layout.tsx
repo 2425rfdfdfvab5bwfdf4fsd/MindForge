@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Inter } from "next/font/google";
 import { TRPCProvider } from "@/lib/trpc/provider";
+import { PostHogProvider } from "@/components/PostHogProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -27,7 +28,9 @@ export default function RootLayout({
     >
       <body className="font-body bg-forge-base antialiased">
         <TRPCProvider>
-          <main>{children}</main>
+          <PostHogProvider>
+            <main>{children}</main>
+          </PostHogProvider>
         </TRPCProvider>
       </body>
     </html>

@@ -43,7 +43,7 @@ export function XPBar({ xp }: XPBarProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [xp]);
 
-  const nextLevel = info.xpEnd === Infinity ? null : info.xpEnd;
+  const nextLevel = info.nextLevelMin;
 
   return (
     <div className="space-y-1.5">

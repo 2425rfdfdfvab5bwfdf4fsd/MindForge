@@ -132,9 +132,9 @@ export default function EnvironmentPage() {
 
   // Redirect guard
   useEffect(() => {
-    if (profile && profile.onboarding_step !== "environment") {
-      if (profile.onboarding_step === "mirror") router.replace("/onboarding/mirror");
-      else if (profile.onboarding_step === "why") router.replace("/onboarding/why");
+    if (profile && profile.onboardingStep !== "environment") {
+      if (profile.onboardingStep === "mirror") router.replace("/onboarding/mirror");
+      else if (profile.onboardingStep === "why") router.replace("/onboarding/why");
       else router.replace("/dashboard");
     }
   }, [profile, router]);

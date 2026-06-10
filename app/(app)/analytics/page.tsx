@@ -405,41 +405,41 @@ function WeeklyReportCard({ report }: { report: Record<string, unknown> }) {
 
       {expanded && (
         <div className="px-5 pb-5 space-y-4 border-t border-[#2A2927]">
-          {report.behavioralArc && (
+          {Boolean(report.behavioralArc) && (
             <div className="pt-4">
               <div className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">
                 Behavioral Arc
               </div>
               <p className="text-sm text-[#A09FA0] leading-relaxed">
-                {report.behavioralArc as string}
+                {String(report.behavioralArc)}
               </p>
             </div>
           )}
-          {report.keyInsight && (
+          {Boolean(report.keyInsight) && (
             <div>
               <div className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">
                 Key Insight
               </div>
               <p className="text-sm font-semibold text-[#FF6B2B] leading-relaxed">
-                {report.keyInsight as string}
+                {String(report.keyInsight)}
               </p>
             </div>
           )}
-          {report.nextWeekChallenge && (
+          {Boolean(report.nextWeekChallenge) && (
             <div>
               <div className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">
                 Next Week Challenge
               </div>
               <p className="text-sm text-white leading-relaxed">
-                {report.nextWeekChallenge as string}
+                {String(report.nextWeekChallenge)}
               </p>
             </div>
           )}
-          {report.bestStreakThisWeek && (
+          {Boolean(report.bestStreakThisWeek) && (
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#1A1918] border border-[#2A2927] rounded-lg">
               <span className="text-xs text-[#6B7280]">Best streak:</span>
               <span className="text-xs font-semibold text-white">
-                {report.bestStreakThisWeek as string}
+                {String(report.bestStreakThisWeek)}
               </span>
             </div>
           )}

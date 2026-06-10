@@ -10,6 +10,7 @@ import {
 } from "@/shared/schema";
 import { recalculateStreak, recalculateForgeScore } from "@/lib/streak";
 import { awardXP } from "@/lib/xp";
+import { trackServerEvent } from "@/lib/posthog/server";
 
 const FREE_TIER_LIMIT = 3;
 
@@ -136,6 +137,11 @@ export const habitsRouter = router({
         userId: ctx.user.id,
         currentStreak: 0,
         longestStreak: 0,
+      });
+
+      trackServerEvent(ctx.user.id, "habit_created", {
+        category: input.category,
+        habit_type: input.habitType,
       });
 
       return habit;

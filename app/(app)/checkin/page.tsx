@@ -75,9 +75,9 @@ export default function CheckinPage() {
   useEffect(() => {
     if (todayCheckin && !checkinLoading) {
       setCheckinId(todayCheckin.id);
-      setSubmittedText(todayCheckin.raw_reflection ?? "");
-      setHonestyScore(todayCheckin.honesty_score ?? null);
-      setMoodSignal(todayCheckin.mood_signal ?? null);
+      setSubmittedText(todayCheckin.rawReflection ?? "");
+      setHonestyScore(todayCheckin.honestyScore ?? null);
+      setMoodSignal(todayCheckin.moodSignal ?? null);
       setPhase("complete");
     }
   }, [todayCheckin, checkinLoading]);
@@ -129,9 +129,9 @@ export default function CheckinPage() {
         session_type: "daily_checkin",
         messages: [{ role: "user", parts: [{ text: text.trim() }] }],
         context: {
-          why_statement: profile?.why_statement ?? "",
-          identity_declaration: profile?.identity_declaration ?? "",
-          forge_score: profile?.forge_score ?? 0,
+          why_statement: profile?.whyStatement ?? "",
+          identity_declaration: profile?.identityDeclaration ?? "",
+          forge_score: profile?.forgeScore ?? 0,
         },
       });
     } catch {
@@ -186,7 +186,7 @@ export default function CheckinPage() {
   // Yesterday's check-in reference
   const yDate = yesterdayDate();
   const yesterdayCheckin = history?.find(
-    (h: { local_date: string }) => h.local_date === yDate
+    (h: { localDate: string }) => h.localDate === yDate
   );
 
   // -------------------------------------------------------------------
@@ -317,7 +317,7 @@ export default function CheckinPage() {
         )}
 
         {/* Free-tier upgrade prompt — shown after submit when free */}
-        {phase === "complete" && isFree && !todayCheckin?.ai_response && (
+        {phase === "complete" && isFree && !todayCheckin?.aiResponse && (
           <div className="mt-6 border border-forge-orange/40 bg-[#1A0A04] px-6 py-5">
             <p className="text-sm font-medium text-text-primary">
               Upgrade to Pro to unlock your AI debrief.
@@ -358,12 +358,12 @@ export default function CheckinPage() {
             {/* Submitted text */}
             <div className="bg-[#1A1918] px-5 py-4">
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
-                {submittedText || todayCheckin?.raw_reflection}
+                {submittedText || todayCheckin?.rawReflection}
               </p>
             </div>
 
             {/* AI debrief — pro, complete */}
-            {(streamedText || todayCheckin?.ai_response) && (
+            {(streamedText || todayCheckin?.aiResponse) && (
               <AnimatePresence>
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
@@ -372,7 +372,7 @@ export default function CheckinPage() {
                   style={{ borderLeft: "3px solid #FF6B2B" }}
                 >
                   <p className="whitespace-pre-wrap">
-                    {streamedText || todayCheckin?.ai_response}
+                    {streamedText || todayCheckin?.aiResponse}
                   </p>
                 </motion.div>
               </AnimatePresence>
@@ -399,8 +399,6 @@ export default function CheckinPage() {
         open={showRuleForty}
         onClose={() => setShowRuleForty(false)}
         triggerContext={`Daily check-in mood: ${moodSignal}. Entry: "${submittedText.slice(0, 200)}"`}
-        whyStatement={profile?.why_statement ?? ""}
-        forgeScore={profile?.forge_score ?? 0}
       />
 
       <style>{`

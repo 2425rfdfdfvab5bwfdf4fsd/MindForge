@@ -8,14 +8,14 @@ interface DayCell {
 }
 
 interface HabitGridProps {
-  history: { local_date: string; completed: boolean }[];
+  history: { localDate: string; completed: boolean }[];
 }
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function buildGrid(history: HabitGridProps["history"]): DayCell[] {
   const completionMap = new Map(
-    history.map((h) => [h.local_date, h.completed])
+    history.map((h) => [h.localDate, h.completed])
   );
 
   const cells: DayCell[] = [];
