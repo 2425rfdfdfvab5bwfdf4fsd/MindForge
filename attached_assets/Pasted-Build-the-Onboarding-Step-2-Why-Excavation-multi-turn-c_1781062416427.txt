@@ -1,0 +1,36 @@
+Build the Onboarding Step 2 — Why Excavation multi-turn chat page.
+
+CREATE app/(onboarding)/why/page.tsx:
+(URL: /onboarding/why)
+
+LAYOUT: Full-screen dark layout. No sidebar. Centered, max-width 720px.
+Top: "Step 2 of 3" breadcrumb. Title: "Excavate Your Why" (text-4xl, font-heading). Subtitle: "Your coach will guide you to the motivation that won't break." (text-secondary).
+
+CHAT INTERFACE:
+- Messages list: scrollable area, max-height 65vh, overflow-y-auto
+- Coach messages: left-aligned, background #111110, border 1px solid #1A3A6E (blue), text-secondary, padding 16px, max-width 85%, no border-radius
+- User messages: right-aligned, background #1A1918, border 1px solid #2A2927, text-primary, padding 16px, max-width 85%
+- Auto-scroll to bottom on new message
+
+INITIAL STATE: On page load, coach's opening message streams in:
+"What's the one thing you want most to change or achieve? Be specific — not 'be better', but what does better actually look like for you?"
+
+INPUT AREA: Fixed at bottom. Textarea (1–3 lines, auto-expand). "Send" button (bg orange, sharp). Disable send while coach is streaming.
+
+TURN MANAGEMENT:
+- Track conversation as messages array: Array<{role: 'user'|'coach', content: string}>
+- On each user send: append message, POST to /api/coach/stream with session_type='why_excavation', full conversation history
+- Max 8 turns total. If not at identity level by turn 6, coach synthesizes from available info.
+
+WHY STATEMENT ACCEPTANCE FLOW:
+- Detect when coach response contains the pattern "You want to..." — show that statement in a highlighted card (border 2px solid #FF6B2B, padding 24px, bg #1A0A04)
+- Two buttons: "This is my truth — Accept" (orange) and "Refine it" (ghost, max 2 refinements)
+- On Accept: show Identity Declaration input: "Complete this: I am someone who..." (text input, full width)
+- On Identity Declaration submit: call tRPC user.updateWhy({ whyStatement, identityDeclaration })
+- Then show "Identity Locked" badge animation: badge icon goes scale(0) rotate(-15deg) → scale(1.15) rotate(5deg) → scale(1) using Framer Motion spring { stiffness: 250, damping: 12 } — total ~500ms
+- Call tRPC to award 'identity_locked' badge only — checkAndAwardBadge awards its own 50 XP. Do NOT award the 200 XP here; that is for full onboarding completion (end of Step 3).
+- "Continue to Step 3" button → set onboarding_step = 'environment' → redirect to /onboarding/environment
+
+NO back button. This is a commitment.
+
+ACCEPTANCE: Multi-turn chat works. After 4–6 turns a Why Statement card appears. User can accept or refine (max 2). Badge animation plays after accepting. Redirects to Step 3.

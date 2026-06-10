@@ -17,6 +17,10 @@ export const userRouter = router({
         displayName: z.string().optional(),
         coachIntensity: z.enum(["hard", "firm"]).optional(),
         timezone: z.string().optional(),
+        onboardingStep: z
+          .enum(["mirror", "why", "environment", "complete"])
+          .optional(),
+        onboardingComplete: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -26,6 +30,8 @@ export const userRouter = router({
           display_name: input.displayName,
           coach_intensity: input.coachIntensity,
           timezone: input.timezone,
+          onboarding_step: input.onboardingStep,
+          onboarding_complete: input.onboardingComplete,
         })
         .eq("id", ctx.user.id)
         .select()
