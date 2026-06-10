@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
 import { recalculateStreak, recalculateForgeScore } from "@/lib/gamification/streak";
-import { awardXP } from "@/lib/gamification/xp";
+import { awardXP, XP_AMOUNTS } from "@/lib/gamification/xp";
 import { trackServerEvent } from "@/lib/posthog/server";
 
 const FREE_TIER_LIMIT = 3;
@@ -234,7 +234,7 @@ export const habitsRouter = router({
       let leveledUp = false;
 
       if (input.completed) {
-        const result = await awardXP(ctx.user.id, 20, "Habit completed", "habit_complete");
+        const result = await awardXP(ctx.user.id, XP_AMOUNTS.habit_complete, "Habit completed", "habit_complete");
         xpAwarded = result.xpAwarded;
         leveledUp = result.leveledUp;
       }

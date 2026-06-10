@@ -2,19 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useSpring, useTransform, motion } from "framer-motion";
-
-const LEVEL_LABELS: Record<number, string> = {
-  1: "Raw",
-  2: "Tempered",
-  3: "Forged",
-  4: "Hardened",
-  5: "Unbreakable",
-  6: "Legendary",
-};
-
-function getLevelLabel(level: number): string {
-  return LEVEL_LABELS[level] ?? "Legendary";
-}
+import { getLevelName } from "@/lib/gamification/level";
 
 interface ForgeScoreProps {
   score: number;
@@ -33,10 +21,7 @@ export function ForgeScore({ score, level = 1, compact = false }: ForgeScoreProp
 
     if (score > prevScore.current && glowRef.current) {
       glowRef.current.animate(
-        [
-          { opacity: 1 },
-          { opacity: 0 },
-        ],
+        [{ opacity: 1 }, { opacity: 0 }],
         { duration: 800, easing: "ease-out" }
       );
     }
@@ -58,7 +43,7 @@ export function ForgeScore({ score, level = 1, compact = false }: ForgeScoreProp
 
   return (
     <div className="relative inline-flex flex-col items-center">
-      {/* Glow layer — animated via Web Animations API on the ::after equivalent */}
+      {/* Glow layer — animates via Web Animations API on score increase */}
       <div
         ref={glowRef}
         className="pointer-events-none absolute inset-0 opacity-0"
@@ -70,7 +55,7 @@ export function ForgeScore({ score, level = 1, compact = false }: ForgeScoreProp
       <motion.span className="font-heading tabular-nums text-display font-bold text-text-primary leading-none">
         {displayed}
       </motion.span>
-      <span className="mt-1 text-xs text-text-muted">{getLevelLabel(level)}</span>
+      <span className="mt-1 text-xs text-text-muted">{getLevelName(level)}</span>
     </div>
   );
 }

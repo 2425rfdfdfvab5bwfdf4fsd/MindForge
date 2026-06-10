@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
 import { recalculateForgeScore } from "@/lib/gamification/streak";
-import { awardXP } from "@/lib/gamification/xp";
+import { awardXP, XP_AMOUNTS } from "@/lib/gamification/xp";
 import { checkMirrorGazer } from "@/lib/gamification/badges";
 import { trackServerEvent } from "@/lib/posthog/server";
 import type { DailyCheckin } from "@/types";
@@ -39,7 +39,7 @@ export const checkinsRouter = router({
       });
 
       if (!input.onboardingMirror) {
-        await awardXP(ctx.user.id, 30, "Daily check-in submitted", "checkin");
+        await awardXP(ctx.user.id, XP_AMOUNTS.checkin, "Daily check-in submitted", "checkin");
         await recalculateForgeScore(ctx.user.id);
         checkMirrorGazer(ctx.user.id).catch(() => {});
         trackServerEvent(ctx.user.id, "checkin_submitted", { has_ai_debrief: (ctx.userProfile?.tier ?? "free") !== "free" });
@@ -94,7 +94,7 @@ export const checkinsRouter = router({
 
       const prevMoodSignal = snap.data()?.moodSignal;
       if (input.moodSignal === "crushing" && !prevMoodSignal) {
-        await awardXP(ctx.user.id, 20, "Crushing check-in bonus", "checkin_bonus");
+        await awardXP(ctx.user.id, XP_AMOUNTS.checkin_bonus, "Crushing check-in bonus", "checkin_bonus");
       }
 
       const updated = await ref.get();

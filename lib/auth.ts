@@ -21,10 +21,6 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 }
 
-export async function getCurrentUser(): Promise<SessionUser | null> {
-  return getSession();
-}
-
 export async function getSessionFromRequest(
   request: Request
 ): Promise<SessionUser | null> {

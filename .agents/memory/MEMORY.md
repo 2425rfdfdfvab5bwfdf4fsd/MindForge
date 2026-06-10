@@ -1,7 +1,7 @@
 - [MindForge stack & PRD constants](mindforge-stack.md) — critical values (XP, levels, pricing, field names) that must never be approximated
 - [Habits list query shape](habits-list-shape.md) — habits.list returns snake_case output shape intentionally; detail page must use habit_type not habitType
 - [TypeScript exclusions](ts-exclusions.md) — shared/models excluded from tsconfig; server/replit_integrations was deleted (Replit scaffolding, not used by app)
-- [Folder restructure](folder-restructure.md) — post-restructure canonical paths for hooks, providers, and gamification utilities
+- [Code quality pass](code-quality-pass.md) — DRY/magic-number/dead-code decisions made in refactor pass; don't re-introduce duplicates listed there
 - [Spec compliance audit](spec-audit.md) — full audit results: nearly 100% compliant; one fix applied (app layout onboarding guard)
 - [Firebase migration](firebase-migration.md) — Firebase Auth + Firestore replaces JWT/Replit Auth + PostgreSQL/Drizzle; key constraints documented
 - [Level utilities split](level-split.md) — getLevelFromXP/getLevelName live in lib/gamification/level.ts (client-safe); lib/gamification/xp.ts is server-only. Client components must import from lib/gamification/level.ts, never xp.ts

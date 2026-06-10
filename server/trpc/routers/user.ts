@@ -3,20 +3,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
-import { awardXP } from "@/lib/gamification/xp";
-import { checkAndAwardBadge } from "@/lib/gamification/badges";
+import { awardXP, XP_AMOUNTS } from "@/lib/gamification/xp";
+import { checkAndAwardBadge, BADGE_KEYS, type BadgeKey } from "@/lib/gamification/badges";
 import type { UserProfile, UserBadge, EnvironmentAuditItem } from "@/types";
-
-const BADGE_KEYS = [
-  "identity_locked",
-  "mirror_gazer",
-  "cookie_jar_founder",
-  "forty_percent_survivor",
-  "cold_mind",
-  "tempered",
-] as const;
-
-type BadgeKey = (typeof BADGE_KEYS)[number];
 
 export const userRouter = router({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
@@ -31,9 +20,7 @@ export const userRouter = router({
         displayName: z.string().optional(),
         coachIntensity: z.enum(["hard", "firm"]).optional(),
         timezone: z.string().optional(),
-        onboardingStep: z
-          .enum(["mirror", "why", "environment", "complete"])
-          .optional(),
+        onboardingStep: z.enum(["mirror", "why", "environment", "complete"]).optional(),
         onboardingComplete: z.boolean().optional(),
       })
     )
@@ -78,12 +65,11 @@ export const userRouter = router({
   submitEnvironmentAudit: protectedProcedure
     .input(
       z.object({
-        answers: z.array(
-          z.object({ question: z.string(), answer: z.string() })
-        ),
+        answers: z.array(z.object({ question: z.string(), answer: z.string() })),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Clear existing audit items before regenerating
       const existing = await adminDb
         .collection("environment_audit_items")
         .where("userId", "==", ctx.user.id)
@@ -117,9 +103,12 @@ export const userRouter = router({
               category: String(x.category ?? "General"),
             }));
           }
-        } catch {}
+        } catch (err) {
+          console.error("[submitEnvironmentAudit] Gemini generation failed:", err);
+        }
       }
 
+      // Fallback items when Gemini is unavailable or returns nothing
       if (items.length === 0) {
         items = [
           { item: "Move your phone charger to a room other than your bedroom tonight", category: "Sleep" },
@@ -166,7 +155,7 @@ export const userRouter = router({
       if (snap.data()?.done) return { awarded: false };
 
       await ref.update({ done: true, doneAt: new Date().toISOString() });
-      await awardXP(ctx.user.id, 50, "Environment audit item completed", "environment");
+      await awardXP(ctx.user.id, XP_AMOUNTS.environment, "Environment audit item completed", "environment");
 
       return { awarded: true, item: { id: snap.id, ...snap.data(), done: true } };
     }),
@@ -189,7 +178,7 @@ export const userRouter = router({
   }),
 
   completeOnboarding: protectedProcedure.mutation(async ({ ctx }) => {
-    await awardXP(ctx.user.id, 200, "Onboarding completed", "onboarding");
+    await awardXP(ctx.user.id, XP_AMOUNTS.onboarding, "Onboarding completed", "onboarding");
     const ref = adminDb.collection("users").doc(ctx.user.id);
     await ref.update({
       onboardingComplete: true,

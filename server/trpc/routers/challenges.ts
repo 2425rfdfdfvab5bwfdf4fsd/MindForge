@@ -8,6 +8,22 @@ import { recalculateForgeScore } from "@/lib/gamification/forge-score";
 import { trackServerEvent } from "@/lib/posthog/server";
 import type { Challenge } from "@/types";
 
+// The challenge deadline window is 3× the challenge's rated duration.
+// e.g. a 30-minute challenge must be completed within 90 minutes.
+const CHALLENGE_DEADLINE_FACTOR = 3;
+
+/** Computes the deadline timestamp for an active challenge. */
+function challengeDeadlineMs(durationMinutes: number): number {
+  return durationMinutes * CHALLENGE_DEADLINE_FACTOR * 60 * 1000;
+}
+
+interface ActiveUserChallenge {
+  id: string;
+  challengeId: string;
+  status: string;
+  startedAt?: string;
+}
+
 export const challengesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const [allSnap, userChalsSnap] = await Promise.all([
@@ -20,14 +36,17 @@ export const challengesRouter = router({
     ]);
 
     const now = new Date();
-    const userChals = userChalsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown> & { id: string; status: string; startedAt?: string; challengeId: string }));
+    const userChals = userChalsSnap.docs.map(
+      (d) => ({ id: d.id, ...d.data() } as ActiveUserChallenge)
+    );
 
+    // Auto-expire challenges whose deadline has passed
     const toExpire = userChals.filter((uc) => {
       if (uc.status !== "active" || !uc.startedAt) return false;
       const challenge = allSnap.docs.find((c) => c.id === uc.challengeId);
       if (!challenge) return false;
       const dur = challenge.data().durationMinutes as number;
-      const expiresAt = new Date(new Date(uc.startedAt as string).getTime() + dur * 3 * 60 * 1000);
+      const expiresAt = new Date(new Date(uc.startedAt).getTime() + challengeDeadlineMs(dur));
       return now > expiresAt;
     });
 
@@ -47,8 +66,8 @@ export const challengesRouter = router({
       let expiresAt: string | null = null;
       if (userChallenge?.status === "active" && userChallenge.startedAt) {
         expiresAt = new Date(
-          new Date(userChallenge.startedAt as string).getTime() +
-            (cData.durationMinutes as number) * 3 * 60 * 1000
+          new Date(userChallenge.startedAt).getTime() +
+            challengeDeadlineMs(cData.durationMinutes as number)
         ).toISOString();
       }
 

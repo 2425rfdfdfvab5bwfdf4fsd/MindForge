@@ -13,6 +13,9 @@ import {
 } from "@/components/forge/Skeletons";
 import { getLevelFromXP } from "@/lib/gamification/level";
 
+// Must match CHALLENGE_DEADLINE_FACTOR in server/trpc/routers/challenges.ts
+const CHALLENGE_DEADLINE_FACTOR = 3;
+
 function getLocalDate(timezone: string): string {
   try {
     return new Date().toLocaleDateString("en-CA", { timeZone: timezone });
@@ -79,7 +82,7 @@ function ActiveChallengeCard({
   if (!challenge.challenges || !challenge.started_at) return null;
   const started = new Date(challenge.started_at);
   const expiresAt = new Date(
-    started.getTime() + challenge.challenges.duration_minutes * 3 * 60 * 1000
+    started.getTime() + challenge.challenges.duration_minutes * CHALLENGE_DEADLINE_FACTOR * 60 * 1000
   );
   const msLeft = Math.max(0, expiresAt.getTime() - Date.now());
   const daysLeft = Math.ceil(msLeft / 86400000);
