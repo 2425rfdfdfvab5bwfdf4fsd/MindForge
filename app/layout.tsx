@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Inter } from "next/font/google";
@@ -28,9 +29,11 @@ export default function RootLayout({
     >
       <body className="font-body bg-forge-base antialiased">
         <TRPCProvider>
-          <PostHogProvider>
-            <main>{children}</main>
-          </PostHogProvider>
+          <Suspense fallback={null}>
+            <PostHogProvider>
+              {children}
+            </PostHogProvider>
+          </Suspense>
         </TRPCProvider>
       </body>
     </html>
