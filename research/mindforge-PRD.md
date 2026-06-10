@@ -973,20 +973,319 @@ interface WeeklyReport {
 
 ### 10.2 Color & Theme
 
-- **Background (primary):** #0A0A0A
-- **Background (cards):** #111111
-- **Background (elevated):** #1A1A1A
-- **Border:** #2A2A2A
-- **Text (primary):** #FFFFFF
-- **Text (muted):** #888888
-- **Accent (CTAs, active states):** #FF6B2B (Molten Orange)
-- **Accent (secondary, info):** #3B82F6 (Steel Blue)
-- **Success:** #22C55E (Green)
-- **Danger/Miss:** #EF4444 (Red)
-- **Typography (headings):** Geist (or Cal Sans as fallback) — `font-bold tracking-tight`
-- **Typography (body):** Inter — `font-normal`
-- **Border radius:** `rounded-none` on primary buttons and cards (sharp corners). `rounded-sm` on small UI elements only.
-- **Component library:** shadcn/ui with custom theme overrides to match above colors and sharp corners.
+*Research basis: Radix UI 12-step color scale architecture [Tier 1], Shadcn UI token system [Tier 1], GitHub Primer functional color model [Tier 1], color psychology research on orange/dark-mode perception, typography calibration for dark-mode readability, and micro-animation neuroscience (dopamine timing research). Full report: `research/mindforge-color-theme-research.md`.*
+
+---
+
+#### 10.2.1 Background Surface Hierarchy
+
+Six distinct surface layers. Pure black (#000000) is NOT used — it eliminates shadow headroom and causes halation (glowing halo around light text). The base has a micro-warm tint to subconsciously reinforce forge heat, distinguishing from cold tech-dark aesthetics.
+
+| Token | Hex | Role |
+|-------|-----|------|
+| `--bg-base` | `#0A0908` | True canvas. Page background only. Micro-warm tint (not neutral gray). |
+| `--bg-subtle` | `#111110` | Default card and panel surface. |
+| `--bg-elevated` | `#1A1918` | Elevated cards, sidebar. Higher elevation = slightly lighter. |
+| `--bg-overlay` | `#232220` | Modals, dialogs, dropdowns. |
+| `--bg-input` | `#161514` | Form inputs, textareas. Slightly recessed (darker than cards). |
+| `--bg-inverse` | `#EDEDEF` | Text-on-dark inverse surfaces. Rare use only. |
+
+**Implementation rule:** Components at a higher visual elevation MUST use a lighter `--bg-*` token, not the same token as their containing surface. A modal on top of an overlay on top of a card must use three distinct values.
+
+---
+
+#### 10.2.2 Border Hierarchy
+
+Three semantic border weights. Borders communicate containment and depth without drop shadows (which fail on dark backgrounds).
+
+| Token | Hex | Role |
+|-------|-----|------|
+| `--border-subtle` | `#1E1D1C` | Hairline dividers, section separators within a panel. |
+| `--border-default` | `#2A2927` | Default card borders, form input borders. Most common. |
+| `--border-strong` | `#3D3B39` | Interactive element borders (hover state), emphasis separators. |
+| `--border-accent` | `#FF6B2B` | Active/selected/focused state. Orange left-border on active habit. |
+| `--border-danger` | `#7F1D1D` | Error state borders on form inputs. |
+
+---
+
+#### 10.2.3 Text Hierarchy
+
+Four semantic text levels. Body text is off-white, not pure white — pure white on near-black causes halation (visual fatigue during long-form reading of coaching responses and reflections).
+
+| Token | Hex | Role |
+|-------|-----|------|
+| `--text-primary` | `#EDEDEF` | Headings, Forge Score numbers, critical labels. Off-white — not pure #FFF. |
+| `--text-secondary` | `#C2C0BE` | Body copy, AI coach responses, card descriptions. |
+| `--text-muted` | `#87857F` | Captions, metadata, timestamps, placeholder text. |
+| `--text-disabled` | `#4A4845` | Disabled form fields, locked feature labels. |
+| `--text-accent` | `#FFBDA3` | Orange text on dark backgrounds (links, inline highlights). High-contrast step of the orange scale — accessible on `--bg-base`. |
+| `--text-accent-blue` | `#93C5FD` | Blue text on dark backgrounds. |
+| `--text-inverse` | `#0A0908` | Dark text on light surfaces. |
+
+**Contrast targets:** Body text (`--text-secondary` on `--bg-base`) must achieve ≥7:1 ratio (WCAG AAA) — high-cognitive-load reading in extended sessions requires AAA, not just AA.
+
+---
+
+#### 10.2.4 Accent Color System — Forge Fire (Orange)
+
+Full 10-step scale centered on Molten Orange. Step 9 is the base brand accent. The hue is validated: orange is the highest-energy warm hue on the visible spectrum, associated with urgency, motivated action, and capability — precisely the behavioral intent of the product.
+
+| Token | Hex | Role |
+|-------|-----|------|
+| `--orange-1` | `#180B04` | Subtlest orange surface tint (toast backgrounds, focus-ring fill). |
+| `--orange-2` | `#231108` | Slightly visible orange surface. |
+| `--orange-3` | `#341A0C` | Component background hover (orange-tinted card hover state). |
+| `--orange-4` | `#452312` | Component background pressed. |
+| `--orange-5` | `#572D18` | Subtle border tint. |
+| `--orange-6` | `#6E3A20` | Default orange border. Focus ring, selected state border. |
+| `--orange-7` | `#8E4E2C` | Strong orange border. Active element highlight. |
+| `--orange-8` | `#B5653A` | Lower-emphasis solid (disabled CTA). |
+| `--orange-9` | `#FF6B2B` | **Base accent — Molten Orange.** CTA buttons, active states, Forge Score highlight. |
+| `--orange-10` | `#FF5214` | CTA hover state. Slightly more intense. |
+| `--orange-11` | `#FFBDA3` | Orange text on dark backgrounds. High-contrast accessible step. |
+| `--orange-glow` | `rgba(255,107,43,0.20)` | Box-shadow glow on CTA button hover. Animate via opacity of `::after` pseudo-element — NOT direct `box-shadow` (performance). |
+
+---
+
+#### 10.2.5 Accent Color System — Steel (Blue)
+
+| Token | Hex | Role |
+|-------|-----|------|
+| `--blue-3` | `#0C1E3D` | Subtle blue surface tint (info toast backgrounds). |
+| `--blue-6` | `#1A3A6E` | Blue border (info states, active coach message). |
+| `--blue-9` | `#3B82F6` | **Base blue accent.** Coach message bubbles, secondary actions, info badges. |
+| `--blue-10` | `#2563EB` | Blue hover state. |
+| `--blue-11` | `#93C5FD` | Blue text on dark backgrounds. |
+
+---
+
+#### 10.2.6 Semantic State Colors
+
+| Token | Hex | Role |
+|-------|-----|------|
+| `--success` | `#22C55E` | Habit completed. Streak milestone. "Crushing" mood badge. |
+| `--success-subtle` | `#14532D` | Success background tint (completed habit card left-border fill). |
+| `--success-text` | `#86EFAC` | Success text on dark. |
+| `--danger` | `#EF4444` | Habit missed. Error state. "Missed" button. |
+| `--danger-subtle` | `#7F1D1D` | Danger background tint. |
+| `--danger-text` | `#FCA5A5` | Danger text on dark. |
+| `--warning` | `#F59E0B` | Streak at risk (1 day from breaking). Near-limit free tier indicator. |
+| `--warning-subtle` | `#78350F` | Warning background tint. |
+| `--neutral-muted` | `#2A2927` | Pending/not-yet-logged habit state. |
+
+---
+
+#### 10.2.7 Typography System
+
+**Font Stack:**
+- **Display/Headings:** `Geist, 'Cal Sans', system-ui, sans-serif` — neo-grotesque, technical precision. Natively supports `tnum` (tabular numbers) and `zero` (slashed zero) for Forge Score, XP, and streak metric displays.
+- **Body/UI:** `Inter, system-ui, sans-serif` — humanist grotesque, optimized for multi-size readability. Ideal for coaching responses and long-form reflections.
+- **Monospace (code/data):** `'Geist Mono', monospace` — for honesty scores, technical metadata.
+
+**Typographic Scale — Major Third (×1.250):**
+
+| Token | Size (rem) | Size (px) | Line Height | Weight | Usage |
+|-------|-----------|-----------|-------------|--------|-------|
+| `text-display` | 3.052rem | ~49px | 1.05 | 800 | Forge Score hero number, landing hero |
+| `text-4xl` | 2.441rem | ~39px | 1.08 | 700 | Page headings (h1) |
+| `text-3xl` | 1.953rem | ~31px | 1.15 | 700 | Section headings (h2) |
+| `text-2xl` | 1.563rem | ~25px | 1.20 | 600 | Card headings (h3), level name |
+| `text-xl` | 1.25rem | 20px | 1.30 | 600 | Sub-headings, prominent labels |
+| `text-base` | 1rem | 16px | 1.65 | 400 | Body copy, AI responses, reflections |
+| `text-sm` | 0.875rem | 14px | 1.55 | 400 | UI labels, form labels, captions |
+| `text-xs` | 0.75rem | 12px | 1.40 | 400 | Metadata, timestamps, badge text |
+
+**Dark-mode calibration rules:**
+- Body text line height is 1.65 (not 1.5) — dark backgrounds cause the Irradiation Illusion, making white text appear closer together than it is. Compensate with generous leading.
+- Body text weight is 400 regular — do NOT use 300 Light in dark mode; it becomes illegible.
+- Heading tracking: `tracking-tight` (-0.02em) for display/4xl. `tracking-normal` for text-xl and below.
+- Font feature settings for numeric displays: `font-variant-numeric: tabular-nums; font-feature-settings: "tnum", "zero"` — ensures Forge Score, XP, and streak numbers align in columns.
+
+---
+
+#### 10.2.8 Spacing & Layout Scale
+
+Base unit: 4px. All spacing uses multiples of 4.
+
+| Token | Value | Common usage |
+|-------|-------|-------------|
+| `space-1` | 4px | Icon padding, tight inline gap |
+| `space-2` | 8px | Input internal padding, small gap |
+| `space-3` | 12px | Default gap between inline elements |
+| `space-4` | 16px | Card internal padding (mobile) |
+| `space-5` | 20px | Section gap (mobile) |
+| `space-6` | 24px | Card internal padding (desktop) |
+| `space-8` | 32px | Section gap (desktop) |
+| `space-10` | 40px | Major section separation |
+| `space-12` | 48px | Page top margin |
+
+---
+
+#### 10.2.9 Border Radius
+
+Sharp corners are the primary brand signal — no soft rounding on primary elements.
+
+| Token | Value | Role |
+|-------|-------|------|
+| `rounded-none` | 0px | Primary buttons, habit cards, main panels — all sharp. |
+| `rounded-sm` | 2px | Small badges, tag chips, inline code. |
+| `rounded-md` | 4px | Toast notifications only (needs slight rounding to read as transient). |
+| `rounded-full` | 9999px | Avatar circles, progress indicator dots only. |
+
+**Rule:** If it is a structural element (card, button, modal, input), use `rounded-none`. If it is a floating transient element (toast, tooltip), use `rounded-md`. No exceptions without design review.
+
+---
+
+#### 10.2.10 Shadow & Elevation System
+
+Drop shadows fail on dark backgrounds — dark shadow on dark surface is invisible. Elevation is communicated entirely through surface color steps (higher = lighter) and border strength.
+
+| Token | Value | Role |
+|-------|-------|------|
+| `shadow-none` | none | Default. Depth shown by surface color contrast. |
+| `shadow-ring` | `0 0 0 1px var(--border-default)` | Inset ring on cards. Replaces the visual function of a box shadow. |
+| `shadow-ring-accent` | `0 0 0 1px var(--orange-6)` | Focused input ring, selected card highlight. |
+| `shadow-glow-cta` | `0 0 24px rgba(255,107,43,0.22)` | CTA button on hover. Animate via `::after` opacity, NOT direct `box-shadow`. |
+| `shadow-glow-score` | `0 0 32px rgba(255,107,43,0.15)` | Forge Score widget when score increases. |
+
+---
+
+#### 10.2.11 Micro-Animation System
+
+*Dopamine is released during anticipation, not just at reward confirmation. Animation timing is a behavioral design decision, not a polish decision.*
+
+**Duration Tokens:**
+
+| Token | Duration | Easing | Role |
+|-------|----------|--------|------|
+| `duration-instant` | 80ms | `ease-out` | Button press state, icon swap, toggle. Must feel like physical button. |
+| `duration-fast` | 150ms | `ease-out` | Hover states, tooltip appear, skeleton fade. |
+| `duration-base` | 200ms | `cubic-bezier(0.16, 1, 0.3, 1)` | Most transitions. Page section reveals, card expand. |
+| `duration-feedback` | 300ms | Spring | Habit completion XP tick, Forge Score increment, streak counter update. The dopamine sweet spot. |
+| `duration-celebration` | 600ms | Spring (loose) | Level-up animation, badge earn, 7-day streak milestone. ONLY use for genuine achievements. |
+
+**Spring Physics Specifications (Framer Motion):**
+- **Standard spring** (buttons, interactive elements): `{ stiffness: 400, damping: 17 }` — quick settle with micro-overshoot. The overshoot is intentional: it signals physicality and makes actions feel consequential.
+- **Feedback spring** (XP tick, score increment): `{ stiffness: 300, damping: 20 }` — slightly softer, still snappy.
+- **Celebration spring** (level-up, badge): `{ stiffness: 200, damping: 10 }` — more bounce, longer settle. Maximum: 600ms total.
+
+**Specific Animation Specs:**
+
+*Habit completion — Forge Spark:*
+- Trigger: immediately on "Completed" button press (do not wait for server response — optimistic update)
+- Effect: 6–8 CSS particle elements absolutely positioned over the habit card
+- Each particle: starts at card center, animates to random offset (±30px x, -20px to -60px y), `scale(0)` at end
+- Staggered: `animation-delay` of 0, 30ms, 60ms, 90ms, 120ms, 150ms, 180ms, 210ms per particle
+- Duration per particle: 400ms total
+- Color: `--orange-9` (#FF6B2B) with opacity fade from 1 to 0
+- Implementation: pure CSS `@keyframes` + `nth-child` delays. No canvas, no JS animation library for this effect.
+
+*Forge Score increment:*
+- Trigger: after server confirms habit/check-in, update optimistically
+- Effect: number count-up (old value → new value) over 300ms using Framer Motion `useSpring` + `useTransform`
+- Simultaneously: `--shadow-glow-score` fades in (opacity 0→1, 150ms) then fades out (opacity 1→0, 500ms, 200ms delay)
+- The count-up begins BEFORE the glow peaks — anticipatory sequencing
+
+*XP bar fill:*
+- Effect: CSS `width` transition from old % to new % over 300ms `cubic-bezier(0.16, 1, 0.3, 1)`
+- If level-up occurs: bar fills to 100%, 200ms pause, then bar resets to 0% (instant) and fills to new level's % over 400ms
+- Level-up overlay: full-screen `::before` fade-in (black, opacity 0→0.85, 150ms), then level name text scales in (`scale(0.8)→scale(1)`, 300ms spring), held for 1.5s, then fades out
+
+*40% Rule modal entry:*
+- NOT a gentle fade-in. Pure black overlay snaps in at 80ms (instant feel = urgency). Text content fades in 100ms after. No spring on entry — the modal is a shock interrupt.
+
+*Badge earn:*
+- Badge icon: `scale(0) rotate(-15deg)` → `scale(1.15) rotate(5deg)` → `scale(1) rotate(0deg)` using spring `{ stiffness: 250, damping: 12 }`. Total ~500ms.
+
+**Variable reward note:** Per behavioral research, add micro-variation to spark effects — randomize the number of particles (6–8, not fixed 7) and their travel distance on each trigger. Unpredictability prevents hedonic adaptation where the brain stops responding to a repeated stimulus.
+
+**Glow implementation note:** Never animate `box-shadow` or `filter: blur` directly — these are paint properties that bypass the compositor thread and cause jank on mobile. Always animate `opacity` of a `::after` pseudo-element containing the gradient/glow.
+
+---
+
+#### 10.2.12 Component Library
+
+**Base:** shadcn/ui with full theme override via CSS custom properties.
+
+**Tailwind config additions required:**
+```js
+// tailwind.config.ts
+theme: {
+  extend: {
+    colors: {
+      forge: {
+        base: '#0A0908',
+        subtle: '#111110',
+        elevated: '#1A1918',
+        overlay: '#232220',
+        input: '#161514',
+        border: '#2A2927',
+        'border-strong': '#3D3B39',
+        orange: '#FF6B2B',
+        'orange-hover': '#FF5214',
+        'orange-text': '#FFBDA3',
+        'orange-glow': 'rgba(255,107,43,0.20)',
+        blue: '#3B82F6',
+        'blue-hover': '#2563EB',
+        'blue-text': '#93C5FD',
+      },
+      text: {
+        primary: '#EDEDEF',
+        secondary: '#C2C0BE',
+        muted: '#87857F',
+        disabled: '#4A4845',
+      }
+    },
+    borderRadius: {
+      DEFAULT: '0px',  // Override shadcn default rounding — all sharp
+      sm: '2px',
+      md: '4px',
+      full: '9999px',
+    },
+    fontFamily: {
+      heading: ['Geist', 'Cal Sans', 'system-ui', 'sans-serif'],
+      body: ['Inter', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'monospace'],
+    },
+    fontSize: {
+      'display': ['3.052rem', { lineHeight: '1.05', fontWeight: '800' }],
+      '4xl':     ['2.441rem', { lineHeight: '1.08', fontWeight: '700' }],
+      '3xl':     ['1.953rem', { lineHeight: '1.15', fontWeight: '700' }],
+      '2xl':     ['1.563rem', { lineHeight: '1.20', fontWeight: '600' }],
+      'xl':      ['1.25rem',  { lineHeight: '1.30', fontWeight: '600' }],
+      'base':    ['1rem',     { lineHeight: '1.65', fontWeight: '400' }],
+      'sm':      ['0.875rem', { lineHeight: '1.55', fontWeight: '400' }],
+      'xs':      ['0.75rem',  { lineHeight: '1.40', fontWeight: '400' }],
+    },
+  }
+}
+```
+
+**Shadcn CSS variables (`globals.css`):**
+```css
+:root {
+  --background:         10 6% 4%;       /* #0A0908 */
+  --foreground:         240 5% 93%;     /* #EDEDEF */
+  --card:               40 5% 7%;       /* #111110 */
+  --card-foreground:    240 5% 93%;
+  --popover:            30 4% 13%;      /* #1A1918 */
+  --popover-foreground: 240 5% 93%;
+  --primary:            21 100% 58%;    /* #FF6B2B */
+  --primary-foreground: 10 6% 4%;
+  --secondary:          217 91% 60%;    /* #3B82F6 */
+  --secondary-foreground: 240 5% 93%;
+  --muted:              30 4% 13%;
+  --muted-foreground:   30 3% 53%;      /* #87857F */
+  --accent:             30 4% 13%;
+  --accent-foreground:  21 100% 58%;
+  --destructive:        0 84% 60%;      /* #EF4444 */
+  --destructive-foreground: 0 0% 98%;
+  --border:             30 3% 17%;      /* #2A2927 */
+  --input:              30 3% 10%;      /* #161514 */
+  --ring:               21 100% 58%;   /* Focus ring = orange */
+  --radius: 0rem;                       /* Sharp corners globally */
+}
+```
 
 ### 10.3 Key UI Flows
 

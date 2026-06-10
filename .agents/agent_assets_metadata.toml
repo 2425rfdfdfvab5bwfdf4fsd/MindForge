@@ -17,4 +17,10 @@ title = "MindForge — Filled PRD Generator Prompt"
 id = "pYo4-r3A6Lc2y8u_5KVp5"
 uri = "file://research/mindforge-PRD.md"
 type = "text"
-title = "MindForge — Complete PRD v1.0"
+title = "MindForge — PRD v1.0 (Updated Section 10.2)"
+
+[[outputs]]
+id = "MVMGHhcXsPSag2NnqEJIp"
+uri = "file://research/mindforge-color-theme-research.md"
+type = "text"
+title = "MindForge — Color & Theme Deep Research Report"
