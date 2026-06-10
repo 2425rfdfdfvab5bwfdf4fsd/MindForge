@@ -1,0 +1,34 @@
+Build the Onboarding Step 3 — Environment Audit page.
+
+CREATE app/(onboarding)/environment/page.tsx:
+(URL: /onboarding/environment)
+
+LAYOUT: Full-screen dark layout. No sidebar. Centered, max-width 640px.
+Progress bar: top of page, 4px height, orange fill, sharp, advances 1/12 steps.
+
+THE 12 QUESTIONS (one per screen, multiple choice 3–4 options):
+1. "Where is your phone at night?" → [On my nightstand, In another room, Under my pillow, No set place]
+2. "Do you have social media apps on your home screen?" → [Yes, multiple, Yes, one or two, In folders, Deleted them]
+3. "Describe your workspace" → [Clean desk, minimal distractions, Somewhat cluttered, Very cluttered / couch, No dedicated workspace]
+4. "How accessible is junk food in your home?" → [None in the house, There but out of sight, Visible on the counter, Everywhere and easy to grab]
+5. "Where is your alarm?" → [Phone next to my bed, Across the room / separate alarm, I don't use an alarm]
+6. "Do you have books or learning material visible?" → [Books on my desk / shelf, Books stored away, Digital only, I don't read regularly]
+7. "How easy is it to drink water in your home?" → [Water bottle always filled and visible, Have to go get water, Usually forget to drink water]
+8. "Where is your gym bag or workout gear?" → [Ready and visible, Put away but accessible, Have it but rarely use it, I don't have workout gear]
+9. "Do you have a TV in your bedroom?" → [Yes and I watch it most nights, Yes but rarely, No]
+10. "How would you describe your phone notification settings?" → [Most off — only essentials, Many apps send notifications, Everything is on]
+11. "How would you describe your sleep environment?" → [Dark, cool, no screens — optimized, Pretty good but improvable, Screens on / not dark enough, Chaotic]
+12. "What is your biggest environmental trigger for your main bad habit?" → [Social media / phone, Food / kitchen, Certain people or places, Evening / night time, Stress]
+
+UI: Card layout. Each question title text-2xl. Options as large clickable cards (border #2A2927, bg #111110, hover bg #1A1918, selected: border #FF6B2B bg #1A0A04). Back/Next navigation. "Submit" on step 12.
+
+ON SUBMIT:
+- Call tRPC user.submitEnvironmentAudit with all 12 answers
+- Server calls Gemini 2.5 Flash with responseMimeType: 'application/json' and this prompt:
+  "Based on these environment audit answers: {answers}, generate 5–8 specific, actionable environment redesign recommendations. Return JSON array: [{item: string, category: string, done: false}]. Each item must be a specific physical action with a specific location (e.g., 'Move your phone charger to the kitchen counter tonight' not 'Use your phone less'). Reference the user's actual answers."
+- Display results as numbered checklist cards
+- Each card has item text + "Mark as Done" button (calls tRPC user.markEnvironmentItemDone)
+- Each "Done" item: award 50 XP (event_type: 'environment')
+- "Enter the Forge" button at bottom: call awardXP(userId, 200, 'Onboarding completed', 'onboarding') — this is the one-time 200 XP for completing the full onboarding flow (Why Excavation + Environment Audit per PRD Feature 13). Then set onboarding_complete = true, onboarding_step = 'complete', redirect to /dashboard
+
+ACCEPTANCE: All 12 questions display with proper navigation. On submit, AI generates personalized recommendations. "Mark as Done" awards 50 XP. "Enter the Forge" redirects to /dashboard.
