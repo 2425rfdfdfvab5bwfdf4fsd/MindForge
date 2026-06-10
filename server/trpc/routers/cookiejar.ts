@@ -2,8 +2,8 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
-import { awardXP } from "@/lib/xp";
-import { checkCookieJarFounder } from "@/lib/badges";
+import { awardXP } from "@/lib/gamification/xp";
+import { checkCookieJarFounder } from "@/lib/gamification/badges";
 import type { CookieJarEntry } from "@/types";
 
 export const cookiejarRouter = router({

@@ -49,21 +49,13 @@ export function useStreamingResponse(): UseStreamingResponseReturn {
         } catch {
           friendlyError = text || friendlyError;
         }
-        setState((prev) => ({
-          ...prev,
-          isStreaming: false,
-          error: friendlyError,
-        }));
+        setState((prev) => ({ ...prev, isStreaming: false, error: friendlyError }));
         return;
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        setState((prev) => ({
-          ...prev,
-          isStreaming: false,
-          error: "No response body",
-        }));
+        setState((prev) => ({ ...prev, isStreaming: false, error: "No response body" }));
         return;
       }
 
@@ -76,40 +68,25 @@ export function useStreamingResponse(): UseStreamingResponseReturn {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        // Keep the last potentially incomplete line in the buffer
         buffer = lines.pop() ?? "";
 
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
-
           const data = line.slice(6).trim();
 
           if (data === "[DONE]") {
-            setState((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isComplete: true,
-            }));
+            setState((prev) => ({ ...prev, isStreaming: false, isComplete: true }));
             return;
           }
 
           try {
             const parsed = JSON.parse(data) as { text?: string; error?: string };
-
             if (parsed.error) {
-              setState((prev) => ({
-                ...prev,
-                isStreaming: false,
-                error: parsed.error ?? "Unknown error",
-              }));
+              setState((prev) => ({ ...prev, isStreaming: false, error: parsed.error ?? "Unknown error" }));
               return;
             }
-
             if (parsed.text) {
-              setState((prev) => ({
-                ...prev,
-                streamedText: prev.streamedText + parsed.text,
-              }));
+              setState((prev) => ({ ...prev, streamedText: prev.streamedText + parsed.text }));
             }
           } catch {
             // Malformed SSE line — skip
@@ -117,7 +94,6 @@ export function useStreamingResponse(): UseStreamingResponseReturn {
         }
       }
 
-      // Stream ended without [DONE]
       setState((prev) => ({ ...prev, isStreaming: false, isComplete: true }));
     } catch (err) {
       setState((prev) => ({

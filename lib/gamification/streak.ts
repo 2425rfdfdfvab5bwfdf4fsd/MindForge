@@ -63,4 +63,4 @@ export async function recalculateStreak(
   return streak;
 }
 
-export { recalculateForgeScore } from "@/lib/forge-score";
+export { recalculateForgeScore } from "./forge-score";

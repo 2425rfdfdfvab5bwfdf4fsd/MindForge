@@ -1,7 +1,7 @@
 import "server-only";
 import { adminDb } from "@/lib/firebase/admin";
-import { getLevelFromXP, getLevelName } from "@/lib/level";
-export { getLevelFromXP, getLevelName, type LevelInfo } from "@/lib/level";
+import { getLevelFromXP, getLevelName } from "./level";
+export { getLevelFromXP, getLevelName, type LevelInfo } from "./level";
 
 export type XPEventType =
   | "habit_complete"

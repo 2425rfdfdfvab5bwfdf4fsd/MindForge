@@ -51,23 +51,9 @@ export async function recalculateForgeScore(userId: string): Promise<number> {
     cookieSnap,
     auditSnap,
   ] = await Promise.all([
-    adminDb
-      .collection("habits")
-      .where("userId", "==", userId)
-      .where("isActive", "==", true)
-      .get(),
-    adminDb
-      .collection("daily_checkins")
-      .where("userId", "==", userId)
-      .where("onboardingMirror", "==", false)
-      .where("localDate", ">=", fourteenDaysAgo)
-      .get(),
-    adminDb
-      .collection("user_challenges")
-      .where("userId", "==", userId)
-      .where("status", "==", "completed")
-      .where("completedAt", ">=", monthStart)
-      .get(),
+    adminDb.collection("habits").where("userId", "==", userId).where("isActive", "==", true).get(),
+    adminDb.collection("daily_checkins").where("userId", "==", userId).where("onboardingMirror", "==", false).where("localDate", ">=", fourteenDaysAgo).get(),
+    adminDb.collection("user_challenges").where("userId", "==", userId).where("status", "==", "completed").where("completedAt", ">=", monthStart).get(),
     adminDb.collection("challenges").where("isActive", "==", true).get(),
     adminDb.collection("cookie_jar_entries").where("userId", "==", userId).get(),
     adminDb.collection("environment_audit_items").where("userId", "==", userId).get(),
@@ -78,9 +64,7 @@ export async function recalculateForgeScore(userId: string): Promise<number> {
   let streakRows: Array<{ currentStreak: number; longestStreak: number }> = [];
   if (habitIds.length) {
     const streakSnaps = await Promise.all(
-      habitIds.map((hid) =>
-        adminDb.collection("habit_streaks").doc(hid).get()
-      )
+      habitIds.map((hid) => adminDb.collection("habit_streaks").doc(hid).get())
     );
     streakRows = streakSnaps
       .filter((s) => s.exists)
@@ -104,15 +88,8 @@ export async function recalculateForgeScore(userId: string): Promise<number> {
   const total = Math.min(Math.max(Math.floor(c1 + c2 + c3 + c4 + c5), 0), 1000);
 
   await Promise.all([
-    adminDb
-      .collection("users")
-      .doc(userId)
-      .update({ forgeScore: total, updatedAt: new Date().toISOString() }),
-    adminDb.collection("forge_score_history").add({
-      userId,
-      score: total,
-      recordedAt: new Date().toISOString(),
-    }),
+    adminDb.collection("users").doc(userId).update({ forgeScore: total, updatedAt: new Date().toISOString() }),
+    adminDb.collection("forge_score_history").add({ userId, score: total, recordedAt: new Date().toISOString() }),
   ]);
 
   return total;

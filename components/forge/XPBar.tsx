@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getLevelFromXP } from "@/lib/level";
+import { getLevelFromXP } from "@/lib/gamification/level";
 
 interface XPBarProps {
   xp: number;

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/trpc/client";
-import { useStreamingResponse } from "@/lib/hooks/useStreamingResponse";
+import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 
 const MIN_CHARS = 100;
 

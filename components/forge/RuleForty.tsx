@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useStreamingResponse } from "@/lib/hooks/useStreamingResponse";
+import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 
 // ---------------------------------------------------------------------------
 // Daily auto-trigger limit helpers (localStorage)

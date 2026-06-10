@@ -2,8 +2,8 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
-import { recalculateStreak, recalculateForgeScore } from "@/lib/streak";
-import { awardXP } from "@/lib/xp";
+import { recalculateStreak, recalculateForgeScore } from "@/lib/gamification/streak";
+import { awardXP } from "@/lib/gamification/xp";
 import { trackServerEvent } from "@/lib/posthog/server";
 
 const FREE_TIER_LIMIT = 3;

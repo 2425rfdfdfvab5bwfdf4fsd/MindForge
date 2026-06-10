@@ -1,0 +1,125 @@
+Perform a full SEO audit and optimization of this project. Follow this exact priority order:
+
+---
+
+## STEP 1 — SPA vs SSR Reality Check (Do this first)
+- Determine if the site is a React/Vue/Angular SPA, server-side rendered (Next.js, Express, etc.), or a hybrid.
+- For SPA: the index.html is ALL search engines see. Optimize it heavily.
+- For SSR: full HTML is indexable — audit every route.
+- For hybrid: audit SSR pages deeply; note which routes are SPA-only.
+
+---
+
+## STEP 2 — Crawlability & Indexation
+- Check /robots.txt exists and returns plain text (NOT HTML). If missing or wrong, create a proper one that allows all important pages and references the sitemap.
+- Check /sitemap.xml exists and returns valid XML (NOT HTML). If missing, create a dynamic sitemap covering all public routes.
+- Ensure no important pages are blocked by noindex tags or disallow rules.
+- Verify canonical tags on every page (correct URL, https, consistent trailing slash).
+- Eliminate redirect chains. All pages should return HTTP 200.
+
+---
+
+## STEP 3 — Technical Foundations
+Fix all of the following:
+
+**Performance / Core Web Vitals:**
+- LCP < 2.5s, INP < 200ms, CLS < 0.1
+- Audit Google Fonts loading — replace blocking <link> with async pattern:
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="[font-url]" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="[font-url]"></noscript>
+- Add loading="lazy" to all below-fold images.
+- Compress and convert images to WebP where possible.
+- Minimize render-blocking JavaScript and CSS.
+
+**Mobile & Security:**
+- Confirm <meta name="viewport" content="width=device-width, initial-scale=1"> is set.
+- Site must be HTTPS with valid SSL.
+- URLs must be lowercase, hyphen-separated, descriptive, no unnecessary params.
+
+---
+
+## STEP 4 — On-Page SEO (every public page)
+For every public route, ensure:
+
+- **Title tag**: Unique, 50–65 chars, primary keyword near the start, brand at the end using `|`
+- **Meta description**: Unique, 150–160 chars, includes keyword + clear value proposition + CTA
+- **H1**: One per page, contains the primary keyword, matches search intent
+- **Heading hierarchy**: H1 → H2 → H3, no skipping levels, headings describe content
+- **Keyword in first 100 words** of body content
+- **All images**: descriptive alt text, descriptive filenames, WebP format, lazy loading
+- **Internal links**: important pages linked with descriptive anchor text, no orphan pages
+
+---
+
+## STEP 5 — Structured Data (Schema Markup)
+Add JSON-LD schema. Each schema = its own <script type="application/ld+json"> block. Never concatenate.
+
+**On every page (add to shared shell/layout):**
+- WebSite + Organization @graph — establishes entity identity for Google's Knowledge Graph
+
+**Per page type:**
+- Home: WebSite, Organization
+- Blog/Article: Article or BlogPosting (include datePublished, dateModified)
+- FAQ section: FAQPage (great for AI Overviews and featured snippets)
+- How-to content: HowTo
+- Glossary: DefinedTerm + DefinedTermSet
+- Product/service list: ItemList
+- Any page with breadcrumbs: BreadcrumbList
+
+---
+
+## STEP 6 — Social Meta Tags (every page)
+Add to every page's <head>:
+<meta property="og:title" content="..." />
+<meta property="og:description" content="..." />
+<meta property="og:url" content="..." />
+<meta property="og:type" content="website" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:site_name" content="[Site Name]" />
+<meta property="og:image" content="[hosted 1200x630 image URL]" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="..." />
+<meta name="twitter:description" content="..." />
+<meta name="twitter:site" content="@handle" />
+
+Note: og:image must be a real hosted URL (1200×630px). Skip it rather than using a broken URL.
+
+---
+
+## STEP 7 — E-E-A-T & Content Quality
+- Make author credentials visible on blog/article pages.
+- Ensure contact info (email, address) is present and accurate.
+- Add or verify Privacy Policy and Terms of Service pages exist.
+- All factual claims should be sourced.
+- Content must be deeper and more useful than what currently ranks for the target keywords.
+
+---
+
+## STEP 8 — Bot Governance (robots.txt update)
+Add rules to differentiate crawlers:
+- Allow: Googlebot, OAI-SearchBot (beneficial retrieval)
+- Consider disallowing: known training scrapers if you want to protect content
+- Always reference sitemap: Sitemap: https://yourdomain.com/sitemap.xml
+
+---
+
+## DELIVERABLE
+After implementing all fixes, produce a report in this format:
+
+# SEO Audit Report
+
+## Executive Summary
+- Overall health: [score/assessment]
+- Top 3 priority issues fixed
+- Quick wins completed
+
+## Critical Issues Fixed
+| Issue | Page | What Was Done |
+
+## Remaining Recommendations
+| Item | Priority | Why |
+
+## Page-by-Page Summary
+For each public route: Title | Meta Description | H1 | Schema Added | Issues Remaining

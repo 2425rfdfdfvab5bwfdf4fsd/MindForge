@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { api } from "@/lib/trpc/client";
-import { useStreamingResponse } from "@/lib/hooks/useStreamingResponse";
+import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 
 const MAX_TURNS = 8;
 const MAX_REFINEMENTS = 2;

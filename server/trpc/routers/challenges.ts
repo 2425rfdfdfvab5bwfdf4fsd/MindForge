@@ -2,9 +2,9 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
-import { awardXP } from "@/lib/xp";
-import { checkColdMind } from "@/lib/badges";
-import { recalculateForgeScore } from "@/lib/forge-score";
+import { awardXP } from "@/lib/gamification/xp";
+import { checkColdMind } from "@/lib/gamification/badges";
+import { recalculateForgeScore } from "@/lib/gamification/forge-score";
 import { trackServerEvent } from "@/lib/posthog/server";
 import type { Challenge } from "@/types";
 

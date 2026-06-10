@@ -3,8 +3,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { adminDb } from "@/lib/firebase/admin";
-import { awardXP } from "@/lib/xp";
-import { checkAndAwardBadge } from "@/lib/badges";
+import { awardXP } from "@/lib/gamification/xp";
+import { checkAndAwardBadge } from "@/lib/gamification/badges";
 import type { UserProfile, UserBadge, EnvironmentAuditItem } from "@/types";
 
 const BADGE_KEYS = [

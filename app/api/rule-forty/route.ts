@@ -1,7 +1,7 @@
 import { getSessionFromRequest } from "@/lib/auth";
 import { adminDb } from "@/lib/firebase/admin";
-import { awardXP, XP_AMOUNTS } from "@/lib/xp";
-import { checkFortyPercentSurvivor } from "@/lib/badges";
+import { awardXP, XP_AMOUNTS } from "@/lib/gamification/xp";
+import { checkFortyPercentSurvivor } from "@/lib/gamification/badges";
 
 export async function POST(request: Request) {
   const session = await getSessionFromRequest(request);

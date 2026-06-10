@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/trpc/client";
-import { useStreamingResponse } from "@/lib/hooks/useStreamingResponse";
+import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 import { RuleForty } from "@/components/forge/RuleForty";
 
 type Phase = "idle" | "submitting" | "streaming" | "classifying" | "complete";
