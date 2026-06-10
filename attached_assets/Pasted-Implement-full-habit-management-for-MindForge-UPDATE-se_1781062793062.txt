@@ -1,0 +1,71 @@
+Implement full habit management for MindForge.
+
+UPDATE server/trpc/routers/habits.ts with real implementations:
+
+habits.list: Protected query. Fetch all active habits for user (is_active = true). Also fetch today's completion status for each habit from habit_completions where local_date = input.localDate. Also fetch habit_streaks for each habit. Return: Array<{ id, name, category, habit_type, target_frequency, target_days, sort_order, current_streak, longest_streak, today_status: 'pending'|'completed'|'missed' }>
+
+habits.create: Protected mutation. Input: { name (max 60 chars, required), category, habit_type, target_frequency, target_days? }
+- Free tier check: count active habits — if ≥3, throw FORBIDDEN with { upgradeRequired: true }
+- Insert into habits table
+- Insert into habit_streaks with current_streak=0, longest_streak=0
+- Return created habit
+
+habits.update: Protected mutation. Input: { id, name?, category?, target_frequency?, target_days? }
+- Verify habit.user_id = ctx.user.id
+- Update habits row
+
+habits.archive: Protected mutation. Input: { id }
+- Verify ownership
+- Set is_active = false
+
+habits.logCompletion: Protected mutation. Input: { habitId, localDate (DATE string 'YYYY-MM-DD'), completed (boolean) }
+- Verify habit belongs to user
+- Upsert into habit_completions (ON CONFLICT (habit_id, local_date) DO UPDATE SET completed = EXCLUDED.completed, completion_time = NOW())
+- Call recalculateStreak(habitId, userId, localDate)
+- If completed: call awardXP(userId, 20, 'Habit completed', 'habit_complete')
+- Call recalculateForgeScore(userId)
+- If NOT completed and streak WAS ≥7 before this miss: return triggerFortyPercent: true
+- Return: { streak, forgeScore, xpAwarded, leveledUp, triggerFortyPercent }
+
+habits.getCompletionHistory: Protected query. Input: { habitId, days: number }. Return habit_completions for that habit for the last N days.
+
+CREATE lib/streak.ts:
+async function recalculateStreak(habitId: string, userId: string, localDate: string): Promise<number>
+- Query habit_completions for this habit, last 60 days, ordered by local_date DESC
+- Walk back from localDate counting consecutive days where completed = true
+- Stop at first gap (non-completed day counts as a gap; future dates are not a gap)
+- Update habit_streaks: { current_streak, longest_streak: max(current, existing_longest), last_completed_date }
+- Return current_streak
+
+CREATE app/(app)/habits/page.tsx:
+(URL: /habits)
+List of all habits. "New Habit" button top right.
+Each habit shown as HabitCard component.
+Pass today's local date (client-side: new Date().toLocaleDateString('en-CA', { timeZone: userTimezone })) to habits.list query.
+If free tier user has 3 habits: show upgrade banner above list.
+
+CREATE components/forge/HabitCard.tsx:
+Props: habit (name, category, habit_type, today_status, current_streak).
+Sharp card, background #111110, border-left 3px solid:
+- Completed: #22C55E (green)
+- Missed: #EF4444 (red)
+- Pending: #FF6B2B (orange)
+Name text-xl font-heading, category badge text-xs, streak (text-sm text-muted).
+Two buttons: "Completed" (bg #22C55E, text white) and "Missed" (bg #EF4444, text white). Both disabled + locked state if already logged today.
+On "Completed" click: optimistic update immediately + call habits.logCompletion.
+Forge Spark animation on completion: 6–8 CSS particles (pure CSS @keyframes, NOT a JS animation library). Each particle: orange (#FF6B2B), starts at card center, moves ±30px x and -20 to -60px y, scale to 0, 400ms total, staggered at 0/30/60/90/120/150/180/210ms delays. Randomize particle count (6–8, not fixed) for variable reward.
+
+CREATE app/(app)/habits/[id]/page.tsx:
+(URL: /habits/[id])
+Habit detail: name + edit/archive buttons. Stats row: Current Streak, Longest Streak, Completion Rate % (text-display, orange numbers, tabular-nums). HabitGrid component below.
+
+CREATE components/forge/HabitGrid.tsx:
+Calendar grid of last 90 days. 7 columns (Sun–Sat). Each cell 12×12px square.
+Colors: #22C55E = completed, #EF4444 = missed, #2A2927 = no data/future.
+Hover: Radix UI Tooltip showing "June 10 — Completed".
+
+CREATE app/(app)/habits/new/page.tsx:
+(URL: /habits/new)
+Form: Name input (max 60 chars), Category select (health/mind/avoid/perform), Type select (build/avoid), Frequency: daily / weekdays / custom. If custom: Mon–Sun checkbox grid. Submit creates habit via tRPC habits.create.
+
+ACCEPTANCE: User can create, view, complete, and miss habits. Streak increments correctly. Forge Spark animation fires on completion. Calendar grid shows history correctly. Free tier enforced at 3 habits.
