@@ -176,7 +176,7 @@ export function RuleForty({
                     transition={{ duration: 0.1 }}
                   >
                     {/* Heading */}
-                    <h1 className="mb-3 text-center text-4xl font-black text-forge-500 uppercase tracking-widest leading-tight">
+                    <h1 className="mb-3 text-center text-4xl font-black text-forge-orange uppercase tracking-widest leading-tight">
                       YOUR MIND IS<br />LYING TO YOU
                     </h1>
 
@@ -194,7 +194,7 @@ export function RuleForty({
                             {[0, 1, 2].map((i) => (
                               <span
                                 key={i}
-                                className="inline-block h-1.5 w-1.5 rounded-full bg-forge-500"
+                                className="inline-block h-1.5 w-1.5 rounded-full bg-forge-orange"
                                 style={{
                                   animation: `ruleFortyPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
                                 }}
@@ -207,7 +207,7 @@ export function RuleForty({
                           <span className="whitespace-pre-wrap">
                             {streamedText}
                             {isStreaming && (
-                              <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-forge-500 align-middle" />
+                              <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-forge-orange align-middle" />
                             )}
                           </span>
                         )}

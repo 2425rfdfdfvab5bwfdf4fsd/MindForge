@@ -183,7 +183,7 @@ export const challengesRouter = router({
         );
       }
 
-      // Badge: cold_mind (3+ cold challenges completed)
+      // Badge: cold_mind (7+ cold challenges completed — per PRD)
       checkColdMind(ctx.user.id).catch(() => {});
 
       // Recalculate Forge Score

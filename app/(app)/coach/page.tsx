@@ -20,7 +20,7 @@ interface ChatMessage {
 const MEMORY_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   preference: { label: "Preference", color: "text-blue-400" },
   trigger:    { label: "Trigger",    color: "text-red-400"  },
-  victory:    { label: "Victory",    color: "text-forge-500" },
+  victory:    { label: "Victory",    color: "text-forge-orange" },
   fear:       { label: "Fear",       color: "text-yellow-400" },
   identity:   { label: "Identity",   color: "text-purple-400" },
   pattern:    { label: "Pattern",    color: "text-teal-400"  },
@@ -32,12 +32,12 @@ const MEMORY_TYPE_LABELS: Record<string, { label: string; color: string }> = {
 function LockedCoach() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] gap-6 px-4">
-      <div className="w-16 h-16 rounded-full bg-forge-900 border border-forge-700 flex items-center justify-center">
-        <Lock className="w-7 h-7 text-forge-500" />
+      <div className="w-16 h-16 flex items-center justify-center border border-forge-border bg-forge-subtle">
+        <Lock className="w-7 h-7 text-forge-orange" />
       </div>
       <div className="text-center max-w-sm">
-        <h2 className="text-2xl font-bold text-white mb-2">Your coach is waiting.</h2>
-        <p className="text-gray-400 text-sm leading-relaxed">
+        <h2 className="text-2xl font-bold text-text-primary mb-2">Your coach is waiting.</h2>
+        <p className="text-text-muted text-sm leading-relaxed">
           The AI Forge Coach remembers everything — your why, your triggers, your wins. 
           It builds a persistent memory of who you are and holds you to your highest standard.
           Available on Pro.
@@ -45,7 +45,7 @@ function LockedCoach() {
       </div>
       <Link
         href="/upgrade"
-        className="inline-flex items-center gap-2 px-6 py-3 bg-forge-600 hover:bg-forge-500 text-white font-semibold rounded-lg transition-colors"
+        className="inline-flex items-center gap-2 px-6 py-3 bg-forge-orange hover:bg-forge-orange-hover text-forge-base font-semibold transition-colors"
       >
         Unlock with Pro <ChevronRight className="w-4 h-4" />
       </Link>
@@ -80,32 +80,32 @@ function MemoryModal({
             onClick={onClose}
           />
           <motion.div
-            className="relative bg-[#111] border border-white/10 rounded-xl w-full max-w-lg max-h-[70vh] flex flex-col overflow-hidden"
+            className="relative bg-forge-subtle border border-forge-border w-full max-w-lg max-h-[70vh] flex flex-col overflow-hidden"
             initial={{ scale: 0.95, opacity: 0, y: 12 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 12 }}
             transition={{ type: "spring", stiffness: 320, damping: 24 }}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-forge-border">
               <div className="flex items-center gap-2">
-                <Brain className="w-4 h-4 text-forge-500" />
-                <span className="font-semibold text-white text-sm">Coach Memory</span>
+                <Brain className="w-4 h-4 text-forge-orange" />
+                <span className="font-semibold text-text-primary text-sm">Coach Memory</span>
               </div>
               <button
                 onClick={onClose}
-                className="text-gray-500 hover:text-white transition-colors"
+                className="text-text-muted hover:text-text-primary transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="overflow-y-auto p-5 flex flex-col gap-5">
               {types.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-8">
+                <p className="text-text-muted text-sm text-center py-8">
                   No memories recorded yet. Start chatting to build your memory bank.
                 </p>
               ) : (
                 types.map((type) => {
-                  const meta = MEMORY_TYPE_LABELS[type] ?? { label: type, color: "text-gray-400" };
+                  const meta = MEMORY_TYPE_LABELS[type] ?? { label: type, color: "text-text-muted" };
                   return (
                     <div key={type}>
                       <h3 className={cn("text-xs font-semibold uppercase tracking-widest mb-2", meta.color)}>
@@ -115,7 +115,7 @@ function MemoryModal({
                         {memories[type].map((m) => (
                           <div
                             key={m.id}
-                            className="text-sm text-gray-300 bg-white/5 rounded-lg px-3 py-2 leading-relaxed"
+                            className="text-sm text-text-secondary bg-forge-elevated border border-forge-border px-3 py-2 leading-relaxed"
                           >
                             {m.content}
                           </div>
@@ -148,21 +148,21 @@ function MessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming?: b
       transition={{ duration: 0.2 }}
     >
       {!isUser && (
-        <div className="w-7 h-7 rounded-full bg-forge-900 border border-forge-700 flex items-center justify-center flex-shrink-0 mt-1">
-          <span className="text-forge-500 text-xs font-bold">FC</span>
+        <div className="w-7 h-7 border border-forge-border bg-forge-subtle flex items-center justify-center flex-shrink-0 mt-1">
+          <span className="text-forge-orange text-xs font-bold">FC</span>
         </div>
       )}
       <div
         className={cn(
-          "max-w-[72%] rounded-xl px-4 py-3 text-sm leading-relaxed",
+          "max-w-[72%] px-4 py-3 text-sm leading-relaxed",
           isUser
-            ? "bg-forge-700/40 text-white border border-forge-700/60"
-            : "bg-white/5 text-gray-200 border border-white/8"
+            ? "bg-forge-elevated border border-forge-border text-text-primary"
+            : "bg-forge-overlay border border-forge-border-strong text-text-secondary"
         )}
       >
         <span className="whitespace-pre-wrap">{text}</span>
         {isStreaming && (
-          <span className="ml-0.5 inline-block w-0.5 h-4 bg-forge-500 animate-pulse align-middle" />
+          <span className="ml-0.5 inline-block w-0.5 h-4 bg-forge-orange animate-pulse align-middle" />
         )}
       </div>
     </motion.div>
@@ -331,7 +331,6 @@ export default function CoachPage() {
       abortRef.current?.abort();
       const sid = sessionId;
       if (!sid) return;
-      // Collect all text for memory extraction
       setMessages((prev) => {
         const fullText = prev.map((m) => m.parts.map((p) => p.text).join("")).join("\n\n");
         fetch("/api/sessions/coach", {
@@ -391,7 +390,7 @@ export default function CoachPage() {
   if (profileLoading) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
-        <div className="w-8 h-8 border-2 border-forge-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-forge-orange border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -406,19 +405,19 @@ export default function CoachPage() {
   return (
     <div className="flex flex-col h-[calc(100dvh-56px)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/8 flex-shrink-0">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-forge-border flex-shrink-0">
         <div>
-          <h1 className="text-lg font-bold text-white">Forge Coach</h1>
-          <p className="text-xs text-gray-500">Personalized AI · Remembers everything</p>
+          <h1 className="text-lg font-bold text-text-primary">Forge Coach</h1>
+          <p className="text-xs text-text-muted">Personalized AI · Remembers everything</p>
         </div>
         <button
           onClick={() => setMemoryOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/8 transition-colors text-xs text-gray-300 hover:text-white"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-forge-elevated hover:bg-forge-overlay border border-forge-border transition-colors text-xs text-text-secondary hover:text-text-primary"
         >
-          <Brain className="w-3.5 h-3.5 text-forge-500" />
+          <Brain className="w-3.5 h-3.5 text-forge-orange" />
           Memory
           {memoryCount > 0 && (
-            <span className="ml-0.5 bg-forge-700 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+            <span className="ml-0.5 bg-forge-orange text-forge-base text-[10px] font-semibold px-1.5 py-0.5">
               {memoryCount}
             </span>
           )}
@@ -452,14 +451,14 @@ export default function CoachPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
-            <div className="w-7 h-7 rounded-full bg-forge-900 border border-forge-700 flex items-center justify-center flex-shrink-0 mt-1">
-              <span className="text-forge-500 text-xs font-bold">FC</span>
+            <div className="w-7 h-7 border border-forge-border bg-forge-subtle flex items-center justify-center flex-shrink-0 mt-1">
+              <span className="text-forge-orange text-xs font-bold">FC</span>
             </div>
-            <div className="bg-white/5 border border-white/8 rounded-xl px-4 py-3 flex items-center gap-1.5">
+            <div className="bg-forge-overlay border border-forge-border px-4 py-3 flex items-center gap-1.5">
               {[0, 1, 2].map((i) => (
                 <span
                   key={i}
-                  className="w-1.5 h-1.5 bg-forge-500 rounded-full animate-bounce"
+                  className="w-1.5 h-1.5 bg-forge-orange rounded-full animate-bounce"
                   style={{ animationDelay: `${i * 0.15}s` }}
                 />
               ))}
@@ -471,7 +470,7 @@ export default function CoachPage() {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 border-t border-white/8 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-[#0D0D0C]">
+      <div className="flex-shrink-0 border-t border-forge-border px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-forge-base">
         <div className="flex items-end gap-3 max-w-3xl mx-auto">
           <textarea
             ref={textareaRef}
@@ -482,9 +481,9 @@ export default function CoachPage() {
             rows={1}
             disabled={isStreaming}
             className={cn(
-              "flex-1 resize-none bg-white/5 border border-white/10 rounded-xl",
-              "px-4 py-3 text-sm text-white placeholder-gray-600 leading-relaxed",
-              "focus:outline-none focus:ring-1 focus:ring-forge-600 transition-all",
+              "flex-1 resize-none bg-forge-input border border-forge-border",
+              "px-4 py-3 text-sm text-text-primary placeholder-text-disabled leading-relaxed",
+              "focus:outline-none focus:border-forge-orange focus:ring-1 focus:ring-forge-orange transition-all",
               "disabled:opacity-50 min-h-[48px] max-h-40"
             )}
           />
@@ -492,16 +491,16 @@ export default function CoachPage() {
             onClick={handleSend}
             disabled={!input.trim() || isStreaming}
             className={cn(
-              "flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all",
+              "flex-shrink-0 w-10 h-10 flex items-center justify-center transition-all",
               input.trim() && !isStreaming
-                ? "bg-forge-600 hover:bg-forge-500 text-white"
-                : "bg-white/5 text-gray-600 cursor-not-allowed"
+                ? "bg-forge-orange hover:bg-forge-orange-hover text-forge-base"
+                : "bg-forge-elevated border border-forge-border text-text-disabled cursor-not-allowed"
             )}
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
-        <p className="text-center text-[10px] text-gray-700 mt-2">
+        <p className="text-center text-[10px] text-text-disabled mt-2">
           Shift+Enter for newline · Enter to send
         </p>
       </div>

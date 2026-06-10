@@ -72,18 +72,20 @@ function ActiveChallengeCard({
 }: {
   challenge: {
     id: string;
-    started_at: string;
-    challenges: { title: string; duration_days: number } | null;
+    started_at: string | Date | null;
+    challenges: { title: string; duration_minutes: number } | null;
   };
 }) {
-  if (!challenge.challenges) return null;
+  if (!challenge.challenges || !challenge.started_at) return null;
   const started = new Date(challenge.started_at);
-  const endDate = new Date(started);
-  endDate.setDate(endDate.getDate() + challenge.challenges.duration_days);
-  const daysLeft = Math.max(
-    0,
-    Math.ceil((endDate.getTime() - Date.now()) / 86400000)
+  const expiresAt = new Date(
+    started.getTime() + challenge.challenges.duration_minutes * 3 * 60 * 1000
   );
+  const msLeft = Math.max(0, expiresAt.getTime() - Date.now());
+  const daysLeft = Math.ceil(msLeft / 86400000);
+  const hoursLeft = Math.ceil(msLeft / 3600000);
+  const timeLabel =
+    daysLeft >= 1 ? `${daysLeft}d remaining` : `${hoursLeft}h remaining`;
 
   return (
     <div className="border border-forge-border bg-forge-elevated p-4">
@@ -93,7 +95,7 @@ function ActiveChallengeCard({
       <p className="text-sm font-medium text-text-primary">
         {challenge.challenges.title}
       </p>
-      <p className="mt-1 text-xs text-forge-orange">{daysLeft}d remaining</p>
+      <p className="mt-1 text-xs text-forge-orange">{timeLabel}</p>
     </div>
   );
 }
@@ -103,8 +105,8 @@ function ActiveChallengeCard({
 // ---------------------------------------------------------------------------
 
 function DashboardContent() {
-  // Initial localDate estimate using UTC; refined after profile loads
-  const localDate = getLocalDate("UTC");
+  const { data: profile } = api.user.getProfile.useQuery(undefined, { retry: false });
+  const localDate = getLocalDate(profile?.timezone ?? "UTC");
 
   const { data, isLoading, refetch } = api.dashboard.getAll.useQuery(
     { localDate },
@@ -223,10 +225,13 @@ function DashboardContent() {
             <ActiveChallengeCard
               challenge={{
                 id: String(activeChallenge.id ?? ""),
-                started_at: String(activeChallenge.started_at ?? ""),
-                challenges: Array.isArray(activeChallenge.challenges)
-                  ? (activeChallenge.challenges[0] as { title: string; duration_days: number } | null ?? null)
-                  : (activeChallenge.challenges as { title: string; duration_days: number } | null),
+                started_at: activeChallenge.started_at ?? null,
+                challenges: activeChallenge.challenges
+                  ? {
+                      title: String(activeChallenge.challenges.title ?? ""),
+                      duration_minutes: Number(activeChallenge.challenges.duration_minutes ?? 0),
+                    }
+                  : null,
               }}
             />
           )}

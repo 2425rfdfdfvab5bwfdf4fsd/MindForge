@@ -6,11 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/trpc/client";
 import { useStreamingResponse } from "@/lib/hooks/useStreamingResponse";
 import { RuleForty } from "@/components/forge/RuleForty";
-import { extractAndStoreMemories } from "@/lib/gemini/memory";
-
-// extractAndStoreMemories uses server-only imports — we'll fire it via
-// a dedicated API route instead to keep it client-safe.
-// For now the call is guarded to only run server-side via tRPC.
 
 type Phase = "idle" | "submitting" | "streaming" | "classifying" | "complete";
 
