@@ -40,7 +40,6 @@ export async function recalculateStreak(
   while (true) {
     const dateStr = cursor.toISOString().slice(0, 10);
     if (dateStr > localDate) {
-      // skip future
       cursor.setDate(cursor.getDate() - 1);
       continue;
     }
@@ -50,7 +49,6 @@ export async function recalculateStreak(
     } else {
       break;
     }
-    // Safety — only go back 60 days
     if (streak > 60) break;
   }
 
@@ -78,21 +76,5 @@ export async function recalculateStreak(
   return streak;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function recalculateForgeScore(supabase: any, userId: string): Promise<void> {
-  // Sum all XP events to get total XP, then store forge_score = xp
-  // (ForgeScore display reads this field directly)
-  const { data: user } = await supabase
-    .from("users")
-    .select("xp")
-    .eq("id", userId)
-    .single();
-
-  if (!user) return;
-
-  // forge_score is a rounded composite — for now 1:1 with XP
-  await supabase
-    .from("users")
-    .update({ forge_score: user.xp })
-    .eq("id", userId);
-}
+// Re-exported from lib/forge-score — real multi-component formula
+export { recalculateForgeScore } from "@/lib/forge-score";
