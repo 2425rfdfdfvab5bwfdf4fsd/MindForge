@@ -1,0 +1,51 @@
+Build the app shell layout components for MindForge.
+
+Note: All app routes live under the (app) route group. The actual URLs are /dashboard, /habits, /checkin, etc. — NOT /app/dashboard. The route group (app) is a folder convention only.
+
+CREATE components/layout/Sidebar.tsx:
+Navigation items (with icons from lucide-react):
+- Dashboard (LayoutDashboard icon) → /dashboard
+- Habits (CheckSquare icon) → /habits
+- Daily Mirror (BookOpen icon) → /checkin
+- AI Coach (Brain icon) → /coach [show "Pro" badge if user is free tier]
+- Cookie Jar (Cookie icon) → /cookie-jar
+- Challenges (Zap icon) → /challenges
+- Analytics (BarChart2 icon) → /analytics
+- Settings (Settings icon) → /settings
+- "40% Rule" button (Flame icon) — persistent at the bottom of the sidebar nav, always visible, orange text. Clicking triggers the 40% Rule overlay manually. This is per the PRD: users can manually trigger the 40% Rule at any time.
+
+Styling: fixed left sidebar, width 240px on desktop. Background #111110. Each nav item: flex row, icon + label, padding 12px 16px, text-muted default, text-primary on hover, bg #1A1918 on hover, border-left 2px solid transparent, border-left-color #FF6B2B on active route. Use usePathname() from next/navigation for active state.
+
+Mobile: hidden on < lg breakpoint (MobileNav handles mobile).
+
+CREATE components/layout/MobileNav.tsx:
+Fixed bottom navigation for mobile (visible only below lg breakpoint).
+Show 5 items: Dashboard, Habits, Mirror, Cookie Jar, Settings.
+Background #111110, border-top #2A2927. Icons + labels. Active state: orange icon + label.
+Add `padding-bottom: env(safe-area-inset-bottom)` for iOS safe area.
+
+CREATE components/layout/Header.tsx:
+Top bar, height 56px, background #111110, border-bottom #2A2927.
+Left: page title (passed as prop or derived from pathname).
+Right: ForgeScore widget (import ForgeScore component) + user avatar (if available, else initials circle, bg #232220).
+
+CREATE components/forge/ForgeScore.tsx:
+Displays the user's Forge Score.
+Layout: small label "FORGE SCORE" (text-xs, text-muted, tracking-widest), large number below (text-display font size, text-primary, tabular nums, Geist font).
+Also show the level label below the score (e.g., "Raw" or "Tempered") in text-xs, text-muted.
+Animate score changes using Framer Motion useSpring + useTransform for count-up over 500ms (PRD specifies 500ms).
+On score increase: apply box-shadow glow (rgba(255,107,43,0.15)) via ::after opacity animation — NOT direct box-shadow property (performance requirement per PRD).
+For now accept score as prop (will be wired to real data in Phase 5).
+
+CREATE app/(app)/layout.tsx:
+App shell layout for all routes that use the app shell.
+- Sidebar on left (desktop only, lg+)
+- Main content area: flex-1, overflow-y-auto, bg #0A0908
+- Header at top of main area
+- MobileNav at bottom (mobile only)
+- Wrap with a <div> that has padding-left 240px on lg+, padding-bottom 64px on mobile for bottom nav
+
+CREATE app/(app)/dashboard/page.tsx (stub):
+Simple placeholder: "Dashboard — Coming Soon" with the forge color scheme. Confirms the layout shell works.
+
+ACCEPTANCE: Navigating to /dashboard (after logging in) shows the sidebar + header + placeholder content. Sidebar highlights the active route. Header shows "FORGE SCORE 0". The "40% Rule" button is visible at the bottom of the sidebar. Mobile view shows bottom nav.
