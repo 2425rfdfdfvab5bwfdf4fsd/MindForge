@@ -1,0 +1,74 @@
+Set up tRPC for MindForge with full type-safe server/client communication.
+
+INSTALL: @trpc/server @trpc/client @trpc/react-query @trpc/next @tanstack/react-query zod superjson
+
+CREATE server/trpc/context.ts:
+- Export createTRPCContext that:
+  - Creates Supabase server client
+  - Gets user from supabase.auth.getUser()
+  - Fetches users row (id, tier, onboarding_complete, coach_intensity) if authenticated
+  - Returns { supabase, user: authUser | null, userProfile: dbUser | null }
+
+CREATE server/trpc/trpc.ts:
+- Initialize tRPC with context and superjson transformer
+- Create base router and procedure
+- Create protectedProcedure: throws UNAUTHORIZED if no user
+- Create requireTier helper: requireTier(ctx, 'pro') — throws FORBIDDEN if user.tier is insufficient (free < pro < elite)
+
+CREATE server/trpc/router.ts (root router):
+- Import and merge: habits, checkins, cookiejar, challenges, analytics, user, dashboard, pods routers
+- Export type AppRouter
+
+CREATE server/trpc/routers/user.ts (stub):
+- getProfile query
+- updateProfile mutation (displayName?, coachIntensity?, timezone?)
+- updateWhy mutation (whyStatement, identityDeclaration)
+- submitEnvironmentAudit mutation (stub — returns empty array for now)
+- markEnvironmentItemDone mutation (stub)
+
+CREATE server/trpc/routers/habits.ts (stub):
+- list query (returns empty array)
+- create mutation (stub)
+- update mutation (stub)
+- archive mutation (stub)
+- logCompletion mutation (stub)
+- getCompletionHistory query (stub)
+
+CREATE server/trpc/routers/checkins.ts (stub):
+- submit mutation (stub)
+- getToday query (stub)
+- updateMetadata mutation (stub)
+- getHistory query (stub)
+
+CREATE server/trpc/routers/cookiejar.ts (stub):
+- list query, add mutation, edit mutation, delete mutation, search query (all stubs)
+
+CREATE server/trpc/routers/challenges.ts (stub):
+- list query, activate mutation, complete mutation (all stubs)
+
+CREATE server/trpc/routers/analytics.ts (stub):
+- forgeScoreHistory query (stub)
+- habitCompletionRates query (stub)
+- checkinHonestyTrend query (stub)
+- xpHistory query (stub)
+- getLatestWeeklyReport query (stub)
+
+CREATE server/trpc/routers/dashboard.ts (stub):
+- getAll query (stub — returns placeholder data)
+
+CREATE server/trpc/routers/pods.ts (stub):
+- Empty router with comment "// Accountability Pods — P1 feature, deferred to Month 4 post-launch"
+
+CREATE app/api/trpc/[trpc]/route.ts:
+- Standard Next.js tRPC handler using fetchRequestHandler
+
+CREATE lib/trpc/client.ts:
+- tRPC React Query client setup with superjson transformer
+- Export api (typed tRPC client hooks)
+
+CREATE lib/trpc/provider.tsx:
+- QueryClient + tRPC provider component for app/layout.tsx
+
+Add TRPCProvider to app/layout.tsx wrapping children.
+
+ACCEPTANCE: No TypeScript errors on `tsc --noEmit`. The tRPC handler responds at /api/trpc/user.getProfile (should return 401 when unauthenticated). All stub routers compile cleanly.
