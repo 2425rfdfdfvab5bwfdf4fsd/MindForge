@@ -1,16 +1,16 @@
 import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { eq, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
+import {
+  users,
+  userBadges,
+  environmentAuditItems,
+  userMemories,
+} from "@/shared/schema";
+import { awardXP } from "@/lib/xp";
+import { checkAndAwardBadge } from "@/lib/badges";
 
-// ---------------------------------------------------------------------------
-// Gemini (server-only — this module is only ever imported by tRPC handlers)
-// ---------------------------------------------------------------------------
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
-const flash = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-// ---------------------------------------------------------------------------
-// Badge helpers
-// ---------------------------------------------------------------------------
 const BADGE_KEYS = [
   "identity_locked",
   "mirror_gazer",
@@ -22,46 +22,14 @@ const BADGE_KEYS = [
 
 type BadgeKey = (typeof BADGE_KEYS)[number];
 
-const BADGE_XP: Record<BadgeKey, number> = {
-  identity_locked: 50,
-  mirror_gazer: 25,
-  cookie_jar_founder: 25,
-  forty_percent_survivor: 50,
-  cold_mind: 50,
-  tempered: 100,
-};
-
-// ---------------------------------------------------------------------------
-// XP helper shared by multiple mutations
-// ---------------------------------------------------------------------------
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function grantXP(
-  supabase: any,
-  userId: string,
-  xp: number,
-  reason: string,
-  eventType: string
-) {
-  await supabase.from("xp_events").insert({
-    user_id: userId,
-    xp_amount: xp,
-    reason,
-    event_type: eventType,
-  });
-  await supabase.rpc("increment_user_xp", { p_user_id: userId, p_xp: xp });
-}
-
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
 export const userRouter = router({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
-    const { data } = await ctx.supabase
-      .from("users")
-      .select("*")
-      .eq("id", ctx.user.id)
-      .single();
-    return data;
+    const [profile] = await ctx.db
+      .select()
+      .from(users)
+      .where(eq(users.id, ctx.user.id))
+      .limit(1);
+    return profile ?? null;
   }),
 
   updateProfile: protectedProcedure
@@ -77,20 +45,27 @@ export const userRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
-        .from("users")
-        .update({
-          display_name: input.displayName,
-          coach_intensity: input.coachIntensity,
-          timezone: input.timezone,
-          onboarding_step: input.onboardingStep,
-          onboarding_complete: input.onboardingComplete,
+      const [updated] = await ctx.db
+        .update(users)
+        .set({
+          ...(input.displayName !== undefined
+            ? { displayName: input.displayName }
+            : {}),
+          ...(input.coachIntensity !== undefined
+            ? { coachIntensity: input.coachIntensity }
+            : {}),
+          ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+          ...(input.onboardingStep !== undefined
+            ? { onboardingStep: input.onboardingStep }
+            : {}),
+          ...(input.onboardingComplete !== undefined
+            ? { onboardingComplete: input.onboardingComplete }
+            : {}),
+          updatedAt: new Date(),
         })
-        .eq("id", ctx.user.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+        .where(eq(users.id, ctx.user.id))
+        .returning();
+      return updated;
     }),
 
   updateWhy: protectedProcedure
@@ -101,48 +76,25 @@ export const userRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { data, error } = await ctx.supabase
-        .from("users")
-        .update({
-          why_statement: input.whyStatement,
-          identity_declaration: input.identityDeclaration,
+      const [updated] = await ctx.db
+        .update(users)
+        .set({
+          whyStatement: input.whyStatement,
+          identityDeclaration: input.identityDeclaration,
+          updatedAt: new Date(),
         })
-        .eq("id", ctx.user.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+        .where(eq(users.id, ctx.user.id))
+        .returning();
+      return updated;
     }),
 
   awardBadge: protectedProcedure
     .input(z.object({ badgeKey: z.enum(BADGE_KEYS) }))
     .mutation(async ({ ctx, input }) => {
-      const { data: badge, error: badgeError } = await ctx.supabase
-        .from("user_badges")
-        .insert({ user_id: ctx.user.id, badge_key: input.badgeKey })
-        .select()
-        .single();
-
-      if (badgeError) {
-        if (badgeError.code === "23505") return { awarded: false };
-        throw badgeError;
-      }
-
-      const xp = BADGE_XP[input.badgeKey];
-      await grantXP(
-        ctx.supabase,
-        ctx.user.id,
-        xp,
-        `Badge earned: ${input.badgeKey}`,
-        "badge"
-      );
-
-      return { awarded: true, badge };
+      const result = await checkAndAwardBadge(ctx.user.id, input.badgeKey as BadgeKey);
+      return result;
     }),
 
-  // ---------------------------------------------------------------------------
-  // Environment audit
-  // ---------------------------------------------------------------------------
   submitEnvironmentAudit: protectedProcedure
     .input(
       z.object({
@@ -152,13 +104,10 @@ export const userRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Delete any previous items for this user so they can redo if needed
-      await ctx.supabase
-        .from("environment_audit_items")
-        .delete()
-        .eq("user_id", ctx.user.id);
+      await ctx.db
+        .delete(environmentAuditItems)
+        .where(eq(environmentAuditItems.userId, ctx.user.id));
 
-      // Build readable answer summary for Gemini
       const answerText = input.answers
         .map((a, i) => `Q${i + 1}: ${a.question}\nAnswer: ${a.answer}`)
         .join("\n\n");
@@ -169,6 +118,8 @@ export const userRouter = router({
 
       if (process.env.GEMINI_API_KEY) {
         try {
+          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+          const flash = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
           const result = await flash.generateContent({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             generationConfig: {
@@ -189,7 +140,6 @@ export const userRouter = router({
         }
       }
 
-      // Fallback items when Gemini isn't configured
       if (items.length === 0) {
         items = [
           {
@@ -215,105 +165,102 @@ export const userRouter = router({
         ];
       }
 
-      // Insert into DB
       const rows = items.map((it) => ({
-        user_id: ctx.user.id,
+        userId: ctx.user.id,
         item: it.item,
         category: it.category,
         done: false,
       }));
 
-      const { data, error } = await ctx.supabase
-        .from("environment_audit_items")
-        .insert(rows)
-        .select();
+      const inserted = await ctx.db
+        .insert(environmentAuditItems)
+        .values(rows)
+        .returning();
 
-      if (error) throw error;
-      return data;
+      return inserted;
     }),
 
   getEnvironmentItems: protectedProcedure.query(async ({ ctx }) => {
-    const { data } = await ctx.supabase
-      .from("environment_audit_items")
-      .select("*")
-      .eq("user_id", ctx.user.id)
-      .order("created_at", { ascending: true });
-    return data ?? [];
+    return ctx.db
+      .select()
+      .from(environmentAuditItems)
+      .where(eq(environmentAuditItems.userId, ctx.user.id))
+      .orderBy(environmentAuditItems.createdAt);
   }),
 
   markEnvironmentItemDone: protectedProcedure
     .input(z.object({ itemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Only award XP once — check if already done
-      const { data: existing } = await ctx.supabase
-        .from("environment_audit_items")
-        .select("done")
-        .eq("id", input.itemId)
-        .eq("user_id", ctx.user.id)
-        .single();
+      const [existing] = await ctx.db
+        .select({ done: environmentAuditItems.done })
+        .from(environmentAuditItems)
+        .where(
+          and(
+            eq(environmentAuditItems.id, input.itemId),
+            eq(environmentAuditItems.userId, ctx.user.id)
+          )
+        )
+        .limit(1);
 
       if (!existing || existing.done) return { awarded: false };
 
-      const { data, error } = await ctx.supabase
-        .from("environment_audit_items")
-        .update({ done: true, done_at: new Date().toISOString() })
-        .eq("id", input.itemId)
-        .eq("user_id", ctx.user.id)
-        .select()
-        .single();
+      const [updated] = await ctx.db
+        .update(environmentAuditItems)
+        .set({ done: true, doneAt: new Date() })
+        .where(
+          and(
+            eq(environmentAuditItems.id, input.itemId),
+            eq(environmentAuditItems.userId, ctx.user.id)
+          )
+        )
+        .returning();
 
-      if (error) throw error;
-
-      await grantXP(
-        ctx.supabase,
+      await awardXP(
         ctx.user.id,
         50,
         "Environment audit item completed",
         "environment"
       );
 
-      return { awarded: true, item: data };
+      return { awarded: true, item: updated };
     }),
 
   getMemories: protectedProcedure.query(async ({ ctx }) => {
-    const { data } = await ctx.supabase
-      .from("user_memories")
-      .select("id, content, memory_type, created_at")
-      .eq("user_id", ctx.user.id)
-      .order("created_at", { ascending: false });
+    const rows = await ctx.db
+      .select({
+        id: userMemories.id,
+        content: userMemories.content,
+        memoryType: userMemories.memoryType,
+        createdAt: userMemories.createdAt,
+      })
+      .from(userMemories)
+      .where(eq(userMemories.userId, ctx.user.id))
+      .orderBy(userMemories.createdAt);
 
-    if (!data) return {} as Record<string, Array<{ id: string; content: string; created_at: string }>>;
-
-    // Group by memory_type
-    const grouped: Record<string, Array<{ id: string; content: string; created_at: string }>> = {};
-    for (const m of data) {
-      if (!grouped[m.memory_type]) grouped[m.memory_type] = [];
-      grouped[m.memory_type].push({ id: m.id, content: m.content, created_at: m.created_at });
+    const grouped: Record<
+      string,
+      Array<{ id: string; content: string; created_at: Date | null }>
+    > = {};
+    for (const m of rows) {
+      if (!grouped[m.memoryType]) grouped[m.memoryType] = [];
+      grouped[m.memoryType].push({
+        id: m.id,
+        content: m.content,
+        created_at: m.createdAt,
+      });
     }
     return grouped;
   }),
 
   completeOnboarding: protectedProcedure.mutation(async ({ ctx }) => {
-    // 200 XP one-time onboarding completion bonus
-    await grantXP(
-      ctx.supabase,
-      ctx.user.id,
-      200,
-      "Onboarding completed",
-      "onboarding"
-    );
+    await awardXP(ctx.user.id, 200, "Onboarding completed", "onboarding");
 
-    const { data, error } = await ctx.supabase
-      .from("users")
-      .update({
-        onboarding_complete: true,
-        onboarding_step: "complete",
-      })
-      .eq("id", ctx.user.id)
-      .select()
-      .single();
+    const [updated] = await ctx.db
+      .update(users)
+      .set({ onboardingComplete: true, onboardingStep: "complete", updatedAt: new Date() })
+      .where(eq(users.id, ctx.user.id))
+      .returning();
 
-    if (error) throw error;
-    return data;
+    return updated;
   }),
 });

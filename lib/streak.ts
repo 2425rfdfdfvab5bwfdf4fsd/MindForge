@@ -1,42 +1,47 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import { db } from "@/server/db";
+import { habitCompletions, habitStreaks } from "@/shared/schema";
+import { eq, and, gte, lte, desc } from "drizzle-orm";
+
 export async function recalculateStreak(
-  supabase: any,
   habitId: string,
   userId: string,
   localDate: string
 ): Promise<number> {
-  // Fetch last 60 days of completions, newest first
   const cutoff = new Date(localDate);
   cutoff.setDate(cutoff.getDate() - 60);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
-  const { data: completions } = await supabase
-    .from("habit_completions")
-    .select("local_date, completed")
-    .eq("habit_id", habitId)
-    .gte("local_date", cutoffStr)
-    .lte("local_date", localDate)
-    .order("local_date", { ascending: false });
+  const completions = await db
+    .select({
+      localDate: habitCompletions.localDate,
+      completed: habitCompletions.completed,
+    })
+    .from(habitCompletions)
+    .where(
+      and(
+        eq(habitCompletions.habitId, habitId),
+        gte(habitCompletions.localDate, cutoffStr),
+        lte(habitCompletions.localDate, localDate)
+      )
+    )
+    .orderBy(desc(habitCompletions.localDate));
 
-  if (!completions || completions.length === 0) {
-    await supabase
-      .from("habit_streaks")
-      .update({ current_streak: 0, updated_at: new Date().toISOString() })
-      .eq("habit_id", habitId);
+  if (!completions.length) {
+    await db
+      .update(habitStreaks)
+      .set({ currentStreak: 0, updatedAt: new Date() })
+      .where(eq(habitStreaks.habitId, habitId));
     return 0;
   }
 
-  // Build a Set of completed dates for O(1) lookup
   const completedDates = new Set(
     completions
-      .filter((c: { local_date: string; completed: boolean }) => c.completed)
-      .map((c: { local_date: string }) => c.local_date)
+      .filter((c) => c.completed)
+      .map((c) => c.localDate as string)
   );
 
-  // Walk back from localDate counting consecutive completed days
   let streak = 0;
   const cursor = new Date(localDate);
-
   while (true) {
     const dateStr = cursor.toISOString().slice(0, 10);
     if (dateStr > localDate) {
@@ -52,29 +57,31 @@ export async function recalculateStreak(
     if (streak > 60) break;
   }
 
-  // Fetch existing longest streak
-  const { data: existing } = await supabase
-    .from("habit_streaks")
-    .select("longest_streak")
-    .eq("habit_id", habitId)
-    .single();
+  const [existing] = await db
+    .select({ longestStreak: habitStreaks.longestStreak })
+    .from(habitStreaks)
+    .where(eq(habitStreaks.habitId, habitId))
+    .limit(1);
 
-  const longest = Math.max(streak, existing?.longest_streak ?? 0);
+  const longest = Math.max(streak, existing?.longestStreak ?? 0);
   const lastCompleted = completedDates.has(localDate) ? localDate : null;
 
-  await supabase
-    .from("habit_streaks")
-    .update({
-      current_streak: streak,
-      longest_streak: longest,
-      last_completed_date: lastCompleted,
-      updated_at: new Date().toISOString(),
+  await db
+    .update(habitStreaks)
+    .set({
+      currentStreak: streak,
+      longestStreak: longest,
+      lastCompletedDate: lastCompleted,
+      updatedAt: new Date(),
     })
-    .eq("habit_id", habitId)
-    .eq("user_id", userId);
+    .where(
+      and(
+        eq(habitStreaks.habitId, habitId),
+        eq(habitStreaks.userId, userId)
+      )
+    );
 
   return streak;
 }
 
-// Re-exported from lib/forge-score — real multi-component formula
 export { recalculateForgeScore } from "@/lib/forge-score";

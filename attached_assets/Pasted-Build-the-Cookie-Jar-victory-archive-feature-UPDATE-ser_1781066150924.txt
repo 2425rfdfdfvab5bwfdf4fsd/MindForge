@@ -1,0 +1,48 @@
+Build the Cookie Jar victory archive feature.
+
+UPDATE server/trpc/routers/cookiejar.ts with real implementations:
+
+cookiejar.list: Protected query. Fetch all cookie_jar_entries for user, ordered by created_at DESC.
+
+cookiejar.add: Protected mutation. Input: { title (required, max 80 chars per PRD), description (required, max 500 chars per PRD), dateOfVictory?: string }
+- Free tier check: count entries — if ≥5, throw FORBIDDEN with { upgradeRequired: true }
+- Insert into cookie_jar_entries
+- Call generateEmbedding(title + '. ' + description), update cookie_jar_entries.embedding
+- Award 25 XP (event_type: 'cookie_jar') — PRD specifies 25 XP, not 15
+- Check badge 'cookie_jar_founder': if total entries for user is now ≥10, award it
+- Return created entry (without embedding vector)
+
+cookiejar.edit: Protected mutation. Input: { id, title?, description?, dateOfVictory? }
+- Verify ownership
+- Update cookie_jar_entries
+- Regenerate embedding if title or description changed
+
+cookiejar.delete: Protected mutation. Input: { id }. Verify ownership. Delete row.
+
+cookiejar.search: Protected query. Input: { query: string }
+- Call generateEmbedding(query)
+- SELECT id, title, description, date_of_victory, 1 - (embedding <=> $queryEmbedding) as similarity FROM cookie_jar_entries WHERE user_id = ? ORDER BY embedding <=> $queryEmbedding LIMIT 5
+- Return results with similarity score
+
+CREATE app/(app)/cookie-jar/page.tsx:
+(URL: /cookie-jar)
+
+HEADER: "Cookie Jar" title (text-3xl, font-heading) + "Add Victory" button (orange, right).
+Search bar: full-width, debounced 500ms (per PRD), placeholder "Search your victories...". Results update on Enter or after 500ms debounce.
+If search active: show semantic results with similarity score badge.
+Otherwise: show all entries grid.
+
+CREATE components/forge/CookieJarEntry.tsx:
+Dark card (#111110), border #2A2927, hover border #3D3B39, orange corner accent.
+Title (text-xl, font-heading, white), date badge (text-xs, text-muted, if provided), description (text-base, text-secondary, 3 lines, expand on click).
+Edit + Delete icons on hover. Delete requires confirmation.
+
+ADD VICTORY MODAL:
+- Title input (max 80 chars, NOT 100 — per PRD), char counter visible
+- Description textarea (max 500 chars), char counter visible
+- Date of Victory: optional date picker (shadcn Calendar)
+- "Lock It In" submit button (orange)
+
+Free tier limit state (≥5 entries): "You have 5 victories stored. Upgrade to Pro to save unlimited victories." — upgrade CTA.
+
+ACCEPTANCE: User can add, edit, view, search (semantic), and delete entries. Free tier caps at 5. Adding awards 25 XP. At 10 entries the 'cookie_jar_founder' badge is awarded. Semantic search returns relevant results.

@@ -1,0 +1,65 @@
+Build the Callousing Challenge system and seed the challenge library.
+
+IMPORTANT: The challenges DB schema uses duration_minutes (not duration_days) and has an xp_reward field per the PRD data model. Challenge categories are: 'cold' | 'screen' | 'physical' | 'fast' | 'social' (per PRD data model — NOT 'mental'/'digital').
+
+Create supabase/seed.sql with 20 challenges:
+
+INSERT INTO challenges (title, description, difficulty, category, duration_minutes, xp_reward) VALUES
+-- Difficulty 1 (Free tier accessible — exactly 5, per PRD Feature 11)
+('Cold Shower Protocol', 'End every shower with 60 seconds of cold water for 7 days straight. No warming back up. No exceptions. Cold exposure activates the noradrenergic system — this is a measurable intervention, not just discomfort.', 1, 'cold', 10080, 75),
+('Phone-Free Morning', 'No phone for the first 60 minutes after waking. Every day for 7 days. The morning cortisol spike is your highest-focus window. You are currently handing it to an algorithm.', 1, 'screen', 10080, 50),
+('No Complaint Protocol', 'Go an entire day without complaining — verbally or mentally. Restart if you slip. The point is not silence — it is rewiring the default toward agency.', 1, 'social', 1440, 50),
+('The Hard Conversation', 'Have one difficult conversation you have been avoiding. Complete it within 48 hours. Name the conversation before you begin.', 1, 'social', 2880, 75),
+('5AM Wake Protocol', 'Wake at 5AM every day for 5 days. No snooze. Get out of bed immediately. You are not a morning person — you are a discipline person.', 1, 'physical', 7200, 75),
+-- Difficulty 3
+('Dopamine Detox Weekend', 'No social media, no streaming, no alcohol, no junk food for 48 hours. Only books, exercise, and intentional work. This is a reset, not a punishment.', 3, 'screen', 2880, 100),
+('10K This Week', 'Run or walk 10 kilometers total within 7 days. Track every kilometer. No weather excuses — you have legs.', 3, 'physical', 10080, 100),
+('Cold Immersion Week', 'Cold shower every morning for 7 days. Minimum 90 seconds cold. No warm water beforehand — cold from the start.', 3, 'cold', 10080, 100),
+('Public Rejection Training', 'Ask for something unreasonable in public 3 times this week — a discount, an impossible request. Train yourself to tolerate rejection. The fear is worse than the reality.', 3, 'social', 10080, 100),
+('Single-Tasking Week', 'No multitasking for 7 days. One thing at a time. No phone while eating. No background noise while working. This is harder than it sounds.', 3, 'screen', 10080, 100),
+('Social Media Elimination', 'Delete all social media apps for 14 days. Not muted — deleted. Reinstall after the 14 days if you choose. But experience the two weeks first.', 3, 'screen', 20160, 100),
+('Water-Only Week', 'No coffee, no alcohol, no juice, no soda for 7 days. Water and herbal tea only. Identify which dependencies are habits vs. choices.', 3, 'fast', 10080, 100),
+-- Difficulty 4
+('30-Day No Algorithm Feed', 'Delete all social media apps for 30 days. Keep a journal of what you do with the time instead. Most people discover they were using the apps to avoid something.', 4, 'screen', 43200, 150),
+('Sleep Discipline Protocol', 'In bed by 10:30PM, awake by 5:30AM, every day for 14 days. Non-negotiable. Track your HRV or subjective energy daily.', 4, 'physical', 20160, 150),
+('Deliberate Discomfort Daily', 'Every day for 21 days, do one thing that makes you genuinely uncomfortable. Document it in your check-in. Comfort is the enemy of growth.', 4, 'physical', 30240, 150),
+('Zero Complaint Month', '30 days without a single complaint. Wear a rubber band on your wrist. Snap it every time you catch yourself complaining. Restart the count.', 4, 'social', 43200, 150),
+('One-Meal-a-Day Week', 'Eat one meal per day for 7 days. This is not about weight — it is about learning that discomfort is not an emergency. Consult a physician if you have health conditions.', 4, 'fast', 10080, 150),
+-- Difficulty 5
+('The 75 Hard Protocol', 'Follow the Andy Frisella 75 Hard protocol for 75 days: two 45-minute workouts per day (one outdoor), diet, no alcohol, one gallon of water, 10 pages of nonfiction reading, progress photo. Restart from day 1 if you miss anything. This is the benchmark.', 5, 'physical', 108000, 200),
+('No Entertainment Month', 'Zero passive entertainment for 30 days: no TV, no streaming, no social media, no gaming. Only creation, learning, work, and relationships. Most people discover who they are without the noise.', 5, 'screen', 43200, 200),
+('Cold Water Protocol — 21 Days', 'Cold shower every morning, minimum 3 minutes cold, for 21 days. No exceptions for illness (reduce duration if sick, do not skip). Cold adaptation is neurological — you are literally rewiring your stress response.', 5, 'cold', 30240, 200);
+
+Note on tier access: Per PRD Feature 11, Free tier users can VIEW all challenges but can only ACTIVATE difficulty-1 challenges (the 5 easiest). Pro tier unlocks the full library.
+
+UPDATE server/trpc/routers/challenges.ts with real implementations:
+
+challenges.list: Protected query. Fetch all active challenges. Join with user_challenges to get each challenge's status for this user. Return challenges with {userStatus: 'none'|'active'|'completed'|'failed', userChallenge?: UserChallenge}.
+
+challenges.activate: Protected mutation. Input: { challengeId }
+- Free tier: only allow if challenge.difficulty === 1; else throw FORBIDDEN { upgradeRequired: true }
+- Per PRD: user can have max 1 active challenge at a time. Check user_challenges where status='active'. If exists, throw CONFLICT { message: 'Complete or abandon your current challenge first.' }
+- Insert into user_challenges (status='active', started_at=now)
+
+challenges.complete: Protected mutation. Input: { userChallengeId, reflection (required, min 50 chars) }
+- Verify user_challenge belongs to user and status='active'
+- Update user_challenges: status='completed', completed_at=now, reflection
+- Award xp = challenge.xp_reward (from challenges table — NOT a flat 100)
+- Check badge 'cold_mind': count cold-category completions for user
+- Check badge 'first_challenge_complete': if this is user's first completed challenge — note: this badge is NOT in the v1 PRD badge list. Do NOT create it. Skip this check.
+- Call recalculateForgeScore(userId)
+- Return { xpAwarded: challenge.xp_reward, badgesAwarded: string[], newForgeScore }
+
+Challenge expiry (per PRD): A challenge expires (auto-fails) if not completed within duration_minutes × 3. Implement a check in challenges.list — if started_at + duration_minutes × 3 minutes has passed and status is still 'active', update status to 'failed'.
+
+CREATE app/(app)/challenges/page.tsx:
+(URL: /challenges)
+Tabs: "Available" | "My Active" | "Completed"
+Free tier sees all challenges but difficulty > 1 shows lock icon with "Pro" badge.
+
+CREATE components/forge/ChallengeCard.tsx:
+Title (text-xl), description (text-sm, text-secondary, 3 lines truncated), difficulty shown as 1–5 filled squares (like signal bars — use Square icon, filled vs. empty), duration formatted (e.g., "7 days"), XP reward badge.
+Status: Available (border #2A2927), Active (border #FF6B2B, pulsing dot indicator), Completed (border #22C55E).
+Active challenge: shows countdown timer (expires at started_at + duration_minutes × 3).
+
+ACCEPTANCE: 20 challenges seeded. Free users see all but can only activate difficulty-1. Only 1 active challenge allowed at a time. XP awarded equals challenge.xp_reward (variable, not flat 100). Challenge expiry auto-fails after duration_minutes × 3.

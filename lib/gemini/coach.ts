@@ -1,5 +1,7 @@
 import "server-only";
-import { generateEmbedding } from "./embeddings";
+import { db } from "@/server/db";
+import { users, habits, habitStreaks, userMemories, cookieJarEntries } from "@/shared/schema";
+import { eq, and, desc } from "drizzle-orm";
 import {
   FORGE_COACH_BASE_SYSTEM_PROMPT,
   FORGE_COACH_FIRM_PROMPT,
@@ -9,19 +11,14 @@ import {
   FORTY_PERCENT_RULE_SYSTEM_PROMPT,
 } from "./prompts";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClient = any;
-
 interface Memory {
   content: string;
   memory_type: string;
-  similarity?: number;
 }
 
 interface CookieJarEntry {
   title: string;
   description: string;
-  similarity?: number;
 }
 
 interface HabitWithStreak {
@@ -37,55 +34,26 @@ type SessionType =
   | "direct_chat";
 
 // ---------------------------------------------------------------------------
-// Semantic retrieval helpers
+// Data helpers (recency-based — pgvector not available on Replit)
 // ---------------------------------------------------------------------------
 
-async function fetchSemanticMemories(
-  supabase: SupabaseClient,
-  userId: string,
-  embedding: number[]
-): Promise<Memory[]> {
-  try {
-    const { data } = await supabase.rpc("match_memories", {
-      query_embedding: embedding,
-      match_user_id: userId,
-      match_count: 5,
-    });
-    return (data ?? []) as Memory[];
-  } catch {
-    // Fallback: return most recent memories without semantic ranking
-    const { data } = await supabase
-      .from("user_memories")
-      .select("content, memory_type")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(5);
-    return (data ?? []) as Memory[];
-  }
+async function fetchRecentMemories(userId: string): Promise<Memory[]> {
+  const rows = await db
+    .select({ content: userMemories.content, memoryType: userMemories.memoryType })
+    .from(userMemories)
+    .where(eq(userMemories.userId, userId))
+    .orderBy(desc(userMemories.createdAt))
+    .limit(5);
+  return rows.map((r) => ({ content: r.content, memory_type: r.memoryType }));
 }
 
-async function fetchSemanticCookieJar(
-  supabase: SupabaseClient,
-  userId: string,
-  embedding: number[]
-): Promise<CookieJarEntry[]> {
-  try {
-    const { data } = await supabase.rpc("match_cookie_jar", {
-      query_embedding: embedding,
-      match_user_id: userId,
-      match_count: 3,
-    });
-    return (data ?? []) as CookieJarEntry[];
-  } catch {
-    // Fallback: return most recent entries
-    const { data } = await supabase
-      .from("cookie_jar_entries")
-      .select("title, description")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(3);
-    return (data ?? []) as CookieJarEntry[];
-  }
+async function fetchRecentCookieJar(userId: string): Promise<CookieJarEntry[]> {
+  return db
+    .select({ title: cookieJarEntries.title, description: cookieJarEntries.description })
+    .from(cookieJarEntries)
+    .where(eq(cookieJarEntries.userId, userId))
+    .orderBy(desc(cookieJarEntries.createdAt))
+    .limit(3);
 }
 
 // ---------------------------------------------------------------------------
@@ -101,85 +69,69 @@ function formatMemories(memories: Memory[]): string {
 
 function formatCookieJar(entries: CookieJarEntry[]): string {
   if (!entries.length) return "No past victories recorded yet.";
-  return entries
-    .map((e) => `• ${e.title}: ${e.description}`)
-    .join("\n");
+  return entries.map((e) => `• ${e.title}: ${e.description}`).join("\n");
 }
 
-function formatHabits(habits: HabitWithStreak[]): string {
-  if (!habits.length) return "No active habits.";
-  return habits
+function formatHabits(habitList: HabitWithStreak[]): string {
+  if (!habitList.length) return "No active habits.";
+  return habitList
     .map((h) => `• ${h.name} (${h.current_streak}d streak)`)
     .join("\n");
 }
 
 // ---------------------------------------------------------------------------
-// Main export: enriched system prompt with RAG context
+// Main export: enriched system prompt with context
 // ---------------------------------------------------------------------------
 
 export async function buildCoachSystemPrompt(
-  supabase: SupabaseClient,
   userId: string,
   currentMessage: string,
   sessionType: SessionType
 ): Promise<string> {
-  // Run all data fetches in parallel — generate embedding first as it gates RAG
-  let embedding: number[] = [];
-
-  try {
-    embedding = await generateEmbedding(currentMessage);
-  } catch {
-    // Embedding unavailable — RAG will fall back to recency
-  }
-
-  const [profileResult, habitsResult, streaksResult, memories, cookieJar] =
+  const [profileRows, habitRows, streakRows, memories, cookieJar] =
     await Promise.all([
-      supabase
-        .from("users")
-        .select(
-          "why_statement, identity_declaration, level, forge_score, coach_intensity"
-        )
-        .eq("id", userId)
-        .single(),
+      db
+        .select({
+          whyStatement: users.whyStatement,
+          identityDeclaration: users.identityDeclaration,
+          level: users.level,
+          forgeScore: users.forgeScore,
+          coachIntensity: users.coachIntensity,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1),
 
-      supabase
-        .from("habits")
-        .select("id, name")
-        .eq("user_id", userId)
-        .eq("is_active", true),
+      db
+        .select({ id: habits.id, name: habits.name })
+        .from(habits)
+        .where(and(eq(habits.userId, userId), eq(habits.isActive, true))),
 
-      supabase
-        .from("habit_streaks")
-        .select("habit_id, current_streak")
-        .eq("user_id", userId),
+      db
+        .select({ habitId: habitStreaks.habitId, currentStreak: habitStreaks.currentStreak })
+        .from(habitStreaks)
+        .where(eq(habitStreaks.userId, userId)),
 
-      fetchSemanticMemories(supabase, userId, embedding),
-      fetchSemanticCookieJar(supabase, userId, embedding),
+      fetchRecentMemories(userId),
+      fetchRecentCookieJar(userId),
     ]);
 
-  const profile = profileResult.data;
-  const habits = (habitsResult.data ?? []) as Array<{ id: string; name: string }>;
-  const streaks = (streaksResult.data ?? []) as Array<{
-    habit_id: string;
-    current_streak: number;
-  }>;
-
-  // Build top-5 habits by streak
-  const streakMap = new Map(streaks.map((s) => [s.habit_id, s.current_streak]));
-  const habitsWithStreaks: HabitWithStreak[] = habits
+  const profile = profileRows[0] ?? null;
+  const streakMap = new Map(streakRows.map((s) => [s.habitId, s.currentStreak]));
+  const habitsWithStreaks: HabitWithStreak[] = habitRows
     .map((h) => ({ name: h.name, current_streak: streakMap.get(h.id) ?? 0 }))
     .sort((a, b) => b.current_streak - a.current_streak)
     .slice(0, 5);
 
-  const intensity = profile?.coach_intensity ?? "hard";
+  const intensity = profile?.coachIntensity ?? "hard";
   const basePrompt =
     intensity === "firm" ? FORGE_COACH_FIRM_PROMPT : FORGE_COACH_BASE_SYSTEM_PROMPT;
 
   const userCtxBlock = `
 --- USER CONTEXT ---
-Why Statement: ${profile?.why_statement ?? "Not set"}
-Identity Declaration: ${profile?.identity_declaration ?? "Not set"}
-Forge Score: ${profile?.forge_score ?? 0} | Level: ${profile?.level ?? 1}
+Why Statement: ${profile?.whyStatement ?? "Not set"}
+Identity Declaration: ${profile?.identityDeclaration ?? "Not set"}
+Forge Score: ${profile?.forgeScore ?? 0} | Level: ${profile?.level ?? 1}
 
 Active Habits & Streaks:
 ${formatHabits(habitsWithStreaks)}
@@ -191,7 +143,6 @@ Relevant Memories:
 ${formatMemories(memories)}
 --- END CONTEXT ---`;
 
-  // Compose final prompt per session type
   switch (sessionType) {
     case "onboarding_mirror":
       return intensity === "firm"
@@ -213,13 +164,10 @@ ${formatMemories(memories)}
       return (
         CHECKIN_DEBRIEF_SYSTEM_PROMPT.replace(
           "{WHY_STATEMENT}",
-          profile?.why_statement ?? "Not set"
+          profile?.whyStatement ?? "Not set"
         )
-          .replace(
-            "{IDENTITY_DECLARATION}",
-            profile?.identity_declaration ?? "Not set"
-          )
-          .replace("{FORGE_SCORE}", String(profile?.forge_score ?? 0))
+          .replace("{IDENTITY_DECLARATION}", profile?.identityDeclaration ?? "Not set")
+          .replace("{FORGE_SCORE}", String(profile?.forgeScore ?? 0))
           .replace("{MEMORIES}", formatMemories(memories)) +
         "\n\n" +
         `User's active habits for context:\n${formatHabits(habitsWithStreaks)}`
@@ -236,8 +184,8 @@ ${formatMemories(memories)}
             ? `${cookieJar[0].title}: ${cookieJar[0].description}`
             : "No past victories recorded yet."
         )
-        .replace("{WHY_STATEMENT}", profile?.why_statement ?? "Not set")
-        .replace("{FORGE_SCORE}", String(profile?.forge_score ?? 0));
+        .replace("{WHY_STATEMENT}", profile?.whyStatement ?? "Not set")
+        .replace("{FORGE_SCORE}", String(profile?.forgeScore ?? 0));
 
     case "direct_chat":
     default:

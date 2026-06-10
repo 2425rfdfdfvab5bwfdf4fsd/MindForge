@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSessionFromRequest } from "@/lib/auth";
 import { geminiFlash } from "@/lib/gemini/client";
 
 type MoodSignal = "excusing" | "deflecting" | "owning" | "crushing";
@@ -8,7 +8,8 @@ interface ClassifyResponse {
   mood_signal: MoodSignal;
 }
 
-const CLASSIFY_PROMPT = (text: string) => `Analyze this daily check-in text and return JSON with exactly these two fields:
+const CLASSIFY_PROMPT = (text: string) =>
+  `Analyze this daily check-in text and return JSON with exactly these two fields:
 1. honesty_score: integer 1–10 (1=entirely avoidant/deflecting, 10=radically self-aware and accountable)
 2. mood_signal: one of exactly: 'excusing' | 'deflecting' | 'owning' | 'crushing'
 
@@ -23,17 +24,11 @@ Text: ${text}
 Return ONLY valid JSON, no other text.`;
 
 export async function POST(request: Request) {
-  // Authenticate
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const session = await getSessionFromRequest(request);
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Parse body
   let body: { checkin_id: string; text: string };
   try {
     body = await request.json();
@@ -49,23 +44,28 @@ export async function POST(request: Request) {
   try {
     const result = await geminiFlash.generateContent({
       contents: [{ role: "user", parts: [{ text: CLASSIFY_PROMPT(text) }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-      },
+      generationConfig: { responseMimeType: "application/json" },
     });
 
     const raw = result.response.text();
     const parsed: ClassifyResponse = JSON.parse(raw);
 
-    // Validate shape
-    const validMoods: MoodSignal[] = ["excusing", "deflecting", "owning", "crushing"];
+    const validMoods: MoodSignal[] = [
+      "excusing",
+      "deflecting",
+      "owning",
+      "crushing",
+    ];
     if (
       typeof parsed.honesty_score !== "number" ||
       parsed.honesty_score < 1 ||
       parsed.honesty_score > 10 ||
       !validMoods.includes(parsed.mood_signal)
     ) {
-      return Response.json({ error: "Invalid classification response" }, { status: 502 });
+      return Response.json(
+        { error: "Invalid classification response" },
+        { status: 502 }
+      );
     }
 
     return Response.json({

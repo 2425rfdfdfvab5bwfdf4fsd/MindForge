@@ -1,0 +1,83 @@
+Implement the full XP system, all 6 badges, and the 40% Rule Engine component.
+
+CREATE lib/xp.ts:
+
+XP AWARD TABLE (per PRD Feature 13 — use these exact values):
+- Habit completed: 20 XP (event_type: 'habit_complete')
+- Daily check-in submitted: 30 XP (event_type: 'checkin')
+- Check-in with mood_signal = 'crushing': bonus 20 XP (event_type: 'checkin_bonus')
+- Callousing Challenge completed: challenge.xp_reward (varies 50–200 per challenge row) (event_type: 'challenge')
+- 40% Rule "I'll take that step" selected: 15 XP (event_type: 'forty_percent')
+- Cookie Jar entry added: 25 XP (event_type: 'cookie_jar')
+- Environment item marked done: 50 XP (event_type: 'environment')
+- Onboarding completed (Why Excavation + Environment Audit): 200 XP one-time (event_type: 'onboarding')
+
+DO NOT invent other XP sources not listed here. No "AI debrief received" XP. No flat "7-day streak bonus". These are not in the PRD.
+
+LEVEL THRESHOLDS (per PRD — non-linear, use these exact boundaries):
+- Level 1 (Raw):        0–499 XP
+- Level 2 (Tempered):   500–1,499 XP
+- Level 3 (Forged):     1,500–3,499 XP
+- Level 4 (Hardened):   3,500–7,499 XP
+- Level 5 (Unbreakable):7,500–14,999 XP
+- Level 6 (Legendary):  15,000+ XP
+
+CREATE function getLevelFromXP(xp: number): { level: number, name: string, currentLevelMin: number, nextLevelMin: number | null, progressPct: number }
+- Iterates threshold table to find current level
+- progressPct = (xp - currentLevelMin) / (nextLevelMin - currentLevelMin) × 100 (for level 6: 100%)
+
+CREATE async function awardXP(userId: string, amount: number, reason: string, eventType: XPEventType): Promise<{ leveledUp: boolean, newLevel: number, levelName: string, xpAwarded: number }>
+- Insert into xp_events (xp_amount, reason, event_type)
+- Fetch users.xp (current total)
+- Update users.xp += amount
+- old_level = getLevelFromXP(oldXP).level
+- new_level = getLevelFromXP(oldXP + amount).level
+- If new_level > old_level: update users.level = new_level, return leveledUp: true
+- Return { leveledUp, newLevel, levelName: getLevelFromXP(oldXP + amount).name, xpAwarded: amount }
+
+CREATE lib/badges.ts:
+
+SIX v1 BADGES (per PRD Feature 13 — these are the exact badge_key values and trigger conditions):
+1. 'identity_locked' — Why Excavation completed (onboarding Step 2)
+2. 'mirror_gazer' — 30-day daily check-in streak (check: 30 consecutive days of check-ins)
+3. 'cookie_jar_founder' — 10 or more Cookie Jar entries logged (not just the first)
+4. 'forty_percent_survivor' — Selected "I'll take that step" 5 times total (count rule_forty_events where choice='took_step')
+5. 'cold_mind' — 7 cold-category challenges completed in lifetime (count user_challenges joined to challenges where category='cold' and status='completed')
+6. 'tempered' — Reached Tempered level (500 XP total, i.e., level 2)
+
+CREATE async function checkAndAwardBadge(userId: string, badgeKey: BadgeKey): Promise<{ awarded: boolean }>
+- SELECT 1 FROM user_badges WHERE user_id = ? AND badge_key = ? (idempotent check)
+- If not yet awarded: INSERT into user_badges
+- Do NOT call awardXP here — badges are cosmetic achievements. The PRD XP table lists exactly 8 XP sources and badge earning is not one of them. Adding XP for badges would be an unauthorized XP source.
+- Return { awarded: true/false }
+
+Badge trigger locations:
+- 'identity_locked': in onboarding Step 2 on Why Statement accept
+- 'mirror_gazer': in checkins.submit — check if last 30 days all have a check-in
+- 'cookie_jar_founder': in cookiejar.add — check if count >= 10
+- 'forty_percent_survivor': in rule_forty_events insert when choice='took_step' — check if total took_step count >= 5 (use >= not = — exact equality risks missing the badge if any event is back-filled or checked slightly out of order; idempotency check in checkAndAwardBadge prevents double-awarding)
+- 'cold_mind': in challenges.complete — check cold-category completions >= 7
+- 'tempered': in awardXP whenever new xp >= 500 — check and award if just crossed threshold
+
+CREATE components/forge/RuleForty.tsx (40% Rule Engine):
+
+TRIGGER CONDITIONS:
+Auto-trigger 1: habits.logCompletion returns triggerFortyPercent: true (habit missed, streak was ≥7)
+Auto-trigger 2: /api/coach/classify returns mood_signal of 'excusing' or 'deflecting'
+Manual trigger: "40% Rule" button in Sidebar
+Limit: max 3 auto-triggers per day (track count in localStorage or in users metadata JSONB field)
+
+COMPONENT (as a full-screen overlay Portal, mounted on body):
+- Background: pure #000000 snaps in at 80ms (NO fade — instant feel = urgency per PRD)
+- Text content fades in 100ms AFTER overlay appears
+- Large heading: "YOUR MIND IS LYING TO YOU" (text-4xl, font-heading, text-primary, center)
+- Subheading: "You've only used 40% of your capacity." (text-xl, text-accent — orange text)
+- Stream Forge Coach intervention via /api/coach/stream (session_type='forty_percent_rule') — streams below
+- Cannot be dismissed by clicking outside or pressing Escape (per PRD spec)
+- Two buttons appear ONLY after streaming completes (or on manual trigger: immediately):
+  - "I'll take that step" (full width, bg #FF6B2B, text black) — closes modal, inserts rule_forty_events with choice='took_step', awards 15 XP, checks 'forty_percent_survivor' badge
+  - "I still can't" (full width, ghost, border #3D3B39, text-muted) — closes modal, inserts rule_forty_events with choice='declined', no XP
+
+Store rule_forty_events in the table created in Step 1.2 (NOT in coach_sessions).
+
+ACCEPTANCE: Forge Score formula matches PRD exactly (floor, 5 components, correct weights). XP amounts match PRD. Level thresholds are non-linear (Raw/Tempered/Forged/Hardened/Unbreakable/Legendary). All 6 PRD badges can be earned with correct trigger conditions. 40% Rule overlay is instant black snap, heading reads "YOUR MIND IS LYING TO YOU", cannot be escaped except via the two buttons.

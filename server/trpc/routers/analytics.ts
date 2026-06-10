@@ -1,83 +1,94 @@
 import { z } from "zod";
+import { eq, and, gte, desc, asc, isNotNull, count } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
+import {
+  forgeScoreHistory,
+  users,
+  habits,
+  habitCompletions,
+  dailyCheckins,
+  xpEvents,
+  weeklyReports,
+} from "@/shared/schema";
 
 export const analyticsRouter = router({
-  // -------------------------------------------------------------------------
-  // Forge Score History
-  // -------------------------------------------------------------------------
   forgeScoreHistory: protectedProcedure
     .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
     .query(async ({ ctx, input }) => {
-      const { data } = await ctx.supabase
-        .from("forge_score_history")
-        .select("score, recorded_at")
-        .eq("user_id", ctx.user.id)
-        .gte(
-          "recorded_at",
-          new Date(Date.now() - input.days * 24 * 60 * 60 * 1000).toISOString()
+      const rows = await ctx.db
+        .select({ score: forgeScoreHistory.score, recordedAt: forgeScoreHistory.recordedAt })
+        .from(forgeScoreHistory)
+        .where(
+          and(
+            eq(forgeScoreHistory.userId, ctx.user.id),
+            gte(
+              forgeScoreHistory.recordedAt,
+              new Date(Date.now() - input.days * 24 * 60 * 60 * 1000)
+            )
+          )
         )
-        .order("recorded_at", { ascending: true });
+        .orderBy(asc(forgeScoreHistory.recordedAt));
 
-      return (data ?? []).map((row: { score: number; recorded_at: string }) => ({
-        date: row.recorded_at.split("T")[0],
-        score: row.score,
+      return rows.map((r) => ({
+        date: (r.recordedAt as Date).toISOString().split("T")[0],
+        score: r.score,
       }));
     }),
 
-  // -------------------------------------------------------------------------
-  // Dashboard Stats
-  // -------------------------------------------------------------------------
   getDashboardStats: protectedProcedure.query(async ({ ctx }) => {
     const today = new Date().toISOString().split("T")[0];
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split("T")[0];
 
-    const [
-      profileResult,
-      activeHabitsResult,
-      todayCompletionsResult,
-      recentCheckinsResult,
-    ] = await Promise.all([
-      ctx.supabase
-        .from("users")
-        .select("forge_score")
-        .eq("id", ctx.user.id)
-        .single(),
+    const [profileRows, activeHabitRows, todayCompletionRows, recentCheckinRows] =
+      await Promise.all([
+        ctx.db
+          .select({ forgeScore: users.forgeScore })
+          .from(users)
+          .where(eq(users.id, ctx.user.id))
+          .limit(1),
 
-      ctx.supabase
-        .from("habits")
-        .select("id")
-        .eq("user_id", ctx.user.id)
-        .eq("is_active", true),
+        ctx.db
+          .select({ id: habits.id })
+          .from(habits)
+          .where(
+            and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true))
+          ),
 
-      ctx.supabase
-        .from("habit_completions")
-        .select("habit_id, completed")
-        .eq("user_id", ctx.user.id)
-        .eq("local_date", today),
+        ctx.db
+          .select({
+            habitId: habitCompletions.habitId,
+            completed: habitCompletions.completed,
+          })
+          .from(habitCompletions)
+          .where(
+            and(
+              eq(habitCompletions.userId, ctx.user.id),
+              eq(habitCompletions.localDate, today)
+            )
+          ),
 
-      ctx.supabase
-        .from("daily_checkins")
-        .select("local_date, honesty_score")
-        .eq("user_id", ctx.user.id)
-        .eq("onboarding_mirror", false)
-        .gte("local_date", fourteenDaysAgo)
-        .order("local_date", { ascending: false }),
-    ]);
+        ctx.db
+          .select({
+            localDate: dailyCheckins.localDate,
+            honestyScore: dailyCheckins.honestyScore,
+          })
+          .from(dailyCheckins)
+          .where(
+            and(
+              eq(dailyCheckins.userId, ctx.user.id),
+              eq(dailyCheckins.onboardingMirror, false),
+              gte(dailyCheckins.localDate, fourteenDaysAgo)
+            )
+          )
+          .orderBy(desc(dailyCheckins.localDate)),
+      ]);
 
-    const forgeScore = profileResult.data?.forge_score ?? 0;
-
-    // Habit stats
-    const activeHabitIds = new Set(
-      (activeHabitsResult.data ?? []).map((h: { id: string }) => h.id)
-    );
-    const todayCompletions = (todayCompletionsResult.data ?? []) as Array<{
-      habit_id: string;
-      completed: boolean;
-    }>;
-    const completedToday = todayCompletions.filter(
-      (c) => activeHabitIds.has(c.habit_id) && c.completed
+    const forgeScore = profileRows[0]?.forgeScore ?? 0;
+    const activeHabitIds = new Set(activeHabitRows.map((h) => h.id));
+    const completedToday = todayCompletionRows.filter(
+      (c) => activeHabitIds.has(c.habitId) && c.completed
     ).length;
 
     const habitStats = {
@@ -89,13 +100,9 @@ export const analyticsRouter = router({
           : 0,
     };
 
-    // Check-in streak — consecutive days from today backwards
-    const recentCheckins = (recentCheckinsResult.data ?? []) as Array<{
-      local_date: string;
-      honesty_score: number | null;
-    }>;
-    const checkinDates = new Set(recentCheckins.map((c) => c.local_date));
-
+    const checkinDates = new Set(
+      recentCheckinRows.map((c) => c.localDate as string)
+    );
     let checkinStreak = 0;
     const cursor = new Date(today);
     for (let i = 0; i < 14; i++) {
@@ -108,23 +115,17 @@ export const analyticsRouter = router({
       }
     }
 
-    // Average honesty score over last 14 days
-    const honestyScores = recentCheckins
-      .map((c) => c.honesty_score)
+    const honestyScores = recentCheckinRows
+      .map((c) => c.honestyScore)
       .filter((s): s is number => s !== null);
     const avgHonestyScore =
       honestyScores.length > 0
-        ? Math.round(
-            honestyScores.reduce((a, b) => a + b, 0) / honestyScores.length
-          )
+        ? Math.round(honestyScores.reduce((a, b) => a + b, 0) / honestyScores.length)
         : 0;
 
     return { forgeScore, habitStats, checkinStreak, avgHonestyScore };
   }),
 
-  // -------------------------------------------------------------------------
-  // Habit Completion Rates (last N days, per-day aggregate)
-  // -------------------------------------------------------------------------
   habitCompletionRates: protectedProcedure
     .input(z.object({ days: z.number().int().min(1).max(90).default(7) }))
     .query(async ({ ctx, input }) => {
@@ -132,28 +133,35 @@ export const analyticsRouter = router({
         .toISOString()
         .split("T")[0];
 
-      const [habitsResult, completionsResult] = await Promise.all([
-        ctx.supabase
-          .from("habits")
-          .select("id")
-          .eq("user_id", ctx.user.id)
-          .eq("is_active", true),
+      const [activeHabits, completionRows] = await Promise.all([
+        ctx.db
+          .select({ id: habits.id })
+          .from(habits)
+          .where(
+            and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true))
+          ),
 
-        ctx.supabase
-          .from("habit_completions")
-          .select("local_date, completed")
-          .eq("user_id", ctx.user.id)
-          .gte("local_date", cutoff)
-          .order("local_date", { ascending: true }),
+        ctx.db
+          .select({
+            localDate: habitCompletions.localDate,
+            completed: habitCompletions.completed,
+          })
+          .from(habitCompletions)
+          .where(
+            and(
+              eq(habitCompletions.userId, ctx.user.id),
+              gte(habitCompletions.localDate, cutoff)
+            )
+          )
+          .orderBy(asc(habitCompletions.localDate)),
       ]);
 
-      const totalHabits = (habitsResult.data ?? []).length;
+      const totalHabits = activeHabits.length;
       if (!totalHabits) return [];
 
-      // Group completions by date
       const byDate: Record<string, { total: number; done: number }> = {};
-      for (const row of completionsResult.data ?? []) {
-        const d = row.local_date as string;
+      for (const row of completionRows) {
+        const d = row.localDate as string;
         if (!byDate[d]) byDate[d] = { total: totalHabits, done: 0 };
         if (row.completed) byDate[d].done++;
       }
@@ -166,9 +174,6 @@ export const analyticsRouter = router({
         }));
     }),
 
-  // -------------------------------------------------------------------------
-  // Check-in Honesty Trend (last N days)
-  // -------------------------------------------------------------------------
   checkinHonestyTrend: protectedProcedure
     .input(z.object({ days: z.number().int().min(1).max(90).default(14) }))
     .query(async ({ ctx, input }) => {
@@ -176,44 +181,52 @@ export const analyticsRouter = router({
         .toISOString()
         .split("T")[0];
 
-      const { data } = await ctx.supabase
-        .from("daily_checkins")
-        .select("local_date, honesty_score")
-        .eq("user_id", ctx.user.id)
-        .eq("onboarding_mirror", false)
-        .gte("local_date", cutoff)
-        .not("honesty_score", "is", null)
-        .order("local_date", { ascending: true });
-
-      return (data ?? []).map(
-        (row: { local_date: string; honesty_score: number }) => ({
-          date: row.local_date,
-          score: row.honesty_score,
+      const rows = await ctx.db
+        .select({
+          localDate: dailyCheckins.localDate,
+          honestyScore: dailyCheckins.honestyScore,
         })
-      );
+        .from(dailyCheckins)
+        .where(
+          and(
+            eq(dailyCheckins.userId, ctx.user.id),
+            eq(dailyCheckins.onboardingMirror, false),
+            gte(dailyCheckins.localDate, cutoff),
+            isNotNull(dailyCheckins.honestyScore)
+          )
+        )
+        .orderBy(asc(dailyCheckins.localDate));
+
+      return rows.map((r) => ({
+        date: r.localDate as string,
+        score: r.honestyScore!,
+      }));
     }),
 
-  // -------------------------------------------------------------------------
-  // XP History — cumulative daily XP events
-  // -------------------------------------------------------------------------
   xpHistory: protectedProcedure
     .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
     .query(async ({ ctx, input }) => {
-      const { data } = await ctx.supabase
-        .from("xp_events")
-        .select("xp_amount, created_at")
-        .eq("user_id", ctx.user.id)
-        .gte(
-          "created_at",
-          new Date(Date.now() - input.days * 24 * 60 * 60 * 1000).toISOString()
+      const rows = await ctx.db
+        .select({
+          xpAmount: xpEvents.xpAmount,
+          createdAt: xpEvents.createdAt,
+        })
+        .from(xpEvents)
+        .where(
+          and(
+            eq(xpEvents.userId, ctx.user.id),
+            gte(
+              xpEvents.createdAt,
+              new Date(Date.now() - input.days * 24 * 60 * 60 * 1000)
+            )
+          )
         )
-        .order("created_at", { ascending: true });
+        .orderBy(asc(xpEvents.createdAt));
 
-      // Aggregate by day
       const byDate: Record<string, number> = {};
-      for (const row of data ?? []) {
-        const d = (row.created_at as string).split("T")[0];
-        byDate[d] = (byDate[d] ?? 0) + (row.xp_amount as number);
+      for (const row of rows) {
+        const d = (row.createdAt as Date).toISOString().split("T")[0];
+        byDate[d] = (byDate[d] ?? 0) + row.xpAmount;
       }
 
       return Object.entries(byDate)
@@ -222,13 +235,13 @@ export const analyticsRouter = router({
     }),
 
   getLatestWeeklyReport: protectedProcedure.query(async ({ ctx }) => {
-    const { data } = await ctx.supabase
-      .from("weekly_reports")
-      .select("*")
-      .eq("user_id", ctx.user.id)
-      .order("week_start_date", { ascending: false })
-      .limit(1)
-      .single();
-    return data ?? null;
+    const rows = await ctx.db
+      .select()
+      .from(weeklyReports)
+      .where(eq(weeklyReports.userId, ctx.user.id))
+      .orderBy(desc(weeklyReports.weekStartDate))
+      .limit(1);
+
+    return rows[0] ?? null;
   }),
 });

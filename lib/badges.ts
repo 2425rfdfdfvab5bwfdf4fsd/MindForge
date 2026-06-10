@@ -1,4 +1,13 @@
-// All 6 PRD v1 badges — badge_key values must match user_badges.badge_key CHECK constraint
+import { db } from "@/server/db";
+import {
+  userBadges,
+  dailyCheckins,
+  cookieJarEntries,
+  ruleFortyEvents,
+  userChallenges,
+  challenges,
+} from "@/shared/schema";
+import { eq, and, gte, count, inArray } from "drizzle-orm";
 
 export const BADGE_KEYS = [
   "identity_locked",
@@ -11,65 +20,51 @@ export const BADGE_KEYS = [
 
 export type BadgeKey = (typeof BADGE_KEYS)[number];
 
-// ---------------------------------------------------------------------------
-// Core: idempotent badge award — no XP, no side effects beyond the insert
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function checkAndAwardBadge(
-  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
   userId: string,
   badgeKey: BadgeKey
 ): Promise<{ awarded: boolean }> {
-  // Check if already awarded
-  const { data: existing } = await supabase
-    .from("user_badges")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("badge_key", badgeKey)
-    .maybeSingle();
+  const [existing] = await db
+    .select({ id: userBadges.id })
+    .from(userBadges)
+    .where(and(eq(userBadges.userId, userId), eq(userBadges.badgeKey, badgeKey)))
+    .limit(1);
 
   if (existing) return { awarded: false };
 
-  const { error } = await supabase.from("user_badges").insert({
-    user_id: userId,
-    badge_key: badgeKey,
-  });
-
-  // Unique constraint violation means race condition — badge was just awarded
-  if (error && error.code === "23505") return { awarded: false };
-  if (error) throw error;
+  try {
+    await db.insert(userBadges).values({ userId, badgeKey });
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code;
+    if (code === "23505") return { awarded: false };
+    throw err;
+  }
 
   return { awarded: true };
 }
 
-// ---------------------------------------------------------------------------
-// Trigger-site helpers — call these from the relevant router/route
-// ---------------------------------------------------------------------------
-
-/**
- * 'mirror_gazer' — 30 consecutive days of daily check-ins.
- * Call from checkins.submit after insert succeeds.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function checkMirrorGazer(supabase: any, userId: string): Promise<void> {
-  // Fetch the last 30 days of non-onboarding checkins
+export async function checkMirrorGazer(
+  userId: string
+): Promise<void> {
   const thirtyDaysAgo = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0];
 
-  const { data } = await supabase
-    .from("daily_checkins")
-    .select("local_date")
-    .eq("user_id", userId)
-    .eq("onboarding_mirror", false)
-    .gte("local_date", thirtyDaysAgo)
-    .order("local_date", { ascending: false });
+  const rows = await db
+    .select({ localDate: dailyCheckins.localDate })
+    .from(dailyCheckins)
+    .where(
+      and(
+        eq(dailyCheckins.userId, userId),
+        eq(dailyCheckins.onboardingMirror, false),
+        gte(dailyCheckins.localDate, thirtyDaysAgo)
+      )
+    )
+    .orderBy(dailyCheckins.localDate);
 
-  if (!data || data.length < 30) return;
+  if (rows.length < 30) return;
 
-  // Verify they are 30 consecutive calendar days
-  const dates = new Set((data as Array<{ local_date: string }>).map((r) => r.local_date));
+  const dates = new Set(rows.map((r) => r.localDate as string));
   const today = new Date();
   let consecutive = true;
 
@@ -80,67 +75,43 @@ export async function checkMirrorGazer(supabase: any, userId: string): Promise<v
     if (!dates.has(key)) { consecutive = false; break; }
   }
 
-  if (consecutive) {
-    await checkAndAwardBadge(supabase, userId, "mirror_gazer");
-  }
+  if (consecutive) await checkAndAwardBadge(userId, "mirror_gazer");
 }
 
-/**
- * 'cookie_jar_founder' — 10+ cookie jar entries.
- * Call from cookiejar.add after insert succeeds.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function checkCookieJarFounder(supabase: any, userId: string): Promise<void> {
-  const { count } = await supabase
-    .from("cookie_jar_entries")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
-
-  if ((count ?? 0) >= 10) {
-    await checkAndAwardBadge(supabase, userId, "cookie_jar_founder");
-  }
+export async function checkCookieJarFounder(userId: string): Promise<void> {
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(cookieJarEntries)
+    .where(eq(cookieJarEntries.userId, userId));
+  if (value >= 10) await checkAndAwardBadge(userId, "cookie_jar_founder");
 }
 
-/**
- * 'forty_percent_survivor' — selected "I'll take that step" 5+ times.
- * Call from rule_forty_events insert when choice='took_step'.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function checkFortyPercentSurvivor(supabase: any, userId: string): Promise<void> {
-  const { count } = await supabase
-    .from("rule_forty_events")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("choice", "took_step");
-
-  if ((count ?? 0) >= 5) {
-    await checkAndAwardBadge(supabase, userId, "forty_percent_survivor");
-  }
+export async function checkFortyPercentSurvivor(userId: string): Promise<void> {
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(ruleFortyEvents)
+    .where(and(eq(ruleFortyEvents.userId, userId), eq(ruleFortyEvents.choice, "took_step")));
+  if (value >= 5) await checkAndAwardBadge(userId, "forty_percent_survivor");
 }
 
-/**
- * 'cold_mind' — 7+ cold-category challenges completed (lifetime).
- * Call from challenges.complete after status='completed'.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function checkColdMind(supabase: any, userId: string): Promise<void> {
-  const { count } = await supabase
-    .from("user_challenges")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "completed")
-    .in(
-      "challenge_id",
-      (
-        await supabase
-          .from("challenges")
-          .select("id")
-          .eq("category", "cold")
-          .eq("is_active", true)
-      ).data?.map((c: { id: string }) => c.id) ?? []
+export async function checkColdMind(userId: string): Promise<void> {
+  const coldChallenges = await db
+    .select({ id: challenges.id })
+    .from(challenges)
+    .where(and(eq(challenges.category, "cold"), eq(challenges.isActive, true)));
+
+  if (!coldChallenges.length) return;
+
+  const coldIds = coldChallenges.map((c) => c.id);
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(userChallenges)
+    .where(
+      and(
+        eq(userChallenges.userId, userId),
+        eq(userChallenges.status, "completed"),
+        inArray(userChallenges.challengeId, coldIds)
+      )
     );
-
-  if ((count ?? 0) >= 7) {
-    await checkAndAwardBadge(supabase, userId, "cold_mind");
-  }
+  if (value >= 7) await checkAndAwardBadge(userId, "cold_mind");
 }

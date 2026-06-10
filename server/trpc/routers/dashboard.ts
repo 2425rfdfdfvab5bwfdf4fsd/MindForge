@@ -1,5 +1,17 @@
 import { z } from "zod";
+import { eq, and, gte, lte, inArray, desc, asc } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
+import {
+  users,
+  habits,
+  habitStreaks,
+  habitCompletions,
+  dailyCheckins,
+  userChallenges,
+  challenges,
+  cookieJarEntries,
+  xpEvents,
+} from "@/shared/schema";
 
 export const dashboardRouter = router({
   getAll: protectedProcedure
@@ -8,162 +20,220 @@ export const dashboardRouter = router({
       const userId = ctx.user.id;
 
       const [
-        userResult,
-        habitsResult,
-        streaksResult,
-        completionsResult,
-        checkinResult,
-        challengeResult,
-        cookieJarResult,
+        userRows,
+        habitsList,
+        streaksList,
+        completionsList,
+        checkinRows,
+        challengeRows,
+        cookieJarRows,
+        todayXPRows,
       ] = await Promise.all([
-        // User profile: forge_score, xp, level, timezone, display_name
-        ctx.supabase
-          .from("users")
-          .select("forge_score, xp, level, timezone, display_name, current_streak_days")
-          .eq("id", userId)
-          .single(),
+        ctx.db
+          .select({
+            forgeScore: users.forgeScore,
+            xp: users.xp,
+            level: users.level,
+            timezone: users.timezone,
+            displayName: users.displayName,
+            currentStreakDays: users.currentStreakDays,
+          })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1),
 
-        // Active habits
-        ctx.supabase
-          .from("habits")
-          .select("id, name, category, habit_type, target_frequency, target_days, sort_order")
-          .eq("user_id", userId)
-          .eq("is_active", true)
-          .order("sort_order", { ascending: true }),
+        ctx.db
+          .select({
+            id: habits.id,
+            name: habits.name,
+            category: habits.category,
+            habitType: habits.habitType,
+            targetFrequency: habits.targetFrequency,
+            targetDays: habits.targetDays,
+            sortOrder: habits.sortOrder,
+          })
+          .from(habits)
+          .where(and(eq(habits.userId, userId), eq(habits.isActive, true)))
+          .orderBy(asc(habits.sortOrder)),
 
-        // Streaks for all habits
-        ctx.supabase
-          .from("habit_streaks")
-          .select("habit_id, current_streak, longest_streak")
-          .eq("user_id", userId),
+        ctx.db
+          .select({
+            habitId: habitStreaks.habitId,
+            currentStreak: habitStreaks.currentStreak,
+            longestStreak: habitStreaks.longestStreak,
+          })
+          .from(habitStreaks)
+          .where(eq(habitStreaks.userId, userId)),
 
-        // Today's completions
-        ctx.supabase
-          .from("habit_completions")
-          .select("habit_id, completed")
-          .eq("user_id", userId)
-          .eq("local_date", input.localDate),
+        ctx.db
+          .select({
+            habitId: habitCompletions.habitId,
+            completed: habitCompletions.completed,
+          })
+          .from(habitCompletions)
+          .where(
+            and(
+              eq(habitCompletions.userId, userId),
+              eq(habitCompletions.localDate, input.localDate)
+            )
+          ),
 
-        // Today's check-in (exclude onboarding mirrors)
-        ctx.supabase
-          .from("daily_checkins")
-          .select("id, mood_signal, honesty_score, created_at")
-          .eq("user_id", userId)
-          .eq("local_date", input.localDate)
-          .eq("onboarding_mirror", false)
-          .maybeSingle(),
+        ctx.db
+          .select({
+            id: dailyCheckins.id,
+            moodSignal: dailyCheckins.moodSignal,
+            honestyScore: dailyCheckins.honestyScore,
+            createdAt: dailyCheckins.createdAt,
+          })
+          .from(dailyCheckins)
+          .where(
+            and(
+              eq(dailyCheckins.userId, userId),
+              eq(dailyCheckins.localDate, input.localDate),
+              eq(dailyCheckins.onboardingMirror, false)
+            )
+          )
+          .limit(1),
 
-        // Active user challenge joined with challenge details
-        ctx.supabase
-          .from("user_challenges")
-          .select("id, started_at, status, challenges(id, title, description, duration_days)")
-          .eq("user_id", userId)
-          .eq("status", "active")
-          .maybeSingle(),
+        ctx.db
+          .select({
+            id: userChallenges.id,
+            startedAt: userChallenges.startedAt,
+            status: userChallenges.status,
+            challengeTitle: challenges.title,
+            challengeDescription: challenges.description,
+            challengeDurationMinutes: challenges.durationMinutes,
+            challengeId: challenges.id,
+          })
+          .from(userChallenges)
+          .leftJoin(challenges, eq(challenges.id, userChallenges.challengeId))
+          .where(
+            and(
+              eq(userChallenges.userId, userId),
+              eq(userChallenges.status, "active")
+            )
+          )
+          .limit(1),
 
-        // Recent cookie jar (last 3)
-        ctx.supabase
-          .from("cookie_jar_entries")
-          .select("id, title, date_of_victory")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
+        ctx.db
+          .select({
+            id: cookieJarEntries.id,
+            title: cookieJarEntries.title,
+            dateOfVictory: cookieJarEntries.dateOfVictory,
+          })
+          .from(cookieJarEntries)
+          .where(eq(cookieJarEntries.userId, userId))
+          .orderBy(desc(cookieJarEntries.createdAt))
           .limit(3),
+
+        ctx.db
+          .select({ xpAmount: xpEvents.xpAmount })
+          .from(xpEvents)
+          .where(
+            and(
+              eq(xpEvents.userId, userId),
+              gte(xpEvents.createdAt, new Date(input.localDate + "T00:00:00")),
+              lte(xpEvents.createdAt, new Date(input.localDate + "T23:59:59"))
+            )
+          ),
       ]);
 
-      const user = userResult.data;
-      const habits = habitsResult.data ?? [];
-      const streaks = streaksResult.data ?? [];
-      const completions = completionsResult.data ?? [];
+      const user = userRows[0] ?? null;
 
-      // Build maps
-      const streakMap = new Map(
-        streaks.map((s: { habit_id: string; current_streak: number; longest_streak: number }) => [
-          s.habit_id,
-          s,
-        ])
-      );
+      const streakMap = new Map(streaksList.map((s) => [s.habitId, s]));
       const completionMap = new Map(
-        completions.map(
-          (c: { habit_id: string; completed: boolean }) => [c.habit_id, c.completed]
-        )
+        completionsList.map((c) => [c.habitId, c.completed])
       );
 
-      // Filter to today's day-of-week
-      const todayDow = new Date(input.localDate + "T12:00:00").getDay(); // 0=Sun
-      const todayHabits = habits
-        .filter(
-          (h: { target_days: number[] }) =>
-            !h.target_days || h.target_days.includes(todayDow)
-        )
-        .map(
-          (h: {
-            id: string;
-            name: string;
-            category: string;
-            habit_type: string;
-            target_frequency: string;
-            target_days: number[];
-            sort_order: number;
-          }) => {
-            const completedVal = completionMap.get(h.id);
-            const today_status =
-              completedVal === undefined
-                ? "pending"
-                : completedVal
-                ? "completed"
-                : "missed";
-            const streak = streakMap.get(h.id);
-            return {
-              id: h.id,
-              name: h.name,
-              category: h.category,
-              habit_type: h.habit_type,
-              target_frequency: h.target_frequency,
-              target_days: h.target_days,
-              sort_order: h.sort_order,
-              current_streak: streak?.current_streak ?? 0,
-              longest_streak: streak?.longest_streak ?? 0,
-              today_status,
-            };
-          }
-        );
+      const todayDow = new Date(input.localDate + "T12:00:00").getDay();
+      const todayHabits = habitsList
+        .filter((h) => {
+          const days = h.targetDays as number[];
+          return !days || days.includes(todayDow);
+        })
+        .map((h) => {
+          const completedVal = completionMap.get(h.id);
+          const today_status =
+            completedVal === undefined
+              ? "pending"
+              : completedVal
+              ? "completed"
+              : "missed";
+          const streak = streakMap.get(h.id);
+          return {
+            id: h.id,
+            name: h.name,
+            category: h.category,
+            habit_type: h.habitType,
+            target_frequency: h.targetFrequency,
+            target_days: h.targetDays as number[],
+            sort_order: h.sortOrder,
+            current_streak: streak?.currentStreak ?? 0,
+            longest_streak: streak?.longestStreak ?? 0,
+            today_status,
+          };
+        });
 
-      // Top streaks (top 3 by current_streak)
-      const topStreaks = habits
-        .map((h: { id: string; name: string }) => ({
+      const topStreaks = habitsList
+        .map((h) => ({
           name: h.name,
-          current_streak: streakMap.get(h.id)?.current_streak ?? 0,
+          current_streak: streakMap.get(h.id)?.currentStreak ?? 0,
         }))
-        .sort(
-          (a: { current_streak: number }, b: { current_streak: number }) =>
-            b.current_streak - a.current_streak
-        )
+        .sort((a, b) => b.current_streak - a.current_streak)
         .slice(0, 3);
 
-      // Today's forge score delta (XP earned today)
-      // Simple: sum xp_events for today
-      const { data: todayXPEvents } = await ctx.supabase
-        .from("xp_events")
-        .select("xp_amount")
-        .eq("user_id", userId)
-        .gte("created_at", input.localDate + "T00:00:00")
-        .lte("created_at", input.localDate + "T23:59:59");
-
-      const todayXPDelta = (todayXPEvents ?? []).reduce(
-        (sum: number, e: { xp_amount: number }) => sum + e.xp_amount,
+      const todayXPDelta = todayXPRows.reduce(
+        (sum, e) => sum + e.xpAmount,
         0
       );
 
+      const rawChallenge = challengeRows[0] ?? null;
+      const activeChallenge = rawChallenge
+        ? {
+            id: rawChallenge.id,
+            started_at: rawChallenge.startedAt,
+            status: rawChallenge.status,
+            challenges: rawChallenge.challengeId
+              ? {
+                  id: rawChallenge.challengeId,
+                  title: rawChallenge.challengeTitle,
+                  description: rawChallenge.challengeDescription,
+                  duration_minutes: rawChallenge.challengeDurationMinutes,
+                }
+              : null,
+          }
+        : null;
+
       return {
-        user: user ?? null,
+        user: user
+          ? {
+              forge_score: user.forgeScore,
+              xp: user.xp,
+              level: user.level,
+              timezone: user.timezone,
+              display_name: user.displayName,
+              current_streak_days: user.currentStreakDays,
+            }
+          : null,
         habits: todayHabits,
-        todayCheckin: checkinResult.data ?? null,
-        activeChallenge: challengeResult.data ?? null,
-        forgeScore: user?.forge_score ?? 0,
+        todayCheckin: checkinRows[0]
+          ? {
+              id: checkinRows[0].id,
+              mood_signal: checkinRows[0].moodSignal,
+              honesty_score: checkinRows[0].honestyScore,
+              created_at: checkinRows[0].createdAt,
+            }
+          : null,
+        activeChallenge,
+        forgeScore: user?.forgeScore ?? 0,
         xp: user?.xp ?? 0,
         level: user?.level ?? 1,
         topStreaks,
-        recentCookieJar: cookieJarResult.data ?? [],
+        recentCookieJar: cookieJarRows.map((e) => ({
+          id: e.id,
+          title: e.title,
+          date_of_victory: e.dateOfVictory,
+        })),
         todayXPDelta,
       };
     }),

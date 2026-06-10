@@ -1,30 +1,11 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { eq, and, gte, desc, isNotNull } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
+import { dailyCheckins } from "@/shared/schema";
 import { recalculateForgeScore } from "@/lib/streak";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function grantXP(supabase: any, userId: string, xp: number, reason: string, eventType: string) {
-  await supabase.from("xp_events").insert({
-    user_id: userId,
-    xp_amount: xp,
-    reason,
-    event_type: eventType,
-  });
-  const { data: user } = await supabase
-    .from("users")
-    .select("xp, level")
-    .eq("id", userId)
-    .single();
-  if (user) {
-    const newXP = (user.xp ?? 0) + xp;
-    const newLevel = Math.floor(newXP / 1000) + 1;
-    await supabase
-      .from("users")
-      .update({ xp: newXP, level: newLevel })
-      .eq("id", userId);
-  }
-}
+import { awardXP } from "@/lib/xp";
+import { checkMirrorGazer } from "@/lib/badges";
 
 export const checkinsRouter = router({
   submit: protectedProcedure
@@ -44,46 +25,41 @@ export const checkinsRouter = router({
         });
       }
 
-      const { data, error } = await ctx.supabase
-        .from("daily_checkins")
-        .insert({
-          user_id: ctx.user.id,
-          local_date: input.localDate,
-          raw_reflection: input.text.trim(),
-          onboarding_mirror: input.onboardingMirror,
-          forge_score_delta: 0,
+      const [checkin] = await ctx.db
+        .insert(dailyCheckins)
+        .values({
+          userId: ctx.user.id,
+          localDate: input.localDate,
+          rawReflection: input.text.trim(),
+          onboardingMirror: input.onboardingMirror,
+          forgeScoreDelta: 0,
         })
-        .select()
-        .single();
+        .returning();
 
-      if (error) throw error;
-
-      // Award 30 XP for regular check-ins only
       if (!input.onboardingMirror) {
-        await grantXP(
-          ctx.supabase,
-          ctx.user.id,
-          30,
-          "Daily check-in submitted",
-          "checkin"
-        );
-        await recalculateForgeScore(ctx.supabase, ctx.user.id);
+        await awardXP(ctx.user.id, 30, "Daily check-in submitted", "checkin");
+        await recalculateForgeScore(ctx.user.id);
+        checkMirrorGazer(ctx.user.id).catch(() => {});
       }
 
-      return data;
+      return checkin;
     }),
 
   getToday: protectedProcedure
     .input(z.object({ localDate: z.string() }))
     .query(async ({ ctx, input }) => {
-      const { data } = await ctx.supabase
-        .from("daily_checkins")
-        .select("*")
-        .eq("user_id", ctx.user.id)
-        .eq("local_date", input.localDate)
-        .eq("onboarding_mirror", false)
-        .maybeSingle();
-      return data ?? null;
+      const [checkin] = await ctx.db
+        .select()
+        .from(dailyCheckins)
+        .where(
+          and(
+            eq(dailyCheckins.userId, ctx.user.id),
+            eq(dailyCheckins.localDate, input.localDate),
+            eq(dailyCheckins.onboardingMirror, false)
+          )
+        )
+        .limit(1);
+      return checkin ?? null;
     }),
 
   updateMetadata: protectedProcedure
@@ -99,55 +75,57 @@ export const checkinsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Verify ownership
-      const { data: existing } = await ctx.supabase
-        .from("daily_checkins")
-        .select("user_id, mood_signal")
-        .eq("id", input.checkinId)
-        .single();
+      const [existing] = await ctx.db
+        .select({ userId: dailyCheckins.userId, moodSignal: dailyCheckins.moodSignal })
+        .from(dailyCheckins)
+        .where(eq(dailyCheckins.id, input.checkinId))
+        .limit(1);
 
-      if (!existing || existing.user_id !== ctx.user.id) {
+      if (!existing || existing.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      const { data, error } = await ctx.supabase
-        .from("daily_checkins")
-        .update({
-          honesty_score: input.honestyScore,
-          mood_signal: input.moodSignal,
-          ai_response: input.aiResponse,
-          forge_score_delta: input.forgeScoreDelta,
+      const [updated] = await ctx.db
+        .update(dailyCheckins)
+        .set({
+          ...(input.honestyScore !== undefined ? { honestyScore: input.honestyScore } : {}),
+          ...(input.moodSignal !== undefined ? { moodSignal: input.moodSignal } : {}),
+          ...(input.aiResponse !== undefined ? { aiResponse: input.aiResponse } : {}),
+          ...(input.forgeScoreDelta !== undefined
+            ? { forgeScoreDelta: input.forgeScoreDelta }
+            : {}),
         })
-        .eq("id", input.checkinId)
-        .select()
-        .single();
+        .where(eq(dailyCheckins.id, input.checkinId))
+        .returning();
 
-      if (error) throw error;
-
-      // Crushing bonus XP — only on first classification
-      if (input.moodSignal === "crushing" && !existing.mood_signal) {
-        await grantXP(
-          ctx.supabase,
-          ctx.user.id,
-          20,
-          "Crushing check-in bonus",
-          "checkin_bonus"
-        );
+      if (input.moodSignal === "crushing" && !existing.moodSignal) {
+        await awardXP(ctx.user.id, 20, "Crushing check-in bonus", "checkin_bonus");
       }
 
-      return data;
+      return updated;
     }),
 
   getHistory: protectedProcedure
     .input(z.object({ limit: z.number().default(30) }))
     .query(async ({ ctx, input }) => {
-      const { data } = await ctx.supabase
-        .from("daily_checkins")
-        .select("id, local_date, raw_reflection, mood_signal, honesty_score, ai_response, created_at")
-        .eq("user_id", ctx.user.id)
-        .eq("onboarding_mirror", false)
-        .order("local_date", { ascending: false })
+      return ctx.db
+        .select({
+          id: dailyCheckins.id,
+          localDate: dailyCheckins.localDate,
+          rawReflection: dailyCheckins.rawReflection,
+          moodSignal: dailyCheckins.moodSignal,
+          honestyScore: dailyCheckins.honestyScore,
+          aiResponse: dailyCheckins.aiResponse,
+          createdAt: dailyCheckins.createdAt,
+        })
+        .from(dailyCheckins)
+        .where(
+          and(
+            eq(dailyCheckins.userId, ctx.user.id),
+            eq(dailyCheckins.onboardingMirror, false)
+          )
+        )
+        .orderBy(desc(dailyCheckins.localDate))
         .limit(input.limit);
-      return data ?? [];
     }),
 });

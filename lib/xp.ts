@@ -1,6 +1,6 @@
-// ---------------------------------------------------------------------------
-// Pure level data — safe to import in client components
-// ---------------------------------------------------------------------------
+import { db } from "@/server/db";
+import { xpEvents, users } from "@/shared/schema";
+import { eq, sql } from "drizzle-orm";
 
 export interface LevelInfo {
   level: number;
@@ -10,7 +10,7 @@ export interface LevelInfo {
   progressPct: number;
 }
 
-const LEVELS: Array<{ level: number; name: string; min: number; next: number | null }> = [
+const LEVELS = [
   { level: 1, name: "Raw",         min: 0,     next: 500   },
   { level: 2, name: "Tempered",    min: 500,   next: 1500  },
   { level: 3, name: "Forged",      min: 1500,  next: 3500  },
@@ -21,7 +21,6 @@ const LEVELS: Array<{ level: number; name: string; min: number; next: number | n
 
 export function getLevelFromXP(xp: number): LevelInfo {
   const safe = Math.max(0, xp);
-
   for (let i = LEVELS.length - 1; i >= 0; i--) {
     const tier = LEVELS[i];
     if (safe >= tier.min) {
@@ -38,17 +37,12 @@ export function getLevelFromXP(xp: number): LevelInfo {
       };
     }
   }
-
   return { level: 1, name: "Raw", currentLevelMin: 0, nextLevelMin: 500, progressPct: 0 };
 }
 
 export function getLevelName(level: number): string {
   return LEVELS.find((l) => l.level === level)?.name ?? "Legendary";
 }
-
-// ---------------------------------------------------------------------------
-// XP event types (PRD Feature 13 — exact list, no additions)
-// ---------------------------------------------------------------------------
 
 export type XPEventType =
   | "habit_complete"
@@ -70,11 +64,6 @@ export const XP_AMOUNTS = {
   forty_percent: 15,
 } as const;
 
-// ---------------------------------------------------------------------------
-// Server-side awardXP — takes supabase client as first arg
-// Never call this from client components.
-// ---------------------------------------------------------------------------
-
 export interface AwardXPResult {
   leveledUp: boolean;
   newLevel: number;
@@ -82,45 +71,37 @@ export interface AwardXPResult {
   xpAwarded: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function awardXP(
-  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
   userId: string,
   amount: number,
   reason: string,
   eventType: XPEventType
 ): Promise<AwardXPResult> {
-  // Insert XP event record
-  await supabase.from("xp_events").insert({
-    user_id: userId,
-    xp_amount: amount,
-    reason,
-    event_type: eventType,
-  });
+  await db.insert(xpEvents).values({ userId, xpAmount: amount, reason, eventType });
 
-  // Fetch current XP total
-  const { data: user } = await supabase
-    .from("users")
-    .select("xp")
-    .eq("id", userId)
-    .single();
+  const [user] = await db
+    .select({ xp: users.xp })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
-  const oldXP: number = user?.xp ?? 0;
+  const oldXP = user?.xp ?? 0;
   const newXP = oldXP + amount;
-
   const oldLevel = getLevelFromXP(oldXP).level;
   const newLevelInfo = getLevelFromXP(newXP);
   const leveledUp = newLevelInfo.level > oldLevel;
 
-  const updatePayload: Record<string, unknown> = { xp: newXP };
-  if (leveledUp) updatePayload.level = newLevelInfo.level;
+  await db
+    .update(users)
+    .set({
+      xp: newXP,
+      ...(leveledUp ? { level: newLevelInfo.level } : {}),
+    })
+    .where(eq(users.id, userId));
 
-  await supabase.from("users").update(updatePayload).eq("id", userId);
-
-  // Award 'tempered' badge the first time the user crosses 500 XP
   if (newXP >= 500 && oldXP < 500) {
     const { checkAndAwardBadge } = await import("./badges");
-    await checkAndAwardBadge(supabase, userId, "tempered");
+    await checkAndAwardBadge(userId, "tempered");
   }
 
   return {

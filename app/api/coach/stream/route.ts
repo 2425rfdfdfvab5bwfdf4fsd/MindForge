@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSessionFromRequest } from "@/lib/auth";
+import { db } from "@/server/db";
+import { users } from "@/shared/schema";
+import { eq } from "drizzle-orm";
 import { geminiPro } from "@/lib/gemini/client";
 import {
   FORGE_COACH_BASE_SYSTEM_PROMPT,
@@ -31,7 +34,6 @@ interface StreamContext {
   cookie_jar_entry?: string;
 }
 
-// In-memory rate limiter
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
@@ -48,7 +50,6 @@ function checkRateLimit(userId: string): boolean {
   return true;
 }
 
-// Fallback prompt builder for session types that don't need RAG
 function buildFallbackPrompt(
   sessionType: SessionType,
   coachIntensity: string,
@@ -67,7 +68,6 @@ function buildFallbackPrompt(
             FORGE_COACH_FIRM_PROMPT
           )
         : ONBOARDING_MIRROR_SYSTEM_PROMPT;
-
     case "why_excavation":
       return coachIntensity === "firm"
         ? WHY_EXCAVATION_SYSTEM_PROMPT.replace(
@@ -75,29 +75,32 @@ function buildFallbackPrompt(
             FORGE_COACH_FIRM_PROMPT
           )
         : WHY_EXCAVATION_SYSTEM_PROMPT;
-
     default:
       return basePrompt;
   }
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getSessionFromRequest(request);
+  if (!session) return new Response("Unauthorized", { status: 401 });
 
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  if (!checkRateLimit(user.id)) {
+  if (!checkRateLimit(session.id)) {
     return new Response("Too many requests", { status: 429 });
   }
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("tier, coach_intensity, why_statement, identity_declaration, forge_score")
-    .eq("id", user.id)
-    .single();
+  const [profileRows] = await db
+    .select({
+      tier: users.tier,
+      coachIntensity: users.coachIntensity,
+      whyStatement: users.whyStatement,
+      identityDeclaration: users.identityDeclaration,
+      forgeScore: users.forgeScore,
+    })
+    .from(users)
+    .where(eq(users.id, session.id))
+    .limit(1);
+
+  const profile = profileRows ?? null;
 
   let body: {
     session_type: SessionType;
@@ -112,7 +115,6 @@ export async function POST(request: Request) {
 
   const { session_type, messages, context } = body;
 
-  // Tier gate
   if (session_type === "direct_chat" || session_type === "daily_checkin") {
     if ((profile?.tier ?? "free") === "free") {
       return new Response("Forbidden: Pro or Elite tier required", { status: 403 });
@@ -127,36 +129,39 @@ export async function POST(request: Request) {
   const lastUserText = lastMessage.parts.map((p) => p.text).join("");
   const history = messages.slice(0, -1);
 
-  // Build system prompt — RAG-enriched for daily_checkin, direct_chat, forty_percent_rule
   let systemPrompt: string;
-  const ragTypes: SessionType[] = ["daily_checkin", "direct_chat", "forty_percent_rule"];
+  const ragTypes: SessionType[] = [
+    "daily_checkin",
+    "direct_chat",
+    "forty_percent_rule",
+  ];
 
   if (ragTypes.includes(session_type) && process.env.GEMINI_API_KEY) {
     try {
       systemPrompt = await buildCoachSystemPrompt(
-        supabase,
-        user.id,
+        session.id,
         context?.trigger_context ?? lastUserText,
         session_type
       );
     } catch {
       systemPrompt = buildFallbackPrompt(
         session_type,
-        profile?.coach_intensity ?? "hard",
+        profile?.coachIntensity ?? "hard",
         context ?? {}
       );
     }
   } else {
     systemPrompt = buildFallbackPrompt(
       session_type,
-      profile?.coach_intensity ?? "hard",
+      profile?.coachIntensity ?? "hard",
       {
-        why_statement: context?.why_statement ?? profile?.why_statement ?? undefined,
+        why_statement:
+          context?.why_statement ?? profile?.whyStatement ?? undefined,
         identity_declaration:
           context?.identity_declaration ??
-          profile?.identity_declaration ??
+          profile?.identityDeclaration ??
           undefined,
-        forge_score: context?.forge_score ?? profile?.forge_score ?? 0,
+        forge_score: context?.forge_score ?? profile?.forgeScore ?? 0,
         memories: context?.memories,
         trigger_context: context?.trigger_context,
         cookie_jar_entry: context?.cookie_jar_entry,
@@ -179,9 +184,7 @@ export async function POST(request: Request) {
           history: history.map((m) => ({ role: m.role, parts: m.parts })),
           systemInstruction: systemPrompt,
         });
-
         const result = await chat.sendMessageStream(lastUserText);
-
         for await (const chunk of result.stream) {
           const text = chunk.text();
           if (text) {
@@ -191,7 +194,9 @@ export async function POST(request: Request) {
         controller.enqueue(encode("data: [DONE]\n\n"));
       } catch {
         controller.enqueue(
-          encode(`data: ${JSON.stringify({ error: "Coach unavailable" })}\n\n`)
+          encode(
+            `data: ${JSON.stringify({ error: "Coach unavailable" })}\n\n`
+          )
         );
       } finally {
         controller.close();

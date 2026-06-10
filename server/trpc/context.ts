@@ -1,25 +1,29 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth";
+import { db } from "@/server/db";
+import { users } from "@/shared/schema";
+import { eq } from "drizzle-orm";
 
 export async function createTRPCContext() {
-  const supabase = await createClient();
-
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+  const session = await getSession();
 
   let userProfile = null;
-  if (authUser) {
-    const { data } = await supabase
-      .from("users")
-      .select("id, tier, onboarding_complete, coach_intensity")
-      .eq("id", authUser.id)
-      .single();
-    userProfile = data;
+  if (session?.id) {
+    const [profile] = await db
+      .select({
+        id: users.id,
+        tier: users.tier,
+        onboardingComplete: users.onboardingComplete,
+        coachIntensity: users.coachIntensity,
+      })
+      .from(users)
+      .where(eq(users.id, session.id))
+      .limit(1);
+    userProfile = profile ?? null;
   }
 
   return {
-    supabase,
-    user: authUser,
+    db,
+    user: session ? { id: session.id, email: session.email } : null,
     userProfile,
   };
 }

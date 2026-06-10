@@ -1,16 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSessionFromRequest } from "@/lib/auth";
 import { extractAndStoreMemories } from "@/lib/gemini/memory";
 
 export async function POST(request: Request) {
-  // Authenticate
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const session = await getSessionFromRequest(request);
+  if (!session) return new Response("Unauthorized", { status: 401 });
 
   let body: { sessionId: string; text: string };
   try {
@@ -24,8 +17,6 @@ export async function POST(request: Request) {
     return new Response("sessionId and text are required", { status: 400 });
   }
 
-  // Fire-and-forget — respond immediately, extraction runs async
-  extractAndStoreMemories(supabase, user.id, sessionId, text).catch(() => {});
-
+  extractAndStoreMemories(session.id, sessionId, text).catch(() => {});
   return new Response(null, { status: 202 });
 }

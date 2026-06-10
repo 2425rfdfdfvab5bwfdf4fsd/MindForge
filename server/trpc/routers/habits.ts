@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { eq, and, gte, lte, inArray, count, desc, asc } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
+import {
+  habits,
+  habitCompletions,
+  habitStreaks,
+  users,
+} from "@/shared/schema";
 import { recalculateStreak, recalculateForgeScore } from "@/lib/streak";
+import { awardXP } from "@/lib/xp";
 
 const FREE_TIER_LIMIT = 3;
 
@@ -9,75 +17,66 @@ export const habitsRouter = router({
   list: protectedProcedure
     .input(z.object({ localDate: z.string() }))
     .query(async ({ ctx, input }) => {
-      const { data: habits } = await ctx.supabase
-        .from("habits")
-        .select("*")
-        .eq("user_id", ctx.user.id)
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
+      const habitsList = await ctx.db
+        .select()
+        .from(habits)
+        .where(and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true)))
+        .orderBy(asc(habits.sortOrder));
 
-      if (!habits || habits.length === 0) return [];
+      if (!habitsList.length) return [];
 
-      const habitIds = habits.map((h: { id: string }) => h.id);
+      const habitIds = habitsList.map((h) => h.id);
 
-      const [{ data: completions }, { data: streaks }] = await Promise.all([
-        ctx.supabase
-          .from("habit_completions")
-          .select("habit_id, completed")
-          .in("habit_id", habitIds)
-          .eq("local_date", input.localDate),
-        ctx.supabase
-          .from("habit_streaks")
-          .select("habit_id, current_streak, longest_streak")
-          .in("habit_id", habitIds),
+      const [completions, streaks] = await Promise.all([
+        ctx.db
+          .select({
+            habitId: habitCompletions.habitId,
+            completed: habitCompletions.completed,
+          })
+          .from(habitCompletions)
+          .where(
+            and(
+              inArray(habitCompletions.habitId, habitIds),
+              eq(habitCompletions.localDate, input.localDate)
+            )
+          ),
+        ctx.db
+          .select({
+            habitId: habitStreaks.habitId,
+            currentStreak: habitStreaks.currentStreak,
+            longestStreak: habitStreaks.longestStreak,
+          })
+          .from(habitStreaks)
+          .where(inArray(habitStreaks.habitId, habitIds)),
       ]);
 
       const completionMap = new Map(
-        (completions ?? []).map(
-          (c: { habit_id: string; completed: boolean }) => [c.habit_id, c.completed]
-        )
+        completions.map((c) => [c.habitId, c.completed])
       );
-      const streakMap = new Map(
-        (streaks ?? []).map(
-          (s: { habit_id: string; current_streak: number; longest_streak: number }) => [
-            s.habit_id,
-            s,
-          ]
-        )
-      );
+      const streakMap = new Map(streaks.map((s) => [s.habitId, s]));
 
-      return habits.map(
-        (h: {
-          id: string;
-          name: string;
-          category: string;
-          habit_type: string;
-          target_frequency: string;
-          target_days: number[];
-          sort_order: number;
-        }) => {
-          const completedVal = completionMap.get(h.id);
-          const today_status =
-            completedVal === undefined
-              ? "pending"
-              : completedVal
-              ? "completed"
-              : "missed";
-          const streak = streakMap.get(h.id);
-          return {
-            id: h.id,
-            name: h.name,
-            category: h.category,
-            habit_type: h.habit_type,
-            target_frequency: h.target_frequency,
-            target_days: h.target_days,
-            sort_order: h.sort_order,
-            current_streak: streak?.current_streak ?? 0,
-            longest_streak: streak?.longest_streak ?? 0,
-            today_status,
-          };
-        }
-      );
+      return habitsList.map((h) => {
+        const completedVal = completionMap.get(h.id);
+        const today_status =
+          completedVal === undefined
+            ? "pending"
+            : completedVal
+            ? "completed"
+            : "missed";
+        const streak = streakMap.get(h.id);
+        return {
+          id: h.id,
+          name: h.name,
+          category: h.category,
+          habit_type: h.habitType,
+          target_frequency: h.targetFrequency,
+          target_days: h.targetDays as number[],
+          sort_order: h.sortOrder,
+          current_streak: streak?.currentStreak ?? 0,
+          longest_streak: streak?.longestStreak ?? 0,
+          today_status,
+        };
+      });
     }),
 
   create: protectedProcedure
@@ -86,24 +85,24 @@ export const habitsRouter = router({
         name: z.string().min(1).max(60),
         category: z.enum(["health", "mind", "avoid", "perform"]),
         habitType: z.enum(["build", "avoid"]),
-        targetFrequency: z.enum(["daily", "weekdays", "custom"]).default("daily"),
+        targetFrequency: z
+          .enum(["daily", "weekdays", "custom"])
+          .default("daily"),
         targetDays: z.array(z.number().min(0).max(6)).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Free tier limit
-      const { count } = await ctx.supabase
-        .from("habits")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", ctx.user.id)
-        .eq("is_active", true);
+      const [{ value: habitCount }] = await ctx.db
+        .select({ value: count() })
+        .from(habits)
+        .where(and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true)));
 
-      if ((count ?? 0) >= FREE_TIER_LIMIT) {
-        const { data: profile } = await ctx.supabase
-          .from("users")
-          .select("tier")
-          .eq("id", ctx.user.id)
-          .single();
+      if (habitCount >= FREE_TIER_LIMIT) {
+        const [profile] = await ctx.db
+          .select({ tier: users.tier })
+          .from(users)
+          .where(eq(users.id, ctx.user.id))
+          .limit(1);
 
         if (!profile || profile.tier === "free") {
           throw new TRPCError({
@@ -120,26 +119,23 @@ export const habitsRouter = router({
           ? input.targetDays
           : [0, 1, 2, 3, 4, 5, 6];
 
-      const { data: habit, error } = await ctx.supabase
-        .from("habits")
-        .insert({
-          user_id: ctx.user.id,
+      const [habit] = await ctx.db
+        .insert(habits)
+        .values({
+          userId: ctx.user.id,
           name: input.name,
           category: input.category,
-          habit_type: input.habitType,
-          target_frequency: input.targetFrequency,
-          target_days: targetDays,
+          habitType: input.habitType,
+          targetFrequency: input.targetFrequency,
+          targetDays,
         })
-        .select()
-        .single();
+        .returning();
 
-      if (error) throw error;
-
-      await ctx.supabase.from("habit_streaks").insert({
-        habit_id: habit.id,
-        user_id: ctx.user.id,
-        current_streak: 0,
-        longest_streak: 0,
+      await ctx.db.insert(habitStreaks).values({
+        habitId: habit.id,
+        userId: ctx.user.id,
+        currentStreak: 0,
+        longestStreak: 0,
       });
 
       return habit;
@@ -150,62 +146,68 @@ export const habitsRouter = router({
       z.object({
         id: z.string().uuid(),
         name: z.string().max(60).optional(),
-        category: z.enum(["health", "mind", "avoid", "perform"]).optional(),
-        targetFrequency: z.enum(["daily", "weekdays", "custom"]).optional(),
+        category: z
+          .enum(["health", "mind", "avoid", "perform"])
+          .optional(),
+        targetFrequency: z
+          .enum(["daily", "weekdays", "custom"])
+          .optional(),
         targetDays: z.array(z.number().min(0).max(6)).optional(),
         sortOrder: z.number().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { data: existing } = await ctx.supabase
-        .from("habits")
-        .select("user_id")
-        .eq("id", input.id)
-        .single();
+      const [existing] = await ctx.db
+        .select({ userId: habits.userId })
+        .from(habits)
+        .where(eq(habits.id, input.id))
+        .limit(1);
 
-      if (!existing || existing.user_id !== ctx.user.id) {
+      if (!existing || existing.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      const { data, error } = await ctx.supabase
-        .from("habits")
-        .update({
-          name: input.name,
-          category: input.category,
-          target_frequency: input.targetFrequency,
-          target_days: input.targetDays,
-          sort_order: input.sortOrder,
+      const [updated] = await ctx.db
+        .update(habits)
+        .set({
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.category !== undefined ? { category: input.category } : {}),
+          ...(input.targetFrequency !== undefined
+            ? { targetFrequency: input.targetFrequency }
+            : {}),
+          ...(input.targetDays !== undefined
+            ? { targetDays: input.targetDays }
+            : {}),
+          ...(input.sortOrder !== undefined
+            ? { sortOrder: input.sortOrder }
+            : {}),
         })
-        .eq("id", input.id)
-        .select()
-        .single();
+        .where(eq(habits.id, input.id))
+        .returning();
 
-      if (error) throw error;
-      return data;
+      return updated;
     }),
 
   archive: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const { data: existing } = await ctx.supabase
-        .from("habits")
-        .select("user_id")
-        .eq("id", input.id)
-        .single();
+      const [existing] = await ctx.db
+        .select({ userId: habits.userId })
+        .from(habits)
+        .where(eq(habits.id, input.id))
+        .limit(1);
 
-      if (!existing || existing.user_id !== ctx.user.id) {
+      if (!existing || existing.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      const { data, error } = await ctx.supabase
-        .from("habits")
-        .update({ is_active: false })
-        .eq("id", input.id)
-        .select()
-        .single();
+      const [updated] = await ctx.db
+        .update(habits)
+        .set({ isActive: false })
+        .where(eq(habits.id, input.id))
+        .returning();
 
-      if (error) throw error;
-      return data;
+      return updated;
     }),
 
   logCompletion: protectedProcedure
@@ -218,42 +220,44 @@ export const habitsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Verify ownership
-      const { data: habit } = await ctx.supabase
-        .from("habits")
-        .select("user_id")
-        .eq("id", input.habitId)
-        .single();
+      const [habit] = await ctx.db
+        .select({ userId: habits.userId })
+        .from(habits)
+        .where(eq(habits.id, input.habitId))
+        .limit(1);
 
-      if (!habit || habit.user_id !== ctx.user.id) {
+      if (!habit || habit.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      // Fetch previous streak before we overwrite
-      const { data: prevStreak } = await ctx.supabase
-        .from("habit_streaks")
-        .select("current_streak")
-        .eq("habit_id", input.habitId)
-        .single();
+      const [prevStreak] = await ctx.db
+        .select({ currentStreak: habitStreaks.currentStreak })
+        .from(habitStreaks)
+        .where(eq(habitStreaks.habitId, input.habitId))
+        .limit(1);
 
-      const prevStreakVal = prevStreak?.current_streak ?? 0;
+      const prevStreakVal = prevStreak?.currentStreak ?? 0;
 
-      // Upsert completion
-      await ctx.supabase.from("habit_completions").upsert(
-        {
-          habit_id: input.habitId,
-          user_id: ctx.user.id,
-          local_date: input.localDate,
+      await ctx.db
+        .insert(habitCompletions)
+        .values({
+          habitId: input.habitId,
+          userId: ctx.user.id,
+          localDate: input.localDate,
           completed: input.completed,
           notes: input.notes,
-          completion_time: new Date().toISOString(),
-        },
-        { onConflict: "habit_id,local_date" }
-      );
+          completionTime: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [habitCompletions.habitId, habitCompletions.localDate],
+          set: {
+            completed: input.completed,
+            notes: input.notes,
+            completionTime: new Date(),
+          },
+        });
 
-      // Recalculate streak
       const newStreak = await recalculateStreak(
-        ctx.supabase,
         input.habitId,
         ctx.user.id,
         input.localDate
@@ -263,47 +267,29 @@ export const habitsRouter = router({
       let leveledUp = false;
 
       if (input.completed) {
-        const XP = 20;
-        xpAwarded = XP;
-
-        await ctx.supabase.from("xp_events").insert({
-          user_id: ctx.user.id,
-          xp_amount: XP,
-          reason: "Habit completed",
-          event_type: "habit_complete",
-        });
-
-        const { data: user } = await ctx.supabase
-          .from("users")
-          .select("xp, level")
-          .eq("id", ctx.user.id)
-          .single();
-
-        if (user) {
-          const newXP = (user.xp ?? 0) + XP;
-          const newLevel = Math.floor(newXP / 1000) + 1;
-          leveledUp = newLevel > (user.level ?? 1);
-          await ctx.supabase
-            .from("users")
-            .update({ xp: newXP, level: newLevel })
-            .eq("id", ctx.user.id);
-        }
+        const result = await awardXP(
+          ctx.user.id,
+          20,
+          "Habit completed",
+          "habit_complete"
+        );
+        xpAwarded = result.xpAwarded;
+        leveledUp = result.leveledUp;
       }
 
-      await recalculateForgeScore(ctx.supabase, ctx.user.id);
+      await recalculateForgeScore(ctx.user.id);
 
-      const { data: updatedUser } = await ctx.supabase
-        .from("users")
-        .select("forge_score")
-        .eq("id", ctx.user.id)
-        .single();
+      const [updatedUser] = await ctx.db
+        .select({ forgeScore: users.forgeScore })
+        .from(users)
+        .where(eq(users.id, ctx.user.id))
+        .limit(1);
 
-      const triggerFortyPercent =
-        !input.completed && prevStreakVal >= 7;
+      const triggerFortyPercent = !input.completed && prevStreakVal >= 7;
 
       return {
         streak: newStreak,
-        forgeScore: updatedUser?.forge_score ?? 0,
+        forgeScore: updatedUser?.forgeScore ?? 0,
         xpAwarded,
         leveledUp,
         triggerFortyPercent,
@@ -311,21 +297,30 @@ export const habitsRouter = router({
     }),
 
   getCompletionHistory: protectedProcedure
-    .input(z.object({ habitId: z.string().uuid(), days: z.number().min(1).max(365) }))
+    .input(
+      z.object({ habitId: z.string().uuid(), days: z.number().min(1).max(365) })
+    )
     .query(async ({ ctx, input }) => {
       const to = new Date();
       const from = new Date();
       from.setDate(from.getDate() - input.days);
 
-      const { data } = await ctx.supabase
-        .from("habit_completions")
-        .select("local_date, completed")
-        .eq("habit_id", input.habitId)
-        .eq("user_id", ctx.user.id)
-        .gte("local_date", from.toISOString().slice(0, 10))
-        .lte("local_date", to.toISOString().slice(0, 10))
-        .order("local_date", { ascending: true });
+      const rows = await ctx.db
+        .select({
+          localDate: habitCompletions.localDate,
+          completed: habitCompletions.completed,
+        })
+        .from(habitCompletions)
+        .where(
+          and(
+            eq(habitCompletions.habitId, input.habitId),
+            eq(habitCompletions.userId, ctx.user.id),
+            gte(habitCompletions.localDate, from.toISOString().slice(0, 10)),
+            lte(habitCompletions.localDate, to.toISOString().slice(0, 10))
+          )
+        )
+        .orderBy(asc(habitCompletions.localDate));
 
-      return data ?? [];
+      return rows;
     }),
 });

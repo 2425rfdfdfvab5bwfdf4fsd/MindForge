@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { generateEmbedding } from "./embeddings";
+import { db } from "@/server/db";
+import { userMemories } from "@/shared/schema";
 
 const MEMORY_TYPES = [
   "preference",
@@ -33,19 +34,12 @@ Rules:
   identity: how the user sees themselves or wants to be seen
   pattern: behavioral patterns (recurring actions or avoidance)
 
-Good examples:
-- "User wakes at 6am consistently during the week"
-- "User struggles with night snacking after 10pm when stressed"
-- "User fears disappointing their family if they fail"
-
 Text to analyze:
 ${text}`;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function extractAndStoreMemories(
-  supabase: any,
   userId: string,
-  sessionId: string,
+  _sessionId: string,
   text: string
 ): Promise<void> {
   if (!process.env.GEMINI_API_KEY) return;
@@ -77,26 +71,16 @@ export async function extractAndStoreMemories(
       )
       .slice(0, 3);
 
-    // Generate embeddings and insert in parallel
     await Promise.allSettled(
-      memories.map(async (mem) => {
-        let embedding: number[] = [];
-        try {
-          embedding = await generateEmbedding(mem.content);
-        } catch {
-          // Embedding failure shouldn't block storage
-        }
-
-        await supabase.from("user_memories").insert({
-          user_id: userId,
-          source_session_id: sessionId,
+      memories.map((mem) =>
+        db.insert(userMemories).values({
+          userId,
           content: mem.content,
-          memory_type: mem.memory_type,
-          embedding: embedding.length > 0 ? embedding : null,
-        });
-      })
+          memoryType: mem.memory_type,
+        })
+      )
     );
   } catch {
-    // Memory extraction is a background task — never throw
+    // Background task — never throw
   }
 }

@@ -1,5 +1,6 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { jwtVerify } from "jose";
+import { COOKIE_NAME } from "@/lib/auth";
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -11,41 +12,32 @@ const PROTECTED_PATHS = [
   "/analytics",
   "/settings",
   "/upgrade",
+  "/onboarding",
 ];
 
-export async function middleware(request: NextRequest) {
-  // If Supabase isn't configured yet, pass all requests through
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) {
-    return NextResponse.next({ request });
+const getSecret = () =>
+  new TextEncoder().encode(
+    process.env.SESSION_SECRET ?? "fallback-dev-secret-32chars!!!"
+  );
+
+async function getUserFromCookies(
+  request: NextRequest
+): Promise<{ id: string } | null> {
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, getSecret());
+    return { id: payload.id as string };
+  } catch {
+    return null;
   }
+}
 
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) =>
-          request.cookies.set(name, value)
-        );
-        supabaseResponse = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          supabaseResponse.cookies.set(name, value, options)
-        );
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // No session → guard protected routes
+  const user = await getUserFromCookies(request);
+
   if (!user) {
     const isProtected = PROTECTED_PATHS.some(
       (p) => pathname === p || pathname.startsWith(`${p}/`)
@@ -55,31 +47,20 @@ export async function middleware(request: NextRequest) {
       url.pathname = "/login";
       return NextResponse.redirect(url);
     }
-    return supabaseResponse;
+    return NextResponse.next();
   }
 
-  // Has session → redirect away from /login
   if (pathname === "/login") {
-    const { data: profile } = await supabase
-      .from("users")
-      .select("onboarding_complete, onboarding_step")
-      .eq("id", user.id)
-      .single();
-
     const url = request.nextUrl.clone();
-    if (!profile?.onboarding_complete) {
-      url.pathname = `/onboarding/${profile?.onboarding_step ?? "mirror"}`;
-    } else {
-      url.pathname = "/dashboard";
-    }
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/billing/webhook).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/auth|api/billing/webhook).*)",
   ],
 };

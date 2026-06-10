@@ -1,11 +1,12 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSessionFromRequest } from "@/lib/auth";
+import { db } from "@/server/db";
+import { ruleFortyEvents } from "@/shared/schema";
 import { awardXP, XP_AMOUNTS } from "@/lib/xp";
 import { checkFortyPercentSurvivor } from "@/lib/badges";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  const session = await getSessionFromRequest(request);
+  if (!session) return new Response("Unauthorized", { status: 401 });
 
   let body: {
     choice: "took_step" | "declined";
@@ -27,29 +28,23 @@ export async function POST(request: Request) {
     return new Response("Invalid triggered_by", { status: 400 });
   }
 
-  // Insert event
-  const { error: insertError } = await supabase.from("rule_forty_events").insert({
-    user_id: user.id,
-    triggered_by,
-    habit_id: habit_id ?? null,
+  await db.insert(ruleFortyEvents).values({
+    userId: session.id,
+    triggeredBy: triggered_by,
+    habitId: habit_id ?? null,
     choice,
   });
 
-  if (insertError) return new Response(insertError.message, { status: 500 });
-
   let xpResult = null;
-
   if (choice === "took_step") {
-    // Award 15 XP — fire badge check in parallel
     const [xp] = await Promise.all([
       awardXP(
-        supabase,
-        user.id,
+        session.id,
         XP_AMOUNTS.forty_percent,
         "40% Rule: took the step",
         "forty_percent"
       ),
-      checkFortyPercentSurvivor(supabase, user.id),
+      checkFortyPercentSurvivor(session.id),
     ]);
     xpResult = xp;
   }
