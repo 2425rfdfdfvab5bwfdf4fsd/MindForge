@@ -21,6 +21,10 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 }
 
+export async function getCurrentUser(): Promise<SessionUser | null> {
+  return getSession();
+}
+
 export async function getSessionFromRequest(
   request: Request
 ): Promise<SessionUser | null> {
@@ -45,7 +49,7 @@ export function sessionCookieOptions() {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
-    maxAge: 7 * 24 * 60 * 60,
+    maxAge: 14 * 24 * 60 * 60, // 14 days per spec
     path: "/",
   };
 }

@@ -3,7 +3,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ["pg", "firebase-admin"],
+    serverComponentsExternalPackages: ["firebase-admin"],
   },
   allowedDevOrigins: [
     "*.replit.dev",
@@ -20,6 +20,4 @@ export default withSentryConfig(nextConfig, {
   project: process.env.SENTRY_PROJECT,
   widenClientFileUpload: false,
   hideSourceMaps: true,
-  disableLogger: true,
-  automaticVercelMonitors: false,
 });
