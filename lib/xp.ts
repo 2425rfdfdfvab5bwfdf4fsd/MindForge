@@ -1,6 +1,5 @@
-import { db } from "@/server/db";
-import { xpEvents, users } from "@/shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 export interface LevelInfo {
   level: number;
@@ -77,27 +76,26 @@ export async function awardXP(
   reason: string,
   eventType: XPEventType
 ): Promise<AwardXPResult> {
-  await db.insert(xpEvents).values({ userId, xpAmount: amount, reason, eventType });
+  const userRef = adminDb.collection("users").doc(userId);
 
-  const [user] = await db
-    .select({ xp: users.xp })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  await adminDb.collection("xp_events").add({
+    userId,
+    xpAmount: amount,
+    reason,
+    eventType,
+    createdAt: new Date().toISOString(),
+  });
 
-  const oldXP = user?.xp ?? 0;
+  const userSnap = await userRef.get();
+  const oldXP: number = userSnap.data()?.xp ?? 0;
   const newXP = oldXP + amount;
   const oldLevel = getLevelFromXP(oldXP).level;
   const newLevelInfo = getLevelFromXP(newXP);
   const leveledUp = newLevelInfo.level > oldLevel;
 
-  await db
-    .update(users)
-    .set({
-      xp: newXP,
-      ...(leveledUp ? { level: newLevelInfo.level } : {}),
-    })
-    .where(eq(users.id, userId));
+  const update: Record<string, unknown> = { xp: newXP, updatedAt: new Date().toISOString() };
+  if (leveledUp) update.level = newLevelInfo.level;
+  await userRef.update(update);
 
   if (newXP >= 500 && oldXP < 500) {
     const { checkAndAwardBadge } = await import("./badges");

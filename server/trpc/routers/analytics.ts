@@ -1,37 +1,22 @@
 import { z } from "zod";
-import { eq, and, gte, desc, asc, isNotNull, count } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
-import {
-  forgeScoreHistory,
-  users,
-  habits,
-  habitCompletions,
-  dailyCheckins,
-  xpEvents,
-  weeklyReports,
-} from "@/shared/schema";
+import { adminDb } from "@/lib/firebase/admin";
 
 export const analyticsRouter = router({
   forgeScoreHistory: protectedProcedure
     .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.db
-        .select({ score: forgeScoreHistory.score, recordedAt: forgeScoreHistory.recordedAt })
-        .from(forgeScoreHistory)
-        .where(
-          and(
-            eq(forgeScoreHistory.userId, ctx.user.id),
-            gte(
-              forgeScoreHistory.recordedAt,
-              new Date(Date.now() - input.days * 24 * 60 * 60 * 1000)
-            )
-          )
-        )
-        .orderBy(asc(forgeScoreHistory.recordedAt));
+      const since = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000).toISOString();
+      const snap = await adminDb
+        .collection("forge_score_history")
+        .where("userId", "==", ctx.user.id)
+        .where("recordedAt", ">=", since)
+        .orderBy("recordedAt")
+        .get();
 
-      return rows.map((r) => ({
-        date: (r.recordedAt as Date).toISOString().split("T")[0],
-        score: r.score,
+      return snap.docs.map((d) => ({
+        date: (d.data().recordedAt as string).split("T")[0],
+        score: d.data().score as number,
       }));
     }),
 
@@ -41,87 +26,59 @@ export const analyticsRouter = router({
       .toISOString()
       .split("T")[0];
 
-    const [profileRows, activeHabitRows, todayCompletionRows, recentCheckinRows] =
+    const [userSnap, activeHabitsSnap, todayCompletionsSnap, recentCheckinsSnap] =
       await Promise.all([
-        ctx.db
-          .select({ forgeScore: users.forgeScore })
-          .from(users)
-          .where(eq(users.id, ctx.user.id))
-          .limit(1),
-
-        ctx.db
-          .select({ id: habits.id })
-          .from(habits)
-          .where(
-            and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true))
-          ),
-
-        ctx.db
-          .select({
-            habitId: habitCompletions.habitId,
-            completed: habitCompletions.completed,
-          })
-          .from(habitCompletions)
-          .where(
-            and(
-              eq(habitCompletions.userId, ctx.user.id),
-              eq(habitCompletions.localDate, today)
-            )
-          ),
-
-        ctx.db
-          .select({
-            localDate: dailyCheckins.localDate,
-            honestyScore: dailyCheckins.honestyScore,
-          })
-          .from(dailyCheckins)
-          .where(
-            and(
-              eq(dailyCheckins.userId, ctx.user.id),
-              eq(dailyCheckins.onboardingMirror, false),
-              gte(dailyCheckins.localDate, fourteenDaysAgo)
-            )
-          )
-          .orderBy(desc(dailyCheckins.localDate)),
+        adminDb.collection("users").doc(ctx.user.id).get(),
+        adminDb
+          .collection("habits")
+          .where("userId", "==", ctx.user.id)
+          .where("isActive", "==", true)
+          .get(),
+        adminDb
+          .collection("habit_completions")
+          .where("userId", "==", ctx.user.id)
+          .where("localDate", "==", today)
+          .get(),
+        adminDb
+          .collection("daily_checkins")
+          .where("userId", "==", ctx.user.id)
+          .where("onboardingMirror", "==", false)
+          .where("localDate", ">=", fourteenDaysAgo)
+          .orderBy("localDate", "desc")
+          .get(),
       ]);
 
-    const forgeScore = profileRows[0]?.forgeScore ?? 0;
-    const activeHabitIds = new Set(activeHabitRows.map((h) => h.id));
-    const completedToday = todayCompletionRows.filter(
-      (c) => activeHabitIds.has(c.habitId) && c.completed
+    const forgeScore = userSnap.data()?.forgeScore ?? 0;
+    const activeHabitIds = new Set(activeHabitsSnap.docs.map((d) => d.id));
+    const completedToday = todayCompletionsSnap.docs.filter(
+      (d) => activeHabitIds.has(d.data().habitId) && d.data().completed
     ).length;
 
     const habitStats = {
       total: activeHabitIds.size,
       completedToday,
-      completionRate:
-        activeHabitIds.size > 0
-          ? Math.round((completedToday / activeHabitIds.size) * 100)
-          : 0,
+      completionRate: activeHabitIds.size > 0
+        ? Math.round((completedToday / activeHabitIds.size) * 100)
+        : 0,
     };
 
     const checkinDates = new Set(
-      recentCheckinRows.map((c) => c.localDate as string)
+      recentCheckinsSnap.docs.map((d) => d.data().localDate as string)
     );
     let checkinStreak = 0;
     const cursor = new Date(today);
     for (let i = 0; i < 14; i++) {
       const d = cursor.toISOString().split("T")[0];
-      if (checkinDates.has(d)) {
-        checkinStreak++;
-        cursor.setDate(cursor.getDate() - 1);
-      } else {
-        break;
-      }
+      if (checkinDates.has(d)) { checkinStreak++; cursor.setDate(cursor.getDate() - 1); }
+      else break;
     }
 
-    const honestyScores = recentCheckinRows
-      .map((c) => c.honestyScore)
+    const honestyScores = recentCheckinsSnap.docs
+      .map((d) => d.data().honestyScore as number | null)
       .filter((s): s is number => s !== null);
-    const avgHonestyScore =
-      honestyScores.length > 0
-        ? Math.round(honestyScores.reduce((a, b) => a + b, 0) / honestyScores.length)
-        : 0;
+    const avgHonestyScore = honestyScores.length > 0
+      ? Math.round(honestyScores.reduce((a, b) => a + b, 0) / honestyScores.length)
+      : 0;
 
     return { forgeScore, habitStats, checkinStreak, avgHonestyScore };
   }),
@@ -133,37 +90,28 @@ export const analyticsRouter = router({
         .toISOString()
         .split("T")[0];
 
-      const [activeHabits, completionRows] = await Promise.all([
-        ctx.db
-          .select({ id: habits.id })
-          .from(habits)
-          .where(
-            and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true))
-          ),
-
-        ctx.db
-          .select({
-            localDate: habitCompletions.localDate,
-            completed: habitCompletions.completed,
-          })
-          .from(habitCompletions)
-          .where(
-            and(
-              eq(habitCompletions.userId, ctx.user.id),
-              gte(habitCompletions.localDate, cutoff)
-            )
-          )
-          .orderBy(asc(habitCompletions.localDate)),
+      const [activeHabitsSnap, completionsSnap] = await Promise.all([
+        adminDb
+          .collection("habits")
+          .where("userId", "==", ctx.user.id)
+          .where("isActive", "==", true)
+          .get(),
+        adminDb
+          .collection("habit_completions")
+          .where("userId", "==", ctx.user.id)
+          .where("localDate", ">=", cutoff)
+          .orderBy("localDate")
+          .get(),
       ]);
 
-      const totalHabits = activeHabits.length;
+      const totalHabits = activeHabitsSnap.size;
       if (!totalHabits) return [];
 
       const byDate: Record<string, { total: number; done: number }> = {};
-      for (const row of completionRows) {
-        const d = row.localDate as string;
-        if (!byDate[d]) byDate[d] = { total: totalHabits, done: 0 };
-        if (row.completed) byDate[d].done++;
+      for (const d of completionsSnap.docs) {
+        const date = d.data().localDate as string;
+        if (!byDate[date]) byDate[date] = { total: totalHabits, done: 0 };
+        if (d.data().completed) byDate[date].done++;
       }
 
       return Object.entries(byDate)
@@ -181,52 +129,37 @@ export const analyticsRouter = router({
         .toISOString()
         .split("T")[0];
 
-      const rows = await ctx.db
-        .select({
-          localDate: dailyCheckins.localDate,
-          honestyScore: dailyCheckins.honestyScore,
-        })
-        .from(dailyCheckins)
-        .where(
-          and(
-            eq(dailyCheckins.userId, ctx.user.id),
-            eq(dailyCheckins.onboardingMirror, false),
-            gte(dailyCheckins.localDate, cutoff),
-            isNotNull(dailyCheckins.honestyScore)
-          )
-        )
-        .orderBy(asc(dailyCheckins.localDate));
+      const snap = await adminDb
+        .collection("daily_checkins")
+        .where("userId", "==", ctx.user.id)
+        .where("onboardingMirror", "==", false)
+        .where("localDate", ">=", cutoff)
+        .orderBy("localDate")
+        .get();
 
-      return rows.map((r) => ({
-        date: r.localDate as string,
-        score: r.honestyScore!,
-      }));
+      return snap.docs
+        .filter((d) => d.data().honestyScore != null)
+        .map((d) => ({
+          date: d.data().localDate as string,
+          score: d.data().honestyScore as number,
+        }));
     }),
 
   xpHistory: protectedProcedure
     .input(z.object({ days: z.number().int().min(1).max(365).default(30) }))
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.db
-        .select({
-          xpAmount: xpEvents.xpAmount,
-          createdAt: xpEvents.createdAt,
-        })
-        .from(xpEvents)
-        .where(
-          and(
-            eq(xpEvents.userId, ctx.user.id),
-            gte(
-              xpEvents.createdAt,
-              new Date(Date.now() - input.days * 24 * 60 * 60 * 1000)
-            )
-          )
-        )
-        .orderBy(asc(xpEvents.createdAt));
+      const since = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000).toISOString();
+      const snap = await adminDb
+        .collection("xp_events")
+        .where("userId", "==", ctx.user.id)
+        .where("createdAt", ">=", since)
+        .orderBy("createdAt")
+        .get();
 
       const byDate: Record<string, number> = {};
-      for (const row of rows) {
-        const d = (row.createdAt as Date).toISOString().split("T")[0];
-        byDate[d] = (byDate[d] ?? 0) + row.xpAmount;
+      for (const d of snap.docs) {
+        const date = (d.data().createdAt as string).split("T")[0];
+        byDate[date] = (byDate[date] ?? 0) + (d.data().xpAmount as number);
       }
 
       return Object.entries(byDate)
@@ -235,14 +168,15 @@ export const analyticsRouter = router({
     }),
 
   getLatestWeeklyReport: protectedProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db
-      .select()
-      .from(weeklyReports)
-      .where(eq(weeklyReports.userId, ctx.user.id))
-      .orderBy(desc(weeklyReports.weekStartDate))
-      .limit(1);
+    const snap = await adminDb
+      .collection("weekly_reports")
+      .where("userId", "==", ctx.user.id)
+      .orderBy("weekStartDate", "desc")
+      .limit(1)
+      .get();
 
-    return rows[0] ?? null;
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() };
   }),
 
   habitCompletionByHabit: protectedProcedure
@@ -252,32 +186,28 @@ export const analyticsRouter = router({
         .toISOString()
         .split("T")[0];
 
-      const activeHabits = await ctx.db
-        .select({ id: habits.id, name: habits.name })
-        .from(habits)
-        .where(and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true)));
+      const [activeHabitsSnap, completionsSnap] = await Promise.all([
+        adminDb
+          .collection("habits")
+          .where("userId", "==", ctx.user.id)
+          .where("isActive", "==", true)
+          .get(),
+        adminDb
+          .collection("habit_completions")
+          .where("userId", "==", ctx.user.id)
+          .where("localDate", ">=", cutoff)
+          .get(),
+      ]);
 
-      if (!activeHabits.length) return [];
+      if (activeHabitsSnap.empty) return [];
 
-      const completionRows = await ctx.db
-        .select({
-          habitId: habitCompletions.habitId,
-          completed: habitCompletions.completed,
-        })
-        .from(habitCompletions)
-        .where(
-          and(
-            eq(habitCompletions.userId, ctx.user.id),
-            gte(habitCompletions.localDate, cutoff)
-          )
-        );
-
-      return activeHabits.map((h) => {
-        const rows = completionRows.filter((r) => r.habitId === h.id);
-        const done = rows.filter((r) => r.completed).length;
+      return activeHabitsSnap.docs.map((h) => {
+        const rows = completionsSnap.docs.filter((d) => d.data().habitId === h.id);
+        const done = rows.filter((d) => d.data().completed).length;
         const total = rows.length;
+        const name = h.data().name as string;
         return {
-          name: h.name.length > 12 ? h.name.slice(0, 12) + "…" : h.name,
+          name: name.length > 12 ? name.slice(0, 12) + "…" : name,
           rate: total > 0 ? Math.round((done / total) * 100) : 0,
         };
       });
@@ -290,50 +220,34 @@ export const analyticsRouter = router({
         .toISOString()
         .split("T")[0];
 
-      const [profileRow, checkinRows, completionRows] = await Promise.all([
-        ctx.db
-          .select({ forgeScore: users.forgeScore })
-          .from(users)
-          .where(eq(users.id, ctx.user.id))
-          .limit(1),
-
-        ctx.db
-          .select({ honestyScore: dailyCheckins.honestyScore })
-          .from(dailyCheckins)
-          .where(
-            and(
-              eq(dailyCheckins.userId, ctx.user.id),
-              eq(dailyCheckins.onboardingMirror, false),
-              gte(dailyCheckins.localDate, cutoff),
-              isNotNull(dailyCheckins.honestyScore)
-            )
-          ),
-
-        ctx.db
-          .select({ completed: habitCompletions.completed })
-          .from(habitCompletions)
-          .where(
-            and(
-              eq(habitCompletions.userId, ctx.user.id),
-              gte(habitCompletions.localDate, cutoff),
-              eq(habitCompletions.completed, true)
-            )
-          ),
+      const [userSnap, checkinSnap, completionSnap] = await Promise.all([
+        adminDb.collection("users").doc(ctx.user.id).get(),
+        adminDb
+          .collection("daily_checkins")
+          .where("userId", "==", ctx.user.id)
+          .where("onboardingMirror", "==", false)
+          .where("localDate", ">=", cutoff)
+          .get(),
+        adminDb
+          .collection("habit_completions")
+          .where("userId", "==", ctx.user.id)
+          .where("localDate", ">=", cutoff)
+          .where("completed", "==", true)
+          .get(),
       ]);
 
-      const scores = checkinRows
-        .map((r) => r.honestyScore)
+      const scores = checkinSnap.docs
+        .map((d) => d.data().honestyScore as number | null)
         .filter((s): s is number => s !== null);
-      const avgHonestyScore =
-        scores.length > 0
-          ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
-          : 0;
+      const avgHonestyScore = scores.length > 0
+        ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+        : 0;
 
       return {
-        forgeScore: profileRow[0]?.forgeScore ?? 0,
+        forgeScore: userSnap.data()?.forgeScore ?? 0,
         checkinCount: scores.length,
         avgHonestyScore,
-        habitsCompleted: completionRows.length,
+        habitsCompleted: completionSnap.size,
       };
     }),
 });

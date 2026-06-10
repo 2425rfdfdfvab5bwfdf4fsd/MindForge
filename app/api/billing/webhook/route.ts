@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/server/db";
-import { subscriptions, users } from "@/shared/schema";
-import { eq } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 import { verifyWebhookSignature, mapVariantToTier } from "@/lib/lemonsqueezy";
 
 export async function POST(request: Request) {
@@ -26,9 +24,7 @@ export async function POST(request: Request) {
   const dataObj = payload.data as Record<string, unknown> | undefined;
   const attrs = dataObj?.attributes as Record<string, unknown> | undefined;
 
-  if (!eventName || !attrs) {
-    return NextResponse.json({ received: true });
-  }
+  if (!eventName || !attrs) return NextResponse.json({ received: true });
 
   const userId = (customData?.user_id as string) ?? null;
   const lsSubscriptionId = dataObj?.id as string | undefined;
@@ -36,7 +32,7 @@ export async function POST(request: Request) {
   const variantId = String(attrs.variant_id ?? "");
 
   const rawStatus = attrs.status as string | undefined;
-  const statusMap: Record<string, "active" | "cancelled" | "past_due" | "expired"> = {
+  const statusMap: Record<string, string> = {
     active: "active",
     cancelled: "cancelled",
     past_due: "past_due",
@@ -45,9 +41,9 @@ export async function POST(request: Request) {
   };
 
   const currentPeriodEnd = attrs.renews_at
-    ? new Date(attrs.renews_at as string)
+    ? new Date(attrs.renews_at as string).toISOString()
     : attrs.ends_at
-    ? new Date(attrs.ends_at as string)
+    ? new Date(attrs.ends_at as string).toISOString()
     : null;
 
   try {
@@ -56,65 +52,92 @@ export async function POST(request: Request) {
         if (!userId || !lsSubscriptionId) break;
         const tier = mapVariantToTier(variantId) ?? "pro";
 
-        await db
-          .insert(subscriptions)
-          .values({
+        const existing = await adminDb
+          .collection("subscriptions")
+          .where("lemonsqueezySubscriptionId", "==", lsSubscriptionId)
+          .limit(1)
+          .get();
+
+        if (existing.empty) {
+          await adminDb.collection("subscriptions").add({
             userId,
             lemonsqueezyCustomerId: lsCustomerId || null,
             lemonsqueezySubscriptionId: lsSubscriptionId,
             tier,
             status: "active",
             currentPeriodEnd,
-          })
-          .onConflictDoUpdate({
-            target: subscriptions.lemonsqueezySubscriptionId,
-            set: { status: "active", tier, currentPeriodEnd, updatedAt: new Date() },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           });
+        } else {
+          await existing.docs[0].ref.update({
+            status: "active",
+            tier,
+            currentPeriodEnd,
+            updatedAt: new Date().toISOString(),
+          });
+        }
 
-        await db
-          .update(users)
-          .set({ tier, updatedAt: new Date() })
-          .where(eq(users.id, userId));
+        await adminDb.collection("users").doc(userId).update({
+          tier,
+          updatedAt: new Date().toISOString(),
+        });
         break;
       }
 
       case "subscription_updated": {
         if (!lsSubscriptionId) break;
         const status = statusMap[rawStatus ?? ""] ?? "active";
-        await db
-          .update(subscriptions)
-          .set({ status, currentPeriodEnd, updatedAt: new Date() })
-          .where(eq(subscriptions.lemonsqueezySubscriptionId, lsSubscriptionId));
+        const snap = await adminDb
+          .collection("subscriptions")
+          .where("lemonsqueezySubscriptionId", "==", lsSubscriptionId)
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          await snap.docs[0].ref.update({
+            status,
+            currentPeriodEnd,
+            updatedAt: new Date().toISOString(),
+          });
+        }
         break;
       }
 
       case "subscription_cancelled": {
         if (!lsSubscriptionId) break;
-        await db
-          .update(subscriptions)
-          .set({ status: "cancelled", updatedAt: new Date() })
-          .where(eq(subscriptions.lemonsqueezySubscriptionId, lsSubscriptionId));
+        const snap = await adminDb
+          .collection("subscriptions")
+          .where("lemonsqueezySubscriptionId", "==", lsSubscriptionId)
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          await snap.docs[0].ref.update({
+            status: "cancelled",
+            updatedAt: new Date().toISOString(),
+          });
+        }
         break;
       }
 
       case "subscription_expired": {
         if (!lsSubscriptionId) break;
-        const [sub] = await db
-          .select({ userId: subscriptions.userId })
-          .from(subscriptions)
-          .where(eq(subscriptions.lemonsqueezySubscriptionId, lsSubscriptionId))
-          .limit(1);
-
-        await db
-          .update(subscriptions)
-          .set({ status: "expired", updatedAt: new Date() })
-          .where(eq(subscriptions.lemonsqueezySubscriptionId, lsSubscriptionId));
-
-        if (sub?.userId) {
-          await db
-            .update(users)
-            .set({ tier: "free", updatedAt: new Date() })
-            .where(eq(users.id, sub.userId));
+        const snap = await adminDb
+          .collection("subscriptions")
+          .where("lemonsqueezySubscriptionId", "==", lsSubscriptionId)
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          const sub = snap.docs[0].data();
+          await snap.docs[0].ref.update({
+            status: "expired",
+            updatedAt: new Date().toISOString(),
+          });
+          if (sub.userId) {
+            await adminDb.collection("users").doc(sub.userId).update({
+              tier: "free",
+              updatedAt: new Date().toISOString(),
+            });
+          }
         }
         break;
       }

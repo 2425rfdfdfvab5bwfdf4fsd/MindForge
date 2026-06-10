@@ -1,18 +1,18 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, desc, count, or, ilike, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
-import { cookieJarEntries } from "@/shared/schema";
+import { adminDb } from "@/lib/firebase/admin";
 import { awardXP } from "@/lib/xp";
 import { checkCookieJarFounder } from "@/lib/badges";
 
 export const cookiejarRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.db
-      .select()
-      .from(cookieJarEntries)
-      .where(eq(cookieJarEntries.userId, ctx.user.id))
-      .orderBy(desc(cookieJarEntries.createdAt));
+    const snap = await adminDb
+      .collection("cookie_jar_entries")
+      .where("userId", "==", ctx.user.id)
+      .orderBy("createdAt", "desc")
+      .get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }),
 
   add: protectedProcedure
@@ -24,136 +24,101 @@ export const cookiejarRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Free tier: max 5 entries
-      const [{ value: entryCount }] = await ctx.db
-        .select({ value: count() })
-        .from(cookieJarEntries)
-        .where(eq(cookieJarEntries.userId, ctx.user.id));
+      const countSnap = await adminDb
+        .collection("cookie_jar_entries")
+        .where("userId", "==", ctx.user.id)
+        .get();
 
-      const profile = ctx.userProfile;
-      const isFree = !profile || profile.tier === "free";
-
-      if (isFree && Number(entryCount) >= 5) {
+      const isFree = ctx.userProfile?.tier === "free";
+      if (isFree && countSnap.size >= 5) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: JSON.stringify({ upgradeRequired: true }),
         });
       }
 
-      const [entry] = await ctx.db
-        .insert(cookieJarEntries)
-        .values({
-          userId: ctx.user.id,
-          title: input.title,
-          description: input.description,
-          dateOfVictory: input.dateOfVictory ?? null,
-        })
-        .returning();
+      const ref = await adminDb.collection("cookie_jar_entries").add({
+        userId: ctx.user.id,
+        title: input.title,
+        description: input.description,
+        dateOfVictory: input.dateOfVictory ?? null,
+        createdAt: new Date().toISOString(),
+      });
 
       await awardXP(ctx.user.id, 25, "Cookie Jar entry added", "cookie_jar");
 
-      // Check badge: cookie_jar_founder at 10 entries
-      const [{ value: newCount }] = await ctx.db
-        .select({ value: count() })
-        .from(cookieJarEntries)
-        .where(eq(cookieJarEntries.userId, ctx.user.id));
+      const newCount = countSnap.size + 1;
+      if (newCount >= 10) checkCookieJarFounder(ctx.user.id).catch(() => {});
 
-      if (Number(newCount) >= 10) {
-        checkCookieJarFounder(ctx.user.id).catch(() => {});
-      }
-
-      return entry;
+      const snap = await ref.get();
+      return { id: ref.id, ...snap.data() };
     }),
 
   edit: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string(),
         title: z.string().min(1).max(80).optional(),
         description: z.string().min(1).max(500).optional(),
         dateOfVictory: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.db
-        .select({ userId: cookieJarEntries.userId })
-        .from(cookieJarEntries)
-        .where(eq(cookieJarEntries.id, input.id))
-        .limit(1);
+      const ref = adminDb.collection("cookie_jar_entries").doc(input.id);
+      const snap = await ref.get();
 
-      if (!existing || existing.userId !== ctx.user.id) {
+      if (!snap.exists || snap.data()?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      const updates: Partial<typeof cookieJarEntries.$inferInsert> = {};
-      if (input.title !== undefined) updates.title = input.title;
-      if (input.description !== undefined) updates.description = input.description;
-      if (input.dateOfVictory !== undefined) updates.dateOfVictory = input.dateOfVictory;
+      const update: Record<string, unknown> = {};
+      if (input.title !== undefined) update.title = input.title;
+      if (input.description !== undefined) update.description = input.description;
+      if (input.dateOfVictory !== undefined) update.dateOfVictory = input.dateOfVictory;
 
-      const [updated] = await ctx.db
-        .update(cookieJarEntries)
-        .set(updates)
-        .where(eq(cookieJarEntries.id, input.id))
-        .returning();
-
-      return updated;
+      await ref.update(update);
+      const updated = await ref.get();
+      return { id: ref.id, ...updated.data() };
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.db
-        .select({ userId: cookieJarEntries.userId })
-        .from(cookieJarEntries)
-        .where(eq(cookieJarEntries.id, input.id))
-        .limit(1);
+      const ref = adminDb.collection("cookie_jar_entries").doc(input.id);
+      const snap = await ref.get();
 
-      if (!existing || existing.userId !== ctx.user.id) {
+      if (!snap.exists || snap.data()?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      await ctx.db
-        .delete(cookieJarEntries)
-        .where(eq(cookieJarEntries.id, input.id));
-
+      await ref.delete();
       return { deleted: true };
     }),
 
   search: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      const q = `%${input.query}%`;
+      const snap = await adminDb
+        .collection("cookie_jar_entries")
+        .where("userId", "==", ctx.user.id)
+        .orderBy("createdAt", "desc")
+        .limit(100)
+        .get();
 
-      // Apply SQL ILIKE filter at the database level so all user entries are
-      // searched — not just the most-recent 20. Client-side scoring is applied
-      // afterwards to rank multi-word matches.
-      const results = await ctx.db
-        .select()
-        .from(cookieJarEntries)
-        .where(
-          and(
-            eq(cookieJarEntries.userId, ctx.user.id),
-            or(
-              ilike(cookieJarEntries.title, q),
-              ilike(cookieJarEntries.description, q)
-            )
-          )
-        )
-        .orderBy(desc(cookieJarEntries.createdAt))
-        .limit(20);
+      const q = input.query.toLowerCase();
+      const words = q.split(/\s+/).filter(Boolean);
 
-      // Client-side multi-word scoring (pgvector/semantic upgrade path later)
-      const words = input.query.toLowerCase().split(/\s+/).filter(Boolean);
-      const scored = results
-        .map((e) => {
-          const corpus = `${e.title} ${e.description}`.toLowerCase();
+      const results = snap.docs
+        .map((d) => {
+          const data = d.data();
+          const corpus = `${data.title} ${data.description}`.toLowerCase();
           const matchCount = words.filter((w) => corpus.includes(w)).length;
-          const similarity = matchCount / words.length;
-          return { ...e, similarity };
+          return { id: d.id, ...data, similarity: matchCount / words.length };
         })
+        .filter((e) => e.similarity > 0)
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, 5);
 
-      return scored;
+      return results;
     }),
 });

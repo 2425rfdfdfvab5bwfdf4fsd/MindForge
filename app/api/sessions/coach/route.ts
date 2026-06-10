@@ -1,7 +1,5 @@
 import { getSessionFromRequest } from "@/lib/auth";
-import { db } from "@/server/db";
-import { coachingSessions } from "@/shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 import { extractAndStoreMemories } from "@/lib/gemini/memory";
 
 interface MessagePart {
@@ -32,36 +30,29 @@ export async function POST(request: Request) {
   const { action, sessionId, message, fullText } = body;
 
   if (action === "create") {
-    const [row] = await db
-      .insert(coachingSessions)
-      .values({
-        userId: session.id,
-        sessionType: "direct_chat",
-        messages: message ? [message] : [],
-      })
-      .returning({ id: coachingSessions.id });
-    return Response.json({ sessionId: row.id });
+    const ref = await adminDb.collection("coaching_sessions").add({
+      userId: session.id,
+      sessionType: "direct_chat",
+      messages: message ? [message] : [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    return Response.json({ sessionId: ref.id });
   }
 
   if (action === "append") {
     if (!sessionId || !message) {
       return new Response("sessionId and message required", { status: 400 });
     }
-    const [existing] = await db
-      .select({ messages: coachingSessions.messages, userId: coachingSessions.userId })
-      .from(coachingSessions)
-      .where(eq(coachingSessions.id, sessionId))
-      .limit(1);
+    const docRef = adminDb.collection("coaching_sessions").doc(sessionId);
+    const existing = await docRef.get();
 
-    if (!existing || existing.userId !== session.id) {
+    if (!existing.exists || existing.data()?.userId !== session.id) {
       return new Response("Not found", { status: 404 });
     }
 
-    const messages = [...((existing.messages as SessionMessage[]) ?? []), message];
-    await db
-      .update(coachingSessions)
-      .set({ messages })
-      .where(eq(coachingSessions.id, sessionId));
+    const messages = [...((existing.data()?.messages as SessionMessage[]) ?? []), message];
+    await docRef.update({ messages, updatedAt: new Date().toISOString() });
     return new Response(null, { status: 204 });
   }
 
@@ -83,15 +74,15 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 100);
 
-  const rows = await db
-    .select({ id: coachingSessions.id, messages: coachingSessions.messages, createdAt: coachingSessions.createdAt })
-    .from(coachingSessions)
-    .where(eq(coachingSessions.userId, session.id))
-    .orderBy(desc(coachingSessions.createdAt))
-    .limit(1);
+  const snap = await adminDb
+    .collection("coaching_sessions")
+    .where("userId", "==", session.id)
+    .orderBy("createdAt", "desc")
+    .limit(1)
+    .get();
 
-  const row = rows[0];
-  const messages = (row?.messages as SessionMessage[]) ?? [];
+  const row = snap.docs[0];
+  const messages = (row?.data()?.messages as SessionMessage[]) ?? [];
 
   return Response.json({
     sessionId: row?.id ?? null,

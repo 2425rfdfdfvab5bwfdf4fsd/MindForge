@@ -2,3 +2,4 @@
 - [Habits list query shape](habits-list-shape.md) — habits.list returns snake_case output shape intentionally; detail page must use habit_type not habitType
 - [TypeScript exclusions](ts-exclusions.md) — shared/models and server/replit_integrations excluded from tsconfig; both are legacy files not used by the active app
 - [Spec compliance audit](spec-audit.md) — full audit results: nearly 100% compliant; one fix applied (app layout onboarding guard)
+- [Firebase migration](firebase-migration.md) — Firebase Auth + Firestore replaces JWT/Replit Auth + PostgreSQL/Drizzle; key constraints documented

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { jwtVerify } from "jose";
-import { COOKIE_NAME } from "@/lib/auth";
+
+const COOKIE_NAME = "mf_session";
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -15,30 +15,11 @@ const PROTECTED_PATHS = [
   "/onboarding",
 ];
 
-const getSecret = () =>
-  new TextEncoder().encode(
-    process.env.SESSION_SECRET ?? "fallback-dev-secret-32chars!!!"
-  );
-
-async function getUserFromCookies(
-  request: NextRequest
-): Promise<{ id: string } | null> {
-  const token = request.cookies.get(COOKIE_NAME)?.value;
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, getSecret());
-    return { id: payload.id as string };
-  } catch {
-    return null;
-  }
-}
-
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const token = request.cookies.get(COOKIE_NAME)?.value;
 
-  const user = await getUserFromCookies(request);
-
-  if (!user) {
+  if (!token) {
     const isProtected = PROTECTED_PATHS.some(
       (p) => pathname === p || pathname.startsWith(`${p}/`)
     );

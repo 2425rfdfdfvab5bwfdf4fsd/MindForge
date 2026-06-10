@@ -1,13 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, and, gte, lte, inArray, count, desc, asc } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
-import {
-  habits,
-  habitCompletions,
-  habitStreaks,
-  users,
-} from "@/shared/schema";
+import { adminDb } from "@/lib/firebase/admin";
 import { recalculateStreak, recalculateForgeScore } from "@/lib/streak";
 import { awardXP } from "@/lib/xp";
 import { trackServerEvent } from "@/lib/posthog/server";
@@ -18,55 +12,56 @@ export const habitsRouter = router({
   list: protectedProcedure
     .input(z.object({ localDate: z.string() }))
     .query(async ({ ctx, input }) => {
-      const habitsList = await ctx.db
-        .select()
-        .from(habits)
-        .where(and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true)))
-        .orderBy(asc(habits.sortOrder));
+      const habitsSnap = await adminDb
+        .collection("habits")
+        .where("userId", "==", ctx.user.id)
+        .where("isActive", "==", true)
+        .orderBy("sortOrder")
+        .get();
 
-      if (!habitsList.length) return [];
+      if (habitsSnap.empty) return [];
 
-      const habitIds = habitsList.map((h) => h.id);
+      const habitIds = habitsSnap.docs.map((d) => d.id);
 
-      const [completions, streaks] = await Promise.all([
-        ctx.db
-          .select({
-            habitId: habitCompletions.habitId,
-            completed: habitCompletions.completed,
-          })
-          .from(habitCompletions)
-          .where(
-            and(
-              inArray(habitCompletions.habitId, habitIds),
-              eq(habitCompletions.localDate, input.localDate)
-            )
-          ),
-        ctx.db
-          .select({
-            habitId: habitStreaks.habitId,
-            currentStreak: habitStreaks.currentStreak,
-            longestStreak: habitStreaks.longestStreak,
-          })
-          .from(habitStreaks)
-          .where(inArray(habitStreaks.habitId, habitIds)),
+      const [completionsSnap, streaksResults] = await Promise.all([
+        adminDb
+          .collection("habit_completions")
+          .where("userId", "==", ctx.user.id)
+          .where("localDate", "==", input.localDate)
+          .get(),
+        Promise.all(
+          habitIds.map((id) =>
+            adminDb.collection("habit_streaks").doc(id).get()
+          )
+        ),
       ]);
 
-      const completionMap = new Map(
-        completions.map((c) => [c.habitId, c.completed])
-      );
-      const streakMap = new Map(streaks.map((s) => [s.habitId, s]));
+      const completionMap = new Map<string, boolean>();
+      completionsSnap.docs.forEach((d) => {
+        const data = d.data();
+        if (habitIds.includes(data.habitId)) {
+          completionMap.set(data.habitId, data.completed);
+        }
+      });
 
-      return habitsList.map((h) => {
-        const completedVal = completionMap.get(h.id);
+      const streakMap = new Map<string, { currentStreak: number; longestStreak: number }>();
+      streaksResults.forEach((s) => {
+        if (s.exists) {
+          streakMap.set(s.id, {
+            currentStreak: s.data()?.currentStreak ?? 0,
+            longestStreak: s.data()?.longestStreak ?? 0,
+          });
+        }
+      });
+
+      return habitsSnap.docs.map((d) => {
+        const h = d.data();
+        const completedVal = completionMap.get(d.id);
         const today_status =
-          completedVal === undefined
-            ? "pending"
-            : completedVal
-            ? "completed"
-            : "missed";
-        const streak = streakMap.get(h.id);
+          completedVal === undefined ? "pending" : completedVal ? "completed" : "missed";
+        const streak = streakMap.get(d.id);
         return {
-          id: h.id,
+          id: d.id,
           name: h.name,
           category: h.category,
           habit_type: h.habitType,
@@ -86,26 +81,21 @@ export const habitsRouter = router({
         name: z.string().min(1).max(60),
         category: z.enum(["health", "mind", "avoid", "perform"]),
         habitType: z.enum(["build", "avoid"]),
-        targetFrequency: z
-          .enum(["daily", "weekdays", "custom"])
-          .default("daily"),
+        targetFrequency: z.enum(["daily", "weekdays", "custom"]).default("daily"),
         targetDays: z.array(z.number().min(0).max(6)).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [{ value: habitCount }] = await ctx.db
-        .select({ value: count() })
-        .from(habits)
-        .where(and(eq(habits.userId, ctx.user.id), eq(habits.isActive, true)));
+      const existingSnap = await adminDb
+        .collection("habits")
+        .where("userId", "==", ctx.user.id)
+        .where("isActive", "==", true)
+        .get();
 
-      if (habitCount >= FREE_TIER_LIMIT) {
-        const [profile] = await ctx.db
-          .select({ tier: users.tier })
-          .from(users)
-          .where(eq(users.id, ctx.user.id))
-          .limit(1);
-
-        if (!profile || profile.tier === "free") {
+      if (existingSnap.size >= FREE_TIER_LIMIT) {
+        const userSnap = await adminDb.collection("users").doc(ctx.user.id).get();
+        const tier = userSnap.data()?.tier ?? "free";
+        if (tier === "free") {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: JSON.stringify({ upgradeRequired: true }),
@@ -120,23 +110,25 @@ export const habitsRouter = router({
           ? input.targetDays
           : [0, 1, 2, 3, 4, 5, 6];
 
-      const [habit] = await ctx.db
-        .insert(habits)
-        .values({
-          userId: ctx.user.id,
-          name: input.name,
-          category: input.category,
-          habitType: input.habitType,
-          targetFrequency: input.targetFrequency,
-          targetDays,
-        })
-        .returning();
+      const ref = await adminDb.collection("habits").add({
+        userId: ctx.user.id,
+        name: input.name,
+        category: input.category,
+        habitType: input.habitType,
+        targetFrequency: input.targetFrequency,
+        targetDays,
+        sortOrder: existingSnap.size,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      });
 
-      await ctx.db.insert(habitStreaks).values({
-        habitId: habit.id,
+      await adminDb.collection("habit_streaks").doc(ref.id).set({
+        habitId: ref.id,
         userId: ctx.user.id,
         currentStreak: 0,
         longestStreak: 0,
+        lastCompletedDate: null,
+        updatedAt: new Date().toISOString(),
       });
 
       trackServerEvent(ctx.user.id, "habit_created", {
@@ -144,189 +136,138 @@ export const habitsRouter = router({
         habit_type: input.habitType,
       });
 
-      return habit;
+      const snap = await ref.get();
+      return { id: ref.id, ...snap.data() };
     }),
 
   update: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string(),
         name: z.string().max(60).optional(),
-        category: z
-          .enum(["health", "mind", "avoid", "perform"])
-          .optional(),
-        targetFrequency: z
-          .enum(["daily", "weekdays", "custom"])
-          .optional(),
+        category: z.enum(["health", "mind", "avoid", "perform"]).optional(),
+        targetFrequency: z.enum(["daily", "weekdays", "custom"]).optional(),
         targetDays: z.array(z.number().min(0).max(6)).optional(),
         sortOrder: z.number().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.db
-        .select({ userId: habits.userId })
-        .from(habits)
-        .where(eq(habits.id, input.id))
-        .limit(1);
+      const ref = adminDb.collection("habits").doc(input.id);
+      const snap = await ref.get();
 
-      if (!existing || existing.userId !== ctx.user.id) {
+      if (!snap.exists || snap.data()?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      const [updated] = await ctx.db
-        .update(habits)
-        .set({
-          ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.category !== undefined ? { category: input.category } : {}),
-          ...(input.targetFrequency !== undefined
-            ? { targetFrequency: input.targetFrequency }
-            : {}),
-          ...(input.targetDays !== undefined
-            ? { targetDays: input.targetDays }
-            : {}),
-          ...(input.sortOrder !== undefined
-            ? { sortOrder: input.sortOrder }
-            : {}),
-        })
-        .where(eq(habits.id, input.id))
-        .returning();
+      const update: Record<string, unknown> = {};
+      if (input.name !== undefined) update.name = input.name;
+      if (input.category !== undefined) update.category = input.category;
+      if (input.targetFrequency !== undefined) update.targetFrequency = input.targetFrequency;
+      if (input.targetDays !== undefined) update.targetDays = input.targetDays;
+      if (input.sortOrder !== undefined) update.sortOrder = input.sortOrder;
 
-      return updated;
+      await ref.update(update);
+      const updated = await ref.get();
+      return { id: ref.id, ...updated.data() };
     }),
 
   archive: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.db
-        .select({ userId: habits.userId })
-        .from(habits)
-        .where(eq(habits.id, input.id))
-        .limit(1);
+      const ref = adminDb.collection("habits").doc(input.id);
+      const snap = await ref.get();
 
-      if (!existing || existing.userId !== ctx.user.id) {
+      if (!snap.exists || snap.data()?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      const [updated] = await ctx.db
-        .update(habits)
-        .set({ isActive: false })
-        .where(eq(habits.id, input.id))
-        .returning();
-
-      return updated;
+      await ref.update({ isActive: false });
+      const updated = await ref.get();
+      return { id: ref.id, ...updated.data() };
     }),
 
   logCompletion: protectedProcedure
     .input(
       z.object({
-        habitId: z.string().uuid(),
+        habitId: z.string(),
         localDate: z.string(),
         completed: z.boolean(),
         notes: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [habit] = await ctx.db
-        .select({ userId: habits.userId })
-        .from(habits)
-        .where(eq(habits.id, input.habitId))
-        .limit(1);
-
-      if (!habit || habit.userId !== ctx.user.id) {
+      const habitSnap = await adminDb.collection("habits").doc(input.habitId).get();
+      if (!habitSnap.exists || habitSnap.data()?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
 
-      const [prevStreak] = await ctx.db
-        .select({ currentStreak: habitStreaks.currentStreak })
-        .from(habitStreaks)
-        .where(eq(habitStreaks.habitId, input.habitId))
-        .limit(1);
+      const streakSnap = await adminDb.collection("habit_streaks").doc(input.habitId).get();
+      const prevStreakVal = streakSnap.data()?.currentStreak ?? 0;
 
-      const prevStreakVal = prevStreak?.currentStreak ?? 0;
+      const existingSnap = await adminDb
+        .collection("habit_completions")
+        .where("habitId", "==", input.habitId)
+        .where("localDate", "==", input.localDate)
+        .limit(1)
+        .get();
 
-      await ctx.db
-        .insert(habitCompletions)
-        .values({
+      if (!existingSnap.empty) {
+        await existingSnap.docs[0].ref.update({
+          completed: input.completed,
+          notes: input.notes ?? null,
+          completionTime: new Date().toISOString(),
+        });
+      } else {
+        await adminDb.collection("habit_completions").add({
           habitId: input.habitId,
           userId: ctx.user.id,
           localDate: input.localDate,
           completed: input.completed,
-          notes: input.notes,
-          completionTime: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [habitCompletions.habitId, habitCompletions.localDate],
-          set: {
-            completed: input.completed,
-            notes: input.notes,
-            completionTime: new Date(),
-          },
+          notes: input.notes ?? null,
+          completionTime: new Date().toISOString(),
         });
+      }
 
-      const newStreak = await recalculateStreak(
-        input.habitId,
-        ctx.user.id,
-        input.localDate
-      );
+      const newStreak = await recalculateStreak(input.habitId, ctx.user.id, input.localDate);
 
       let xpAwarded = 0;
       let leveledUp = false;
 
       if (input.completed) {
-        const result = await awardXP(
-          ctx.user.id,
-          20,
-          "Habit completed",
-          "habit_complete"
-        );
+        const result = await awardXP(ctx.user.id, 20, "Habit completed", "habit_complete");
         xpAwarded = result.xpAwarded;
         leveledUp = result.leveledUp;
       }
 
       await recalculateForgeScore(ctx.user.id);
 
-      const [updatedUser] = await ctx.db
-        .select({ forgeScore: users.forgeScore })
-        .from(users)
-        .where(eq(users.id, ctx.user.id))
-        .limit(1);
-
+      const userSnap = await adminDb.collection("users").doc(ctx.user.id).get();
+      const forgeScore = userSnap.data()?.forgeScore ?? 0;
       const triggerFortyPercent = !input.completed && prevStreakVal >= 7;
 
-      return {
-        streak: newStreak,
-        forgeScore: updatedUser?.forgeScore ?? 0,
-        xpAwarded,
-        leveledUp,
-        triggerFortyPercent,
-      };
+      return { streak: newStreak, forgeScore, xpAwarded, leveledUp, triggerFortyPercent };
     }),
 
   getCompletionHistory: protectedProcedure
-    .input(
-      z.object({ habitId: z.string().uuid(), days: z.number().min(1).max(365) })
-    )
+    .input(z.object({ habitId: z.string(), days: z.number().min(1).max(365) }))
     .query(async ({ ctx, input }) => {
-      const to = new Date();
       const from = new Date();
       from.setDate(from.getDate() - input.days);
+      const fromStr = from.toISOString().slice(0, 10);
+      const toStr = new Date().toISOString().slice(0, 10);
 
-      const rows = await ctx.db
-        .select({
-          localDate: habitCompletions.localDate,
-          completed: habitCompletions.completed,
-        })
-        .from(habitCompletions)
-        .where(
-          and(
-            eq(habitCompletions.habitId, input.habitId),
-            eq(habitCompletions.userId, ctx.user.id),
-            gte(habitCompletions.localDate, from.toISOString().slice(0, 10)),
-            lte(habitCompletions.localDate, to.toISOString().slice(0, 10))
-          )
-        )
-        .orderBy(asc(habitCompletions.localDate));
+      const snap = await adminDb
+        .collection("habit_completions")
+        .where("habitId", "==", input.habitId)
+        .where("userId", "==", ctx.user.id)
+        .where("localDate", ">=", fromStr)
+        .where("localDate", "<=", toStr)
+        .orderBy("localDate")
+        .get();
 
-      return rows;
+      return snap.docs.map((d) => ({
+        localDate: d.data().localDate,
+        completed: d.data().completed,
+      }));
     }),
 });

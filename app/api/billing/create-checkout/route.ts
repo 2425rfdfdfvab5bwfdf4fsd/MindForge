@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { db } from "@/server/db";
-import { users } from "@/shared/schema";
-import { eq } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 import { createCheckoutUrl, getVariantIdForPlan } from "@/lib/lemonsqueezy";
 
 export async function POST(request: Request) {
@@ -23,13 +21,8 @@ export async function POST(request: Request) {
   try {
     const variantId = getVariantIdForPlan(planKey);
 
-    const [user] = await db
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.id, session.id))
-      .limit(1);
-
-    const email = user?.email ?? session.email ?? "";
+    const userDoc = await adminDb.collection("users").doc(session.id).get();
+    const email = userDoc.data()?.email ?? session.email ?? "";
     const checkoutUrl = await createCheckoutUrl(session.id, email, variantId);
 
     return NextResponse.json({ checkoutUrl });

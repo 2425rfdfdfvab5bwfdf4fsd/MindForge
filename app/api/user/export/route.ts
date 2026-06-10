@@ -1,15 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { db } from "@/server/db";
-import {
-  dailyCheckins,
-  cookieJarEntries,
-  habits,
-  habitCompletions,
-  userMemories,
-  userBadges,
-} from "@/shared/schema";
-import { eq } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 
 export async function GET() {
   const session = await getSession();
@@ -17,25 +8,27 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [checkins, jarEntries, userHabits, completions, memories, badges] =
+  const uid = session.id;
+
+  const [checkins, jarEntries, userHabits, completions, memories, badgesSnap] =
     await Promise.all([
-      db.select().from(dailyCheckins).where(eq(dailyCheckins.userId, session.id)),
-      db.select().from(cookieJarEntries).where(eq(cookieJarEntries.userId, session.id)),
-      db.select().from(habits).where(eq(habits.userId, session.id)),
-      db.select().from(habitCompletions).where(eq(habitCompletions.userId, session.id)),
-      db.select().from(userMemories).where(eq(userMemories.userId, session.id)),
-      db.select().from(userBadges).where(eq(userBadges.userId, session.id)),
+      adminDb.collection("daily_checkins").where("userId", "==", uid).get(),
+      adminDb.collection("cookie_jar_entries").where("userId", "==", uid).get(),
+      adminDb.collection("habits").where("userId", "==", uid).get(),
+      adminDb.collection("habit_completions").where("userId", "==", uid).get(),
+      adminDb.collection("user_memories").where("userId", "==", uid).get(),
+      adminDb.collection("users").doc(uid).collection("badges").get(),
     ]);
 
   const exportData = {
     exportedAt: new Date().toISOString(),
-    userId: session.id,
-    checkins,
-    cookieJar: jarEntries,
-    habits: userHabits,
-    habitCompletions: completions,
-    memories,
-    badges,
+    userId: uid,
+    checkins: checkins.docs.map((d) => ({ id: d.id, ...d.data() })),
+    cookieJar: jarEntries.docs.map((d) => ({ id: d.id, ...d.data() })),
+    habits: userHabits.docs.map((d) => ({ id: d.id, ...d.data() })),
+    habitCompletions: completions.docs.map((d) => ({ id: d.id, ...d.data() })),
+    memories: memories.docs.map((d) => ({ id: d.id, ...d.data() })),
+    badges: badgesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
   };
 
   return new NextResponse(JSON.stringify(exportData, null, 2), {

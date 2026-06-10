@@ -1,17 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/server/db";
-import {
-  users,
-  weeklyReports,
-  dailyCheckins,
-  habitCompletions,
-  xpEvents,
-  forgeScoreHistory,
-  cookieJarEntries,
-  habits,
-  habitStreaks,
-} from "@/shared/schema";
-import { eq, and, gte, inArray, desc } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Resend } from "resend";
 import { render } from "@react-email/render";
@@ -46,23 +34,23 @@ export async function POST(request: Request) {
   const week = getWeekRange();
   const cutoff = new Date(week.start + "T00:00:00");
 
-  const eligibleUsers = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      displayName: users.displayName,
-      whyStatement: users.whyStatement,
-      identityDeclaration: users.identityDeclaration,
-      forgeScore: users.forgeScore,
-    })
-    .from(users)
-    .where(
-      and(
-        eq(users.onboardingComplete, true),
-        eq(users.isDeleted, false),
-        inArray(users.tier, ["pro", "elite"])
-      )
-    );
+  const eligibleSnap = await adminDb
+    .collection("users")
+    .where("onboardingComplete", "==", true)
+    .where("isDeleted", "==", false)
+    .get();
+
+  const eligibleUsers = eligibleSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as {
+      id: string;
+      email: string;
+      displayName?: string | null;
+      whyStatement?: string | null;
+      identityDeclaration?: string | null;
+      forgeScore: number;
+      tier: string;
+    }))
+    .filter((u) => u.tier === "pro" || u.tier === "elite");
 
   let processed = 0;
   let failed = 0;
@@ -92,9 +80,9 @@ async function processUser(
   user: {
     id: string;
     email: string;
-    displayName: string | null;
-    whyStatement: string | null;
-    identityDeclaration: string | null;
+    displayName?: string | null;
+    whyStatement?: string | null;
+    identityDeclaration?: string | null;
     forgeScore: number;
   },
   week: { start: string; end: string; label: string },
@@ -102,86 +90,81 @@ async function processUser(
 ) {
   const weekCutoffStr = week.start;
 
-  const [checkinRows, completionRows, xpRows, scoreRows, jarRows, habitRows, streakRows] =
+  const [checkinSnap, completionSnap, xpSnap, scoreSnap, jarSnap, habitSnap, streakSnap] =
     await Promise.all([
-      db
-        .select({ honestyScore: dailyCheckins.honestyScore })
-        .from(dailyCheckins)
-        .where(
-          and(
-            eq(dailyCheckins.userId, user.id),
-            eq(dailyCheckins.onboardingMirror, false),
-            gte(dailyCheckins.localDate, weekCutoffStr)
-          )
-        ),
+      adminDb
+        .collection("daily_checkins")
+        .where("userId", "==", user.id)
+        .where("onboardingMirror", "==", false)
+        .where("localDate", ">=", weekCutoffStr)
+        .get(),
 
-      db
-        .select({ completed: habitCompletions.completed })
-        .from(habitCompletions)
-        .where(
-          and(
-            eq(habitCompletions.userId, user.id),
-            gte(habitCompletions.localDate, weekCutoffStr),
-            eq(habitCompletions.completed, true)
-          )
-        ),
+      adminDb
+        .collection("habit_completions")
+        .where("userId", "==", user.id)
+        .where("localDate", ">=", weekCutoffStr)
+        .where("completed", "==", true)
+        .get(),
 
-      db
-        .select({ xpAmount: xpEvents.xpAmount })
-        .from(xpEvents)
-        .where(
-          and(eq(xpEvents.userId, user.id), gte(xpEvents.createdAt, cutoff))
-        ),
+      adminDb
+        .collection("xp_events")
+        .where("userId", "==", user.id)
+        .where("createdAt", ">=", cutoff.toISOString())
+        .get(),
 
-      db
-        .select({ score: forgeScoreHistory.score })
-        .from(forgeScoreHistory)
-        .where(
-          and(
-            eq(forgeScoreHistory.userId, user.id),
-            gte(forgeScoreHistory.recordedAt, cutoff)
-          )
-        )
-        .orderBy(forgeScoreHistory.recordedAt)
-        .limit(1),
+      adminDb
+        .collection("forge_score_history")
+        .where("userId", "==", user.id)
+        .where("recordedAt", ">=", cutoff.toISOString())
+        .orderBy("recordedAt")
+        .limit(1)
+        .get(),
 
-      db
-        .select({ title: cookieJarEntries.title })
-        .from(cookieJarEntries)
-        .where(eq(cookieJarEntries.userId, user.id))
-        .orderBy(desc(cookieJarEntries.createdAt))
-        .limit(10),
+      adminDb
+        .collection("cookie_jar_entries")
+        .where("userId", "==", user.id)
+        .orderBy("createdAt", "desc")
+        .limit(10)
+        .get(),
 
-      db
-        .select({ id: habits.id, name: habits.name })
-        .from(habits)
-        .where(and(eq(habits.userId, user.id), eq(habits.isActive, true))),
+      adminDb
+        .collection("habits")
+        .where("userId", "==", user.id)
+        .where("isActive", "==", true)
+        .get(),
 
-      db
-        .select({
-          habitId: habitStreaks.habitId,
-          currentStreak: habitStreaks.currentStreak,
-        })
-        .from(habitStreaks)
-        .where(eq(habitStreaks.userId, user.id)),
+      adminDb
+        .collection("habit_streaks")
+        .where("userId", "==", user.id)
+        .get(),
     ]);
 
-  const checkinCount = checkinRows.length;
-  const habitsCompleted = completionRows.length;
-  const xpEarned = xpRows.reduce((sum, r) => sum + r.xpAmount, 0);
+  const checkinCount = checkinSnap.size;
+  const habitsCompleted = completionSnap.size;
+  const xpEarned = xpSnap.docs.reduce(
+    (sum, d) => sum + (d.data().xpAmount as number ?? 0),
+    0
+  );
 
-  const weekStartScore = scoreRows[0]?.score ?? user.forgeScore;
+  const weekStartScore = scoreSnap.docs[0]?.data().score ?? user.forgeScore;
   const forgeScoreChange = user.forgeScore - weekStartScore;
+
+  const habitRows = habitSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }));
   const habitCompletionRate = Math.round(
     (habitsCompleted / Math.max(habitRows.length * 7, 1)) * 100
   );
 
-  const topStreak = streakRows.sort((a, b) => b.currentStreak - a.currentStreak)[0];
+  const streakRows = streakSnap.docs.map((d) => ({
+    habitId: d.data().habitId as string,
+    currentStreak: d.data().currentStreak as number,
+  }));
+  const topStreak = [...streakRows].sort((a, b) => b.currentStreak - a.currentStreak)[0];
   const topHabit = habitRows.find((h) => h.id === topStreak?.habitId);
   const bestStreakThisWeek = topHabit
     ? `${topHabit.name} — ${topStreak?.currentStreak ?? 0} days`
     : "";
 
+  const jarRows = jarSnap.docs.map((d) => ({ title: d.data().title as string }));
   const randomJarEntry =
     jarRows.length > 0
       ? jarRows[Math.floor(Math.random() * jarRows.length)]
@@ -239,20 +222,18 @@ Return only valid JSON (no markdown):
     }
   }
 
-  const [reportRow] = await db
-    .insert(weeklyReports)
-    .values({
-      userId: user.id,
-      weekStartDate: week.start,
-      forgeScoreChange,
-      habitCompletionRate,
-      bestStreakThisWeek,
-      behavioralArc: reportContent.behavioral_arc,
-      keyInsight: reportContent.key_insight,
-      nextWeekChallenge: reportContent.next_week_challenge,
-      emailSent: false,
-    })
-    .returning();
+  const reportRef = await adminDb.collection("weekly_reports").add({
+    userId: user.id,
+    weekStartDate: week.start,
+    forgeScoreChange,
+    habitCompletionRate,
+    bestStreakThisWeek,
+    behavioralArc: reportContent.behavioral_arc,
+    keyInsight: reportContent.key_insight,
+    nextWeekChallenge: reportContent.next_week_challenge,
+    emailSent: false,
+    createdAt: new Date().toISOString(),
+  });
 
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return;
@@ -286,8 +267,5 @@ Return only valid JSON (no markdown):
     html,
   });
 
-  await db
-    .update(weeklyReports)
-    .set({ emailSent: true })
-    .where(eq(weeklyReports.id, reportRow.id));
+  await reportRef.update({ emailSent: true });
 }

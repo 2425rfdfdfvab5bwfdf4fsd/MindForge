@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getSession } from "@/lib/auth";
-import { db } from "@/server/db";
-import { users } from "@/shared/schema";
-import { eq } from "drizzle-orm";
-import { COOKIE_NAME } from "@/lib/auth";
+import { getSession, COOKIE_NAME } from "@/lib/auth";
+import { adminDb } from "@/lib/firebase/admin";
 
 export async function POST() {
   const session = await getSession();
@@ -12,15 +9,12 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  await db
-    .update(users)
-    .set({
-      isDeleted: true,
-      email: `deleted-${session.id}@deleted.mindforge`,
-      displayName: "Deleted User",
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, session.id));
+  await adminDb.collection("users").doc(session.id).update({
+    isDeleted: true,
+    email: `deleted-${session.id}@deleted.mindforge`,
+    displayName: "Deleted User",
+    updatedAt: new Date().toISOString(),
+  });
 
   const cookieStore = cookies();
   cookieStore.delete(COOKIE_NAME);

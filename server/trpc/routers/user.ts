@@ -1,14 +1,8 @@
 import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { eq, and } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
-import {
-  users,
-  userBadges,
-  subscriptions,
-  environmentAuditItems,
-  userMemories,
-} from "@/shared/schema";
+import { adminDb } from "@/lib/firebase/admin";
 import { awardXP } from "@/lib/xp";
 import { checkAndAwardBadge } from "@/lib/badges";
 
@@ -25,12 +19,9 @@ type BadgeKey = (typeof BADGE_KEYS)[number];
 
 export const userRouter = router({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
-    const [profile] = await ctx.db
-      .select()
-      .from(users)
-      .where(eq(users.id, ctx.user.id))
-      .limit(1);
-    return profile ?? null;
+    const snap = await adminDb.collection("users").doc(ctx.user.id).get();
+    if (!snap.exists) return null;
+    return { id: snap.id, ...snap.data() };
   }),
 
   updateProfile: protectedProcedure
@@ -46,27 +37,17 @@ export const userRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [updated] = await ctx.db
-        .update(users)
-        .set({
-          ...(input.displayName !== undefined
-            ? { displayName: input.displayName }
-            : {}),
-          ...(input.coachIntensity !== undefined
-            ? { coachIntensity: input.coachIntensity }
-            : {}),
-          ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
-          ...(input.onboardingStep !== undefined
-            ? { onboardingStep: input.onboardingStep }
-            : {}),
-          ...(input.onboardingComplete !== undefined
-            ? { onboardingComplete: input.onboardingComplete }
-            : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, ctx.user.id))
-        .returning();
-      return updated;
+      const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+      if (input.displayName !== undefined) update.displayName = input.displayName;
+      if (input.coachIntensity !== undefined) update.coachIntensity = input.coachIntensity;
+      if (input.timezone !== undefined) update.timezone = input.timezone;
+      if (input.onboardingStep !== undefined) update.onboardingStep = input.onboardingStep;
+      if (input.onboardingComplete !== undefined) update.onboardingComplete = input.onboardingComplete;
+
+      const ref = adminDb.collection("users").doc(ctx.user.id);
+      await ref.update(update);
+      const snap = await ref.get();
+      return { id: snap.id, ...snap.data() };
     }),
 
   updateWhy: protectedProcedure
@@ -77,23 +58,20 @@ export const userRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [updated] = await ctx.db
-        .update(users)
-        .set({
-          whyStatement: input.whyStatement,
-          identityDeclaration: input.identityDeclaration,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, ctx.user.id))
-        .returning();
-      return updated;
+      const ref = adminDb.collection("users").doc(ctx.user.id);
+      await ref.update({
+        whyStatement: input.whyStatement,
+        identityDeclaration: input.identityDeclaration,
+        updatedAt: new Date().toISOString(),
+      });
+      const snap = await ref.get();
+      return { id: snap.id, ...snap.data() };
     }),
 
   awardBadge: protectedProcedure
     .input(z.object({ badgeKey: z.enum(BADGE_KEYS) }))
     .mutation(async ({ ctx, input }) => {
-      const result = await checkAndAwardBadge(ctx.user.id, input.badgeKey as BadgeKey);
-      return result;
+      return checkAndAwardBadge(ctx.user.id, input.badgeKey as BadgeKey);
     }),
 
   submitEnvironmentAudit: protectedProcedure
@@ -105,15 +83,20 @@ export const userRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.db
-        .delete(environmentAuditItems)
-        .where(eq(environmentAuditItems.userId, ctx.user.id));
+      const existing = await adminDb
+        .collection("environment_audit_items")
+        .where("userId", "==", ctx.user.id)
+        .get();
+
+      const batch = adminDb.batch();
+      existing.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
 
       const answerText = input.answers
         .map((a, i) => `Q${i + 1}: ${a.question}\nAnswer: ${a.answer}`)
         .join("\n\n");
 
-      const prompt = `Based on these environment audit answers:\n\n${answerText}\n\nGenerate 5–8 specific, actionable environment redesign recommendations. Return a JSON array only, no markdown, no explanation:\n[{"item": "...", "category": "..."}]\n\nRules: Each item must be a specific physical action with a specific location (e.g. "Move your phone charger to the kitchen counter tonight" not "Use your phone less"). Reference the user's actual answers. Categories should be one of: Sleep, Focus, Nutrition, Fitness, Mindset, Digital.`;
+      const prompt = `Based on these environment audit answers:\n\n${answerText}\n\nGenerate 5–8 specific, actionable environment redesign recommendations. Return a JSON array only, no markdown, no explanation:\n[{"item": "...", "category": "..."}]\n\nRules: Each item must be a specific physical action with a specific location. Reference the user's actual answers. Categories should be one of: Sleep, Focus, Nutrition, Fitness, Mindset, Digital.`;
 
       let items: Array<{ item: string; category: string }> = [];
 
@@ -123,10 +106,7 @@ export const userRouter = router({
           const flash = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
           const result = await flash.generateContent({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.7,
-            },
+            generationConfig: { responseMimeType: "application/json", temperature: 0.7 },
           });
           const raw = result.response.text().trim();
           const parsed = JSON.parse(raw);
@@ -136,152 +116,105 @@ export const userRouter = router({
               category: String(x.category ?? "General"),
             }));
           }
-        } catch {
-          // Fall through to fallback
-        }
+        } catch {}
       }
 
       if (items.length === 0) {
         items = [
-          {
-            item: "Move your phone charger to a room other than your bedroom tonight",
-            category: "Sleep",
-          },
-          {
-            item: "Place a full water bottle on your desk or countertop right now",
-            category: "Nutrition",
-          },
-          {
-            item: "Remove social media apps from your phone's home screen",
-            category: "Digital",
-          },
-          {
-            item: "Clear your desk surface of everything except what you need today",
-            category: "Focus",
-          },
-          {
-            item: "Put your workout gear somewhere visible before you go to bed",
-            category: "Fitness",
-          },
+          { item: "Move your phone charger to a room other than your bedroom tonight", category: "Sleep" },
+          { item: "Place a full water bottle on your desk or countertop right now", category: "Nutrition" },
+          { item: "Remove social media apps from your phone's home screen", category: "Digital" },
+          { item: "Clear your desk surface of everything except what you need today", category: "Focus" },
+          { item: "Put your workout gear somewhere visible before you go to bed", category: "Fitness" },
         ];
       }
 
-      const rows = items.map((it) => ({
-        userId: ctx.user.id,
-        item: it.item,
-        category: it.category,
-        done: false,
-      }));
-
-      const inserted = await ctx.db
-        .insert(environmentAuditItems)
-        .values(rows)
-        .returning();
+      const inserted: Array<Record<string, unknown>> = [];
+      for (const it of items) {
+        const ref = await adminDb.collection("environment_audit_items").add({
+          userId: ctx.user.id,
+          item: it.item,
+          category: it.category,
+          done: false,
+          createdAt: new Date().toISOString(),
+        });
+        inserted.push({ id: ref.id, userId: ctx.user.id, ...it, done: false });
+      }
 
       return inserted;
     }),
 
   getEnvironmentItems: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.db
-      .select()
-      .from(environmentAuditItems)
-      .where(eq(environmentAuditItems.userId, ctx.user.id))
-      .orderBy(environmentAuditItems.createdAt);
+    const snap = await adminDb
+      .collection("environment_audit_items")
+      .where("userId", "==", ctx.user.id)
+      .orderBy("createdAt")
+      .get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }),
 
   markEnvironmentItemDone: protectedProcedure
     .input(z.object({ itemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.db
-        .select({ done: environmentAuditItems.done })
-        .from(environmentAuditItems)
-        .where(
-          and(
-            eq(environmentAuditItems.id, input.itemId),
-            eq(environmentAuditItems.userId, ctx.user.id)
-          )
-        )
-        .limit(1);
+      const ref = adminDb.collection("environment_audit_items").doc(input.itemId);
+      const snap = await ref.get();
 
-      if (!existing || existing.done) return { awarded: false };
+      if (!snap.exists || snap.data()?.userId !== ctx.user.id) {
+        return { awarded: false };
+      }
+      if (snap.data()?.done) return { awarded: false };
 
-      const [updated] = await ctx.db
-        .update(environmentAuditItems)
-        .set({ done: true, doneAt: new Date() })
-        .where(
-          and(
-            eq(environmentAuditItems.id, input.itemId),
-            eq(environmentAuditItems.userId, ctx.user.id)
-          )
-        )
-        .returning();
+      await ref.update({ done: true, doneAt: new Date().toISOString() });
+      await awardXP(ctx.user.id, 50, "Environment audit item completed", "environment");
 
-      await awardXP(
-        ctx.user.id,
-        50,
-        "Environment audit item completed",
-        "environment"
-      );
-
-      return { awarded: true, item: updated };
+      return { awarded: true, item: { id: snap.id, ...snap.data(), done: true } };
     }),
 
   getMemories: protectedProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db
-      .select({
-        id: userMemories.id,
-        content: userMemories.content,
-        memoryType: userMemories.memoryType,
-        createdAt: userMemories.createdAt,
-      })
-      .from(userMemories)
-      .where(eq(userMemories.userId, ctx.user.id))
-      .orderBy(userMemories.createdAt);
+    const snap = await adminDb
+      .collection("user_memories")
+      .where("userId", "==", ctx.user.id)
+      .orderBy("createdAt")
+      .get();
 
-    const grouped: Record<
-      string,
-      Array<{ id: string; content: string; created_at: Date | null }>
-    > = {};
-    for (const m of rows) {
-      if (!grouped[m.memoryType]) grouped[m.memoryType] = [];
-      grouped[m.memoryType].push({
-        id: m.id,
-        content: m.content,
-        created_at: m.createdAt,
-      });
+    const grouped: Record<string, Array<{ id: string; content: string; created_at: string }>> = {};
+    for (const d of snap.docs) {
+      const data = d.data();
+      const type = data.memoryType as string;
+      if (!grouped[type]) grouped[type] = [];
+      grouped[type].push({ id: d.id, content: data.content, created_at: data.createdAt });
     }
     return grouped;
   }),
 
   completeOnboarding: protectedProcedure.mutation(async ({ ctx }) => {
     await awardXP(ctx.user.id, 200, "Onboarding completed", "onboarding");
-
-    const [updated] = await ctx.db
-      .update(users)
-      .set({ onboardingComplete: true, onboardingStep: "complete", updatedAt: new Date() })
-      .where(eq(users.id, ctx.user.id))
-      .returning();
-
-    return updated;
+    const ref = adminDb.collection("users").doc(ctx.user.id);
+    await ref.update({
+      onboardingComplete: true,
+      onboardingStep: "complete",
+      updatedAt: new Date().toISOString(),
+    });
+    const snap = await ref.get();
+    return { id: snap.id, ...snap.data() };
   }),
 
   getSubscription: protectedProcedure.query(async ({ ctx }) => {
-    const [sub] = await ctx.db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, ctx.user.id))
-      .limit(1);
-    return sub ?? null;
+    const snap = await adminDb
+      .collection("subscriptions")
+      .where("userId", "==", ctx.user.id)
+      .limit(1)
+      .get();
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() };
   }),
 
   getBadges: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.db
-      .select({
-        id: userBadges.id,
-        badgeKey: userBadges.badgeKey,
-        earnedAt: userBadges.earnedAt,
-      })
-      .from(userBadges)
-      .where(eq(userBadges.userId, ctx.user.id));
+    const snap = await adminDb
+      .collection("users")
+      .doc(ctx.user.id)
+      .collection("badges")
+      .get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }),
 });

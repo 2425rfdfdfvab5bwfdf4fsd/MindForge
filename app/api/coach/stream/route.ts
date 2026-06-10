@@ -1,7 +1,5 @@
 import { getSessionFromRequest } from "@/lib/auth";
-import { db } from "@/server/db";
-import { users } from "@/shared/schema";
-import { eq } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 import { geminiPro } from "@/lib/gemini/client";
 import {
   FORGE_COACH_BASE_SYSTEM_PROMPT,
@@ -53,7 +51,7 @@ function checkRateLimit(userId: string): boolean {
 function buildFallbackPrompt(
   sessionType: SessionType,
   coachIntensity: string,
-  context: StreamContext
+  _context: StreamContext
 ): string {
   const basePrompt =
     coachIntensity === "firm"
@@ -88,19 +86,8 @@ export async function POST(request: Request) {
     return new Response("Too many requests", { status: 429 });
   }
 
-  const [profileRows] = await db
-    .select({
-      tier: users.tier,
-      coachIntensity: users.coachIntensity,
-      whyStatement: users.whyStatement,
-      identityDeclaration: users.identityDeclaration,
-      forgeScore: users.forgeScore,
-    })
-    .from(users)
-    .where(eq(users.id, session.id))
-    .limit(1);
-
-  const profile = profileRows ?? null;
+  const userDoc = await adminDb.collection("users").doc(session.id).get();
+  const profile = userDoc.data() ?? null;
 
   let body: {
     session_type: SessionType;

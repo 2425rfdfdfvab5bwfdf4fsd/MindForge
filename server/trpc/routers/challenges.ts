@@ -1,197 +1,141 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, and, desc } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
-import { challenges, userChallenges } from "@/shared/schema";
+import { adminDb } from "@/lib/firebase/admin";
 import { awardXP } from "@/lib/xp";
 import { checkColdMind } from "@/lib/badges";
 import { recalculateForgeScore } from "@/lib/forge-score";
 
 export const challengesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    const all = await ctx.db
-      .select()
-      .from(challenges)
-      .where(eq(challenges.isActive, true));
-
-    const userChals = await ctx.db
-      .select()
-      .from(userChallenges)
-      .where(eq(userChallenges.userId, ctx.user.id))
-      .orderBy(desc(userChallenges.startedAt));
+    const [allSnap, userChalsSnap] = await Promise.all([
+      adminDb.collection("challenges").where("isActive", "==", true).get(),
+      adminDb
+        .collection("user_challenges")
+        .where("userId", "==", ctx.user.id)
+        .orderBy("startedAt", "desc")
+        .get(),
+    ]);
 
     const now = new Date();
+    const userChals = userChalsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown> & { id: string; status: string; startedAt?: string; challengeId: string }));
 
-    // Auto-expire active challenges past duration_minutes × 3
     const toExpire = userChals.filter((uc) => {
       if (uc.status !== "active" || !uc.startedAt) return false;
-      const challenge = all.find((c) => c.id === uc.challengeId);
+      const challenge = allSnap.docs.find((c) => c.id === uc.challengeId);
       if (!challenge) return false;
-      const expiresAt = new Date(
-        uc.startedAt.getTime() + challenge.durationMinutes * 3 * 60 * 1000
-      );
+      const dur = challenge.data().durationMinutes as number;
+      const expiresAt = new Date(new Date(uc.startedAt as string).getTime() + dur * 3 * 60 * 1000);
       return now > expiresAt;
     });
 
     if (toExpire.length > 0) {
       await Promise.all(
         toExpire.map((uc) =>
-          ctx.db
-            .update(userChallenges)
-            .set({ status: "failed" })
-            .where(eq(userChallenges.id, uc.id))
+          adminDb.collection("user_challenges").doc(uc.id).update({ status: "failed" })
         )
       );
-      // Reflect the expiry in the in-memory list
-      toExpire.forEach((uc) => {
-        const found = userChals.find((u) => u.id === uc.id);
-        if (found) found.status = "failed";
-      });
+      toExpire.forEach((uc) => { uc.status = "failed"; });
     }
 
-    return all.map((c) => {
-      const userChallenge =
-        userChals.find((uc) => uc.challengeId === c.id) ?? null;
+    return allSnap.docs.map((c) => {
+      const cData = c.data();
+      const userChallenge = userChals.find((uc) => uc.challengeId === c.id) ?? null;
 
       let expiresAt: string | null = null;
-      if (
-        userChallenge?.status === "active" &&
-        userChallenge.startedAt
-      ) {
+      if (userChallenge?.status === "active" && userChallenge.startedAt) {
         expiresAt = new Date(
-          userChallenge.startedAt.getTime() +
-            c.durationMinutes * 3 * 60 * 1000
+          new Date(userChallenge.startedAt as string).getTime() +
+            (cData.durationMinutes as number) * 3 * 60 * 1000
         ).toISOString();
       }
 
-      return { ...c, userChallenge, expiresAt };
+      return { id: c.id, ...cData, userChallenge, expiresAt };
     });
   }),
 
   activate: protectedProcedure
-    .input(z.object({ challengeId: z.string().uuid() }))
+    .input(z.object({ challengeId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [challenge] = await ctx.db
-        .select()
-        .from(challenges)
-        .where(
-          and(
-            eq(challenges.id, input.challengeId),
-            eq(challenges.isActive, true)
-          )
-        )
-        .limit(1);
-
-      if (!challenge) {
+      const chalSnap = await adminDb.collection("challenges").doc(input.challengeId).get();
+      if (!chalSnap.exists || !chalSnap.data()?.isActive) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
-      // Free tier: only difficulty-1 challenges
-      const isFree = !ctx.userProfile || ctx.userProfile.tier === "free";
-      if (isFree && challenge.difficulty > 1) {
+      const isFree = ctx.userProfile?.tier === "free";
+      if (isFree && (chalSnap.data()?.difficulty ?? 1) > 1) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: JSON.stringify({ upgradeRequired: true }),
         });
       }
 
-      // Max 1 active challenge at a time
-      const [existingActive] = await ctx.db
-        .select({ id: userChallenges.id })
-        .from(userChallenges)
-        .where(
-          and(
-            eq(userChallenges.userId, ctx.user.id),
-            eq(userChallenges.status, "active")
-          )
-        )
-        .limit(1);
+      const activeSnap = await adminDb
+        .collection("user_challenges")
+        .where("userId", "==", ctx.user.id)
+        .where("status", "==", "active")
+        .limit(1)
+        .get();
 
-      if (existingActive) {
+      if (!activeSnap.empty) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "Complete or abandon your current challenge first.",
         });
       }
 
-      const [uc] = await ctx.db
-        .insert(userChallenges)
-        .values({
-          userId: ctx.user.id,
-          challengeId: input.challengeId,
-          status: "active",
-          startedAt: new Date(),
-        })
-        .returning();
+      const ref = await adminDb.collection("user_challenges").add({
+        userId: ctx.user.id,
+        challengeId: input.challengeId,
+        status: "active",
+        startedAt: new Date().toISOString(),
+        completedAt: null,
+        reflection: null,
+      });
 
-      return uc;
+      const snap = await ref.get();
+      return { id: ref.id, ...snap.data() };
     }),
 
   complete: protectedProcedure
     .input(
       z.object({
-        userChallengeId: z.string().uuid(),
+        userChallengeId: z.string(),
         reflection: z.string().min(50, "Reflection must be at least 50 characters."),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [uc] = await ctx.db
-        .select({
-          id: userChallenges.id,
-          userId: userChallenges.userId,
-          challengeId: userChallenges.challengeId,
-          status: userChallenges.status,
-        })
-        .from(userChallenges)
-        .where(eq(userChallenges.id, input.userChallengeId))
-        .limit(1);
+      const ref = adminDb.collection("user_challenges").doc(input.userChallengeId);
+      const snap = await ref.get();
 
-      if (!uc || uc.userId !== ctx.user.id) {
+      if (!snap.exists || snap.data()?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
-
-      if (uc.status !== "active") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Challenge is not active.",
-        });
+      if (snap.data()?.status !== "active") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Challenge is not active." });
       }
 
-      const [challenge] = await ctx.db
-        .select({ xpReward: challenges.xpReward, category: challenges.category })
-        .from(challenges)
-        .where(eq(challenges.id, uc.challengeId))
-        .limit(1);
+      const chalSnap = await adminDb.collection("challenges").doc(snap.data()!.challengeId).get();
+      const xpReward = chalSnap.data()?.xpReward ?? 0;
 
-      const [updated] = await ctx.db
-        .update(userChallenges)
-        .set({
-          status: "completed",
-          reflection: input.reflection,
-          completedAt: new Date(),
-        })
-        .where(eq(userChallenges.id, input.userChallengeId))
-        .returning();
+      await ref.update({
+        status: "completed",
+        reflection: input.reflection,
+        completedAt: new Date().toISOString(),
+      });
 
       let xpResult = null;
-      if (challenge?.xpReward) {
-        xpResult = await awardXP(
-          ctx.user.id,
-          challenge.xpReward,
-          "Challenge completed",
-          "challenge"
-        );
+      if (xpReward) {
+        xpResult = await awardXP(ctx.user.id, xpReward, "Challenge completed", "challenge");
       }
 
-      // Badge: cold_mind (7+ cold challenges completed — per PRD)
       checkColdMind(ctx.user.id).catch(() => {});
-
-      // Recalculate Forge Score
       const newForgeScore = await recalculateForgeScore(ctx.user.id);
 
+      const updated = await ref.get();
       return {
-        userChallenge: updated,
-        xpAwarded: challenge?.xpReward ?? 0,
+        userChallenge: { id: ref.id, ...updated.data() },
+        xpAwarded: xpReward,
         badgesAwarded: [] as string[],
         newForgeScore,
         leveledUp: xpResult?.leveledUp ?? false,

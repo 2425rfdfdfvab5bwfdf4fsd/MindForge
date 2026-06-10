@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { db } from "@/server/db";
-import { users } from "@/shared/schema";
-import { eq } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Header } from "@/components/layout/Header";
@@ -15,14 +13,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
-  const [profile] = await db
-    .select({
-      onboardingComplete: users.onboardingComplete,
-      onboardingStep: users.onboardingStep,
-    })
-    .from(users)
-    .where(eq(users.id, session.id))
-    .limit(1);
+  const userDoc = await adminDb.collection("users").doc(session.id).get();
+  const profile = userDoc.data();
 
   if (!profile || !profile.onboardingComplete) {
     const step = profile?.onboardingStep ?? "mirror";

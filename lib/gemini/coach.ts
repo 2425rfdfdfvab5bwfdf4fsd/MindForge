@@ -1,7 +1,5 @@
 import "server-only";
-import { db } from "@/server/db";
-import { users, habits, habitStreaks, userMemories, cookieJarEntries } from "@/shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 import {
   FORGE_COACH_BASE_SYSTEM_PROMPT,
   FORGE_COACH_FIRM_PROMPT,
@@ -33,32 +31,31 @@ type SessionType =
   | "forty_percent_rule"
   | "direct_chat";
 
-// ---------------------------------------------------------------------------
-// Data helpers (recency-based — pgvector not available on Replit)
-// ---------------------------------------------------------------------------
-
 async function fetchRecentMemories(userId: string): Promise<Memory[]> {
-  const rows = await db
-    .select({ content: userMemories.content, memoryType: userMemories.memoryType })
-    .from(userMemories)
-    .where(eq(userMemories.userId, userId))
-    .orderBy(desc(userMemories.createdAt))
-    .limit(5);
-  return rows.map((r) => ({ content: r.content, memory_type: r.memoryType }));
+  const snap = await adminDb
+    .collection("user_memories")
+    .where("userId", "==", userId)
+    .orderBy("createdAt", "desc")
+    .limit(5)
+    .get();
+  return snap.docs.map((d) => ({
+    content: d.data().content,
+    memory_type: d.data().memoryType,
+  }));
 }
 
 async function fetchRecentCookieJar(userId: string): Promise<CookieJarEntry[]> {
-  return db
-    .select({ title: cookieJarEntries.title, description: cookieJarEntries.description })
-    .from(cookieJarEntries)
-    .where(eq(cookieJarEntries.userId, userId))
-    .orderBy(desc(cookieJarEntries.createdAt))
-    .limit(3);
+  const snap = await adminDb
+    .collection("cookie_jar_entries")
+    .where("userId", "==", userId)
+    .orderBy("createdAt", "desc")
+    .limit(3)
+    .get();
+  return snap.docs.map((d) => ({
+    title: d.data().title,
+    description: d.data().description,
+  }));
 }
-
-// ---------------------------------------------------------------------------
-// Format helpers
-// ---------------------------------------------------------------------------
 
 function formatMemories(memories: Memory[]): string {
   if (!memories.length) return "No memories recorded yet.";
@@ -79,45 +76,32 @@ function formatHabits(habitList: HabitWithStreak[]): string {
     .join("\n");
 }
 
-// ---------------------------------------------------------------------------
-// Main export: enriched system prompt with context
-// ---------------------------------------------------------------------------
-
 export async function buildCoachSystemPrompt(
   userId: string,
   currentMessage: string,
   sessionType: SessionType
 ): Promise<string> {
-  const [profileRows, habitRows, streakRows, memories, cookieJar] =
+  const [profileSnap, habitsSnap, streaksSnap, memories, cookieJar] =
     await Promise.all([
-      db
-        .select({
-          whyStatement: users.whyStatement,
-          identityDeclaration: users.identityDeclaration,
-          level: users.level,
-          forgeScore: users.forgeScore,
-          coachIntensity: users.coachIntensity,
-        })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1),
-
-      db
-        .select({ id: habits.id, name: habits.name })
-        .from(habits)
-        .where(and(eq(habits.userId, userId), eq(habits.isActive, true))),
-
-      db
-        .select({ habitId: habitStreaks.habitId, currentStreak: habitStreaks.currentStreak })
-        .from(habitStreaks)
-        .where(eq(habitStreaks.userId, userId)),
-
+      adminDb.collection("users").doc(userId).get(),
+      adminDb
+        .collection("habits")
+        .where("userId", "==", userId)
+        .where("isActive", "==", true)
+        .get(),
+      adminDb
+        .collection("habit_streaks")
+        .where("userId", "==", userId)
+        .get(),
       fetchRecentMemories(userId),
       fetchRecentCookieJar(userId),
     ]);
 
-  const profile = profileRows[0] ?? null;
-  const streakMap = new Map(streakRows.map((s) => [s.habitId, s.currentStreak]));
+  const profile = profileSnap.data() ?? null;
+  const habitRows = habitsSnap.docs.map((d) => ({ id: d.id, name: d.data().name as string }));
+  const streakMap = new Map(
+    streaksSnap.docs.map((d) => [d.data().habitId as string, d.data().currentStreak as number])
+  );
   const habitsWithStreaks: HabitWithStreak[] = habitRows
     .map((h) => ({ name: h.name, current_streak: streakMap.get(h.id) ?? 0 }))
     .sort((a, b) => b.current_streak - a.current_streak)

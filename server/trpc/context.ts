@@ -1,28 +1,24 @@
 import { getSession } from "@/lib/auth";
-import { db } from "@/server/db";
-import { users } from "@/shared/schema";
-import { eq } from "drizzle-orm";
+import { adminDb } from "@/lib/firebase/admin";
 
 export async function createTRPCContext() {
   const session = await getSession();
 
   let userProfile = null;
   if (session?.id) {
-    const [profile] = await db
-      .select({
-        id: users.id,
-        tier: users.tier,
-        onboardingComplete: users.onboardingComplete,
-        coachIntensity: users.coachIntensity,
-      })
-      .from(users)
-      .where(eq(users.id, session.id))
-      .limit(1);
-    userProfile = profile ?? null;
+    const snap = await adminDb.collection("users").doc(session.id).get();
+    if (snap.exists) {
+      const d = snap.data()!;
+      userProfile = {
+        id: snap.id,
+        tier: (d.tier as string) ?? "free",
+        onboardingComplete: (d.onboardingComplete as boolean) ?? false,
+        coachIntensity: (d.coachIntensity as string) ?? "hard",
+      };
+    }
   }
 
   return {
-    db,
     user: session ? { id: session.id, email: session.email } : null,
     userProfile,
   };

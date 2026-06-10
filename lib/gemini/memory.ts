@@ -1,6 +1,6 @@
+import "server-only";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { db } from "@/server/db";
-import { userMemories } from "@/shared/schema";
+import { adminDb } from "@/lib/firebase/admin";
 
 const MEMORY_TYPES = [
   "preference",
@@ -73,10 +73,11 @@ export async function extractAndStoreMemories(
 
     await Promise.allSettled(
       memories.map((mem) =>
-        db.insert(userMemories).values({
+        adminDb.collection("user_memories").add({
           userId,
           content: mem.content,
           memoryType: mem.memory_type,
+          createdAt: new Date().toISOString(),
         })
       )
     );

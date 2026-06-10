@@ -1,6 +1,5 @@
 import { getSessionFromRequest } from "@/lib/auth";
-import { db } from "@/server/db";
-import { ruleFortyEvents } from "@/shared/schema";
+import { adminDb } from "@/lib/firebase/admin";
 import { awardXP, XP_AMOUNTS } from "@/lib/xp";
 import { checkFortyPercentSurvivor } from "@/lib/badges";
 
@@ -28,11 +27,12 @@ export async function POST(request: Request) {
     return new Response("Invalid triggered_by", { status: 400 });
   }
 
-  await db.insert(ruleFortyEvents).values({
+  await adminDb.collection("rule_forty_events").add({
     userId: session.id,
     triggeredBy: triggered_by,
     habitId: habit_id ?? null,
     choice,
+    createdAt: new Date().toISOString(),
   });
 
   let xpResult = null;
