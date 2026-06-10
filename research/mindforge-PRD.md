@@ -1,7 +1,7 @@
 # PRD: MindForge
-**Version:** 1.0
-**Date:** June 9, 2026
-**Status:** Ready for Development
+**Version:** 1.1
+**Date:** June 10, 2026
+**Status:** Active Development — Firebase Auth + Firestore migration applied
 
 ---
 
@@ -50,7 +50,7 @@ MindForge gives users a system to fight back against the neural rewiring happeni
 | AI Debrief Completion Rate | 80% of check-ins | Coaching sessions created / check-ins submitted |
 | NPS | 55+ | In-app survey at Day 14 and Day 66 |
 | Weekly Neural Report Open Rate | 55%+ | Resend analytics |
-| Average Forge Score at Day 30 | 350+ | Supabase aggregate query |
+| Average Forge Score at Day 30 | 350+ | Firestore aggregate query |
 
 ---
 
@@ -79,11 +79,11 @@ MindForge gives users a system to fight back against the neural rewiring happeni
 | Frontend | Next.js 14 (App Router) + TypeScript | Full-stack, SSR/SSG, streaming support, edge-ready, best DX for solo founders |
 | Styling | Tailwind CSS + shadcn/ui (customized) | Rapid dark-mode UI with accessible components, no design system overhead |
 | API Layer | tRPC | End-to-end type safety between Next.js server and client — eliminates REST boilerplate |
-| Database | Supabase (PostgreSQL + pgvector) | Managed Postgres with built-in auth, RLS, realtime, and vector similarity search |
-| Auth | Supabase Auth | Magic link + Google OAuth, JWT sessions, Row Level Security policies |
+| Database | Firebase Firestore | Managed NoSQL document database with real-time sync, offline support, and flexible security rules |
+| Auth | Firebase Auth | Email/password + Google OAuth, server-side session cookies (14-day), Admin SDK for server verification |
 | AI — Coaching | Google Gemini 2.5 Pro | Best reasoning + long context for nuanced coaching conversations and structured output |
 | AI — Light Tasks | Google Gemini 2.5 Flash | Fast, cheap for memory extraction, mood classification, short AI tasks |
-| AI — Embeddings | Google text-embedding-004 | Embeds user memories and cookie jar entries for RAG retrieval via pgvector |
+| AI — Embeddings | Google text-embedding-004 | Embeds user memories and cookie jar entries for semantic search (stored as arrays in Firestore) |
 | Payments | Lemon Squeezy | Merchant of Record — handles global VAT/GST/sales tax automatically, no tax registration needed |
 | Email | Resend + React Email | Developer-first transactional email; weekly neural report delivery |
 | Hosting | Vercel | Zero-config Next.js deployment, edge functions, cron jobs (for weekly reports) |
@@ -97,9 +97,9 @@ mindforge/
 ├── app/                          # Next.js App Router
 │   ├── (auth)/
 │   │   ├── login/
-│   │   │   └── page.tsx          # Login page (magic link + Google)
+│   │   │   └── page.tsx          # Login page (email/password + Google)
 │   │   └── callback/
-│   │       └── route.ts          # Supabase auth callback
+│   │       └── route.ts          # Post-auth redirect handler
 │   ├── (onboarding)/
 │   │   ├── mirror/
 │   │   │   └── page.tsx          # Step 1: Accountability Mirror
@@ -133,6 +133,9 @@ mindforge/
 │   │   ├── trpc/
 │   │   │   └── [trpc]/
 │   │   │       └── route.ts      # tRPC handler
+│   │   ├── auth/
+│   │   │   └── session/
+│   │   │       └── route.ts      # POST: exchange Firebase ID token for session cookie
 │   │   ├── coach/
 │   │   │   └── stream/
 │   │   │       └── route.ts      # SSE streaming endpoint for AI responses
@@ -166,10 +169,10 @@ mindforge/
 │       └── MobileNav.tsx         # Bottom nav for mobile
 │
 ├── lib/
-│   ├── supabase/
-│   │   ├── client.ts             # Supabase browser client
-│   │   ├── server.ts             # Supabase server client (RSC)
-│   │   └── middleware.ts         # Auth middleware + tier gating
+│   ├── firebase/
+│   │   ├── client.ts             # Firebase browser client (Auth + Firestore)
+│   │   └── admin.ts              # Firebase Admin SDK (server-only, session cookie verification)
+│   ├── auth.ts                   # Server auth helpers (getCurrentUser, requireAuth)
 │   ├── gemini/
 │   │   ├── client.ts             # Gemini API client setup
 │   │   ├── coach.ts              # Forge Coach prompt builder + streaming
@@ -200,26 +203,31 @@ mindforge/
 ├── types/
 │   └── index.ts                  # Shared TypeScript types
 │
-├── middleware.ts                 # Next.js middleware (auth redirect + tier check)
+├── middleware.ts                 # Next.js middleware (Edge-safe cookie presence check)
 ├── .env.local                    # Local environment variables
-├── vercel.json                   # Cron job configuration
-└── supabase/
-    └── migrations/
-        └── 001_initial_schema.sql  # Full database schema migration
+└── vercel.json                   # Cron job configuration
 ```
 
 ### 5.3 Key Environment Variables
 
 ```
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key (server-only)
+# Firebase (client-side — NEXT_PUBLIC_ prefix required)
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_web_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_firebase_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 
-# Google Gemini AI
+# Firebase Admin (server-only — no NEXT_PUBLIC_ prefix)
+FIREBASE_PROJECT_ID=your_firebase_project_id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your_project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+# Google Gemini AI (server-only)
 GEMINI_API_KEY=your_google_ai_studio_api_key
 
-# Lemon Squeezy
+# Lemon Squeezy (server-only)
 LEMONSQUEEZY_API_KEY=your_lemonsqueezy_api_key
 LEMONSQUEEZY_WEBHOOK_SECRET=your_webhook_signing_secret
 LEMONSQUEEZY_STORE_ID=your_store_id
@@ -228,7 +236,7 @@ LEMONSQUEEZY_PRO_ANNUAL_VARIANT_ID=variant_id_for_pro_annual
 LEMONSQUEEZY_ELITE_MONTHLY_VARIANT_ID=variant_id_for_elite_monthly
 LEMONSQUEEZY_ELITE_ANNUAL_VARIANT_ID=variant_id_for_elite_annual
 
-# Resend (Email)
+# Resend (Email — server-only)
 RESEND_API_KEY=your_resend_api_key
 RESEND_FROM_EMAIL=forge@mindforge.app
 
@@ -252,21 +260,22 @@ CRON_SECRET=random_secret_to_authenticate_vercel_cron_calls
 
 ### Feature 1: Authentication & Session Management
 - **Priority:** P0
-- **User Story:** As a new visitor, I want to sign up with my email or Google account so that I can access MindForge securely without creating a password.
+- **User Story:** As a new visitor, I want to sign up with my email and password or Google account so that I can access MindForge securely.
 - **Acceptance Criteria:**
-  - [ ] User can request a magic link by entering their email address; link arrives within 60 seconds
-  - [ ] User can authenticate via Google OAuth (one-click)
-  - [ ] Authenticated session persists for 7 days; silent refresh via Supabase JWT
-  - [ ] Unauthenticated users attempting to access any `/app/*` route are redirected to `/login`
+  - [ ] User can register and sign in with email + password via Firebase Auth
+  - [ ] User can authenticate via Google OAuth (one-click) via Firebase Auth
+  - [ ] Authenticated session persists for 14 days via a server-side session cookie (`mf_session`); cookie is HttpOnly and SameSite=Strict
+  - [ ] Unauthenticated users attempting to access any app route are redirected to `/login`
   - [ ] Users who have not completed onboarding are redirected to `/onboarding/mirror` after login
   - [ ] Users who have completed onboarding are redirected to `/dashboard` after login
-- **UI Notes:** Login page uses full dark background (#0A0A0A). MindForge logotype centered. Two options: "Continue with Email" (text input + submit) and "Continue with Google" (icon button). No password field. Tag line below: *"Rewire your brain. Forge your identity."*
+- **UI Notes:** Login page uses full dark background (#0A0A0A). MindForge logotype centered. Two options: email + password form and "Continue with Google" button. Tag line below: *"Rewire your brain. Forge your identity."*
 - **API/Logic Notes:**
-  - Magic link sent via Supabase Auth `signInWithOtp`. Callback route `/api/auth/callback` exchanges code for session.
-  - Google OAuth via Supabase Auth `signInWithOAuth`. Same callback route.
-  - On first successful login: create `users` record if not exists (via Supabase trigger or server action).
-  - Middleware (`middleware.ts`) reads Supabase session cookie on every request. Redirects unauthenticated requests to `/login`. Checks `onboarding_complete` field; redirects incomplete users to onboarding.
-- **Dependencies:** Supabase Auth, middleware.ts
+  - Email/password sign-in via Firebase client SDK `signInWithEmailAndPassword`. After sign-in, client sends Firebase ID token to `POST /api/auth/session` which calls `adminAuth.createSessionCookie` (14-day expiry) and sets `mf_session` HttpOnly cookie.
+  - Google OAuth via Firebase client SDK `signInWithPopup(googleProvider)`. Same session cookie flow after sign-in.
+  - On first successful login: create `users` Firestore document at `users/{uid}` if it does not exist (checked in session endpoint or tRPC context).
+  - `middleware.ts` is Edge-safe — checks for `mf_session` cookie presence only (no Admin SDK import). Full token verification happens in `lib/auth.ts` → `getCurrentUser()` using `adminAuth.verifySessionCookie()`.
+  - `requireAuth` helper in tRPC context throws `UNAUTHORIZED` if no valid session.
+- **Dependencies:** Firebase Auth (client + Admin SDK), `lib/firebase/client.ts`, `lib/firebase/admin.ts`, `lib/auth.ts`, `app/api/auth/session/route.ts`, `middleware.ts`
 
 ---
 
@@ -390,8 +399,8 @@ CRON_SECRET=random_secret_to_authenticate_vercel_cron_calls
 - **User Story:** As a Pro user, I want an AI coach that remembers everything about me across sessions so that its coaching gets more specific and irreplaceable the longer I use the platform.
 - **Acceptance Criteria:**
   - [ ] Every AI response (check-in debrief, 40% intervention, direct chat) uses the full memory-enriched system prompt
-  - [ ] System prompt construction (before every request) must include: Forge Coach persona instructions, user's `why_statement`, user's `identity_declaration`, user's current Forge Score and level, user's active habit names and current streaks, top-3 Cookie Jar entries (retrieved semantically), top-5 long-term memories (retrieved by cosine similarity to current input, using pgvector)
-  - [ ] After every coaching session (check-in debrief or direct conversation): run Gemini 2.5 Flash memory extraction to identify new atomic facts, embed them with text-embedding-004, upsert to `user_memories` table
+  - [ ] System prompt construction (before every request) must include: Forge Coach persona instructions, user's `why_statement`, user's `identity_declaration`, user's current Forge Score and level, user's active habit names and current streaks, top-3 Cookie Jar entries (retrieved semantically), top-5 long-term memories (retrieved by cosine similarity to current input, computed in-process from Firestore-stored embedding arrays)
+  - [ ] After every coaching session (check-in debrief or direct conversation): run Gemini 2.5 Flash memory extraction to identify new atomic facts, embed them with text-embedding-004, store in `user_memories` Firestore collection
   - [ ] Memory facts are typed: 'preference' / 'trigger' / 'victory' / 'fear' / 'identity' / 'pattern'
   - [ ] Pro/Elite users can access a direct chat interface with the Forge Coach (not just daily debriefs)
   - [ ] Free users see a locked state with: "Your coach is waiting. Unlock with Pro."
@@ -401,17 +410,17 @@ CRON_SECRET=random_secret_to_authenticate_vercel_cron_calls
 - **UI Notes:** `/coach` page shows a chat interface. Coach messages left-aligned with a small forge icon. User messages right-aligned. Input fixed at bottom. "Send" button (orange). Streaming response shows blinking cursor. Memory retrieval is invisible to user — no "I'm looking up your memories" message.
 - **API/Logic Notes:**
   - `/api/coach/stream` route (POST, returns SSE stream):
-    1. Authenticate user, verify Pro/Elite tier
+    1. Authenticate user via `getCurrentUser()`, verify Pro/Elite tier
     2. Embed incoming message with text-embedding-004
-    3. Query pgvector: `SELECT content FROM user_memories WHERE user_id = $1 ORDER BY embedding <=> $2 LIMIT 5`
-    4. Query pgvector: `SELECT title, description FROM cookie_jar_entries WHERE user_id = $1 ORDER BY embedding <=> $2 LIMIT 3`
+    3. Fetch all `user_memories` for user from Firestore, compute cosine similarity in-process, take top-5
+    4. Fetch all `cookie_jar_entries` for user from Firestore, compute cosine similarity, take top-3
     5. Fetch user profile (why, identity, level, Forge Score)
     6. Fetch active habits + streaks
     7. Construct system prompt from all above
     8. Call Gemini 2.5 Pro `generateContentStream`, pipe to SSE response
-  - After stream ends: call Gemini 2.5 Flash with full exchange, extract JSON array of memory facts, embed each, upsert to `user_memories`
-  - Store full session (messages JSONB) in `coaching_sessions` table
-- **Dependencies:** Feature 1 (Auth), Feature 5 (Habits), Feature 10 (Cookie Jar), Feature 13 (Forge Score), Supabase pgvector, Gemini API
+  - After stream ends: call Gemini 2.5 Flash with full exchange, extract JSON array of memory facts, embed each, write to `user_memories` Firestore collection via Admin SDK
+  - Store full session in `coaching_sessions` Firestore collection
+- **Dependencies:** Feature 1 (Auth), Feature 5 (Habits), Feature 10 (Cookie Jar), Feature 13 (Forge Score), Firebase Firestore, Gemini API
 
 ---
 
@@ -479,9 +488,9 @@ CRON_SECRET=random_secret_to_authenticate_vercel_cron_calls
 - **API/Logic Notes:**
   - tRPC `cookiejar.add(title, description, dateOfVictory?)`: saves entry, calls `lib/gemini/embeddings.ts` to embed `${title}. ${description}`, stores vector
   - tRPC `cookiejar.list()`: returns all entries ordered by `created_at DESC`
-  - tRPC `cookiejar.search(query: string)`: embeds query, queries pgvector `ORDER BY embedding <=> $queryEmbedding LIMIT 5`
-  - tRPC `cookiejar.delete(id)`: deletes entry (RLS ensures ownership)
-  - Google text-embedding-004 produces 768-dimension vectors. pgvector column must be `vector(768)`.
+  - tRPC `cookiejar.search(query: string)`: embeds query with text-embedding-004, fetches all user's `cookie_jar_entries` from Firestore, computes cosine similarity in-process, returns top-5
+  - tRPC `cookiejar.delete(id)`: deletes Firestore document (server verifies userId matches)
+  - Google text-embedding-004 produces 768-dimension vectors, stored as `number[]` in Firestore. Cosine similarity is computed server-side in-process (no external vector DB required).
 - **Dependencies:** Feature 1 (Auth), Feature 15 (Gamification), Gemini embeddings
 
 ---
@@ -710,7 +719,7 @@ interface Habit {
 interface HabitCompletion {
   id: string;                          // UUID
   habit_id: string;                    // FK → habits.id
-  user_id: string;                     // FK → users.id (denormalized for RLS)
+  user_id: string;                     // FK → users/{uid} (denormalized for Firestore queries)
   local_date: string;                  // 'YYYY-MM-DD' — user's local date, NOT UTC
   completed: boolean;                  // true = done, false = deliberately missed
   notes: string | null;                // optional (not used in v1 UI but stored)
@@ -897,14 +906,15 @@ interface WeeklyReport {
 
 | Method | Endpoint | Auth | Tier | Request Body | Response | Description |
 |--------|----------|------|------|--------------|----------|-------------|
-| POST | /api/auth/callback | No | — | `{code, next}` | Redirect | Supabase OAuth callback |
+| POST | /api/auth/session | No | — | `{idToken}` | `{success, onboardingComplete}` | Exchange Firebase ID token for mf_session cookie |
+| POST | /api/auth/logout | Yes | — | — | `{success}` | Clear mf_session cookie |
 | POST | /api/coach/stream | Yes | Pro | `{message, sessionType, habitId?}` | SSE stream | Streaming AI coach response |
 | POST | /api/coach/classify | Yes | Pro | `{checkinId, text}` | `{honestyScore, moodSignal}` | Classify check-in mood via Flash |
 | POST | /api/billing/create-checkout | Yes | Any | `{variantId, billingPeriod}` | `{checkoutUrl}` | Create Lemon Squeezy checkout |
 | POST | /api/billing/webhook | No (HMAC) | — | LemonSqueezy event payload | `{received: true}` | Handle subscription events |
 | GET | /api/cron/weekly-report | Cron secret | — | — | `{processed: number}` | Sunday neural report generation |
 
-**tRPC Routes** (all authenticated via Supabase session middleware):
+**tRPC Routes** (all authenticated via Firebase Admin SDK session cookie verification in tRPC context):
 
 | Router | Procedure | Type | Input | Output | Description |
 |--------|-----------|------|-------|--------|-------------|
@@ -1290,8 +1300,8 @@ theme: {
 ### 10.3 Key UI Flows
 
 **Flow 1: First-Time User Onboarding**
-1. User lands on `/login`, enters email, receives magic link
-2. Clicks magic link → redirected to `/onboarding/mirror`
+1. User lands on `/login`, enters email + password (or clicks "Continue with Google")
+2. Signs in → client POSTs Firebase ID token to `/api/auth/session` → `mf_session` cookie set → redirected to `/onboarding/mirror`
 3. Sees large textarea: "Write the truth about where you are right now."
 4. Writes reflection (min 100 chars), clicks "Submit to the Mirror"
 5. AI response streams in below (starts within 3 seconds)
@@ -1326,20 +1336,21 @@ theme: {
 
 ## 11. AUTHENTICATION & AUTHORIZATION
 
-- **Auth Method:** Supabase Auth — magic link (email OTP) + Google OAuth. No passwords stored.
-- **Session:** Supabase JWT, 7-day expiry with silent refresh via `@supabase/ssr` cookie-based session.
-- **Row Level Security (RLS):** Enabled on ALL tables. Every table has RLS policies ensuring users can only read/write their own rows. Service role key bypasses RLS (used only in webhook handler and cron).
+- **Auth Method:** Firebase Auth — email/password + Google OAuth. Passwords are managed by Firebase (never stored in application database).
+- **Session:** Server-side `mf_session` cookie created via `adminAuth.createSessionCookie()` with 14-day expiry. Verified on every server request via `adminAuth.verifySessionCookie()` in `lib/auth.ts`. Cookie is HttpOnly, SameSite=Strict, Secure in production.
+- **Data Isolation:** Firestore Security Rules ensure every collection enforces `request.auth.uid == resource.data.userId` (or document path `users/{uid}`). The Firebase Admin SDK (used in tRPC routers and webhook handler) bypasses security rules intentionally — all server-side writes use Admin SDK with explicit `userId` from the verified session.
 
 | Role | Permissions |
 |------|-------------|
-| Authenticated (Free) | Read/write own data; limited by feature tier gates in tRPC |
-| Authenticated (Pro) | Full access to all Pro features; unlimited data creation |
+| Authenticated (Free) | Read/write own Firestore documents; limited by feature tier gates in tRPC |
+| Authenticated (Pro) | Full access to all Pro features; unlimited document creation |
 | Authenticated (Elite) | Full access including direct coach chat, unlimited conversations |
-| Service Role (server) | Full unrestricted access — used only in webhook + cron handlers |
+| Admin SDK (server) | Full unrestricted Firestore access — used in tRPC routers, webhook handler, and cron |
 | Unauthenticated | Access to `/`, `/login` only |
 
 **Tier gating approach:**
-- `middleware.ts`: redirects unauthenticated users. Does NOT check tier (too slow for every request).
+- `middleware.ts`: Edge-safe cookie presence check only — redirects unauthenticated users. Does NOT verify the token (Admin SDK is not available at Edge runtime).
+- `lib/auth.ts` → `getCurrentUser()`: Called in tRPC context and server API routes. Verifies `mf_session` cookie using `adminAuth.verifySessionCookie()`, fetches `users/{uid}` from Firestore, returns full user profile including `tier`.
 - tRPC routers: `requireTier(ctx, 'pro')` helper function checks `ctx.user.tier` before proceeding. Throws `TRPCError({ code: 'FORBIDDEN' })` for insufficient tier.
 - Free tier limits (habit count, cookie jar count, challenge access): enforced in tRPC mutation handlers, not middleware.
 
@@ -1350,15 +1361,15 @@ theme: {
 - [ ] **Empty check-in submission:** Blocked at UI level (submit button disabled until 50+ chars). Server-side: tRPC `checkins.submit` validates `text.trim().length >= 50`, returns `BAD_REQUEST` if not.
 - [ ] **Gemini API unavailable / timeout:** All Gemini calls wrapped in try/catch with 30-second timeout. On failure: store raw check-in without AI response, show user: "Your coach is temporarily unavailable. Your reflection has been saved. We'll generate your debrief shortly." Retry job (manual or cron) can regenerate missing debriefs.
 - [ ] **Gemini streaming interrupted mid-response:** SSE stream closed by client (user navigates away). Partial response is NOT stored. On return to the page, show: "Your debrief was interrupted. Resubmit to generate it." Allow resubmission of existing check-in for AI response regeneration (same day only).
-- [ ] **Duplicate habit completion (same habitId + localDate):** SQL unique constraint on `(habit_id, local_date)` prevents duplicates. tRPC returns `CONFLICT` error. Frontend shows: "You've already logged this habit today."
+- [ ] **Duplicate habit completion (same habitId + localDate):** Firestore document ID set to `{habitId}_{localDate}` prevents duplicates — Firestore `set()` with merge:false throws if doc exists, or use a transaction to check first. tRPC returns `CONFLICT` error. Frontend shows: "You've already logged this habit today."
 - [ ] **Free user hitting habit limit:** On `habits.create` call with 3 existing habits, tRPC returns `FORBIDDEN` with `{ upgradeRequired: true }`. Frontend shows upgrade modal.
 - [ ] **Lemon Squeezy webhook replay / duplicate event:** Webhook handler checks `lemonsqueezy_subscription_id` before upserting — idempotent. Processing the same event twice produces the same result.
 - [ ] **Invalid Lemon Squeezy webhook signature:** Return `401 Unauthorized` immediately without processing. Log to Sentry.
 - [ ] **Cron job fails mid-batch (weekly report):** Each user's report is processed in a separate try/catch. Failure for one user does not stop processing of others. Failed users logged to Sentry.
 - [ ] **User accesses `/coach` (Pro-only) on Free tier:** Middleware does not block it (tier check is tRPC-level). Page loads but shows a locked state UI with: "Your coach is waiting. Unlock with Pro." Upgrade CTA centered on page.
-- [ ] **pgvector similarity search with no memories:** Returns empty array. System prompt injected with: "No prior memories available for this user." Coach introduces itself without referencing past context.
+- [ ] **Embedding similarity search with no memories:** Returns empty array. System prompt injected with: "No prior memories available for this user." Coach introduces itself without referencing past context. (Embeddings stored as number[] arrays in Firestore; cosine similarity computed in-process on the server.)
 - [ ] **Timezone-related date mismatch:** `localDate` always sent from client (`new Date().toLocaleDateString('en-CA', { timeZone: userTimezone })` — returns 'YYYY-MM-DD'). Never computed server-side. Server accepts and stores as-is.
-- [ ] **User deletes account:** Soft-delete: set `users.is_deleted = true`, anonymize email to `deleted_[id]@mindforge.app`, delete all personal data (check-ins, coach sessions, memories, cookie jar) within 24 hours via background job. Subscription cancellation must be triggered via Lemon Squeezy API first.
+- [ ] **User deletes account:** Soft-delete: set `users/{uid}.isDeleted = true`, anonymize `email` to `deleted_[uid]@mindforge.app`, delete all sub-collections (habits, checkins, coaching sessions, memories, cookie jar entries) within 24 hours via background job. Also call `adminAuth.deleteUser(uid)` to remove the Firebase Auth account. Subscription cancellation must be triggered via Lemon Squeezy API first.
 
 ---
 
@@ -1368,15 +1379,15 @@ theme: {
 - [ ] **AI streaming first token < 3 seconds** — enforced by Gemini 2.5 Pro API; if exceeded, show animated "Forge Coach is thinking..." state
 - [ ] **Dashboard load < 1.5 seconds** — achieved via single `dashboard.getAll` tRPC query + React Suspense skeleton loaders
 - [ ] **Forge Score recalculation < 200ms** — all required data fetched via indexed queries; no N+1 patterns
-- [ ] **All user inputs sanitized** before database writes — tRPC Zod schema validation on all inputs; no raw SQL string interpolation
-- [ ] **API rate limiting:** `/api/coach/stream` limited to 20 requests/hour per user (enforced via Supabase Edge Function or Vercel middleware rate limiter using user ID)
+- [ ] **All user inputs sanitized** before database writes — tRPC Zod schema validation on all inputs; no raw string interpolation into Firestore queries
+- [ ] **API rate limiting:** `/api/coach/stream` limited to 20 requests/hour per user (enforced via in-memory Map or Vercel KV using user UID)
 - [ ] **Lemon Squeezy webhook HMAC verification** on every incoming webhook request
 - [ ] **Cron endpoint protected** by `Authorization: Bearer CRON_SECRET` header (set automatically by Vercel)
-- [ ] **No sensitive data in client bundle:** `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `LEMONSQUEEZY_API_KEY`, `RESEND_API_KEY` are server-only env vars (no `NEXT_PUBLIC_` prefix)
+- [ ] **No sensitive data in client bundle:** `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`, `GEMINI_API_KEY`, `LEMONSQUEEZY_API_KEY`, `RESEND_API_KEY` are server-only env vars (no `NEXT_PUBLIC_` prefix). Firebase Admin credentials never exposed to client.
 - [ ] **HTTPS enforced** in production (Vercel default)
-- [ ] **Supabase RLS enabled** on all tables — no table may be created without RLS policy
-- [ ] **SQL injection impossible** — all database access via Supabase client's parameterized queries
-- [ ] **User data isolation** — RLS policies enforce `user_id = auth.uid()` on all user data tables
+- [ ] **Firestore Security Rules** deployed for all collections — every collection enforces `request.auth.uid == resource.data.userId`. Server-side writes use Admin SDK (bypasses rules intentionally with verified session UID).
+- [ ] **NoSQL injection not applicable** — Firestore uses structured APIs with no query string interpolation. All Firestore paths constructed from verified `userId` from `adminAuth.verifySessionCookie()`.
+- [ ] **User data isolation** — Firestore document paths always include `userId`; tRPC context always reads `userId` from the verified session cookie, never from client-supplied input.
 - [ ] **GDPR compliance** — data export endpoint and delete-my-account flow implemented in v1
 
 ---
@@ -1404,9 +1415,9 @@ theme: {
 
 **Phase 1: Foundation (Days 1–14)**
 1. Next.js project setup: TypeScript, Tailwind CSS, shadcn/ui, dark theme config, Geist + Inter fonts
-2. Supabase project: enable pgvector extension, run full schema migration (all tables, RLS policies, indexes)
-3. Supabase Auth: magic link + Google OAuth, middleware.ts (auth redirect + onboarding redirect)
-4. tRPC setup: router structure, context (Supabase client injection), base middleware (requireAuth, requireTier)
+2. Firebase project: create Firestore database, define collection structure, deploy Security Rules
+3. Firebase Auth: email/password + Google OAuth, `lib/firebase/client.ts` + `lib/firebase/admin.ts`, session cookie flow (`/api/auth/session`), Edge-safe `middleware.ts`
+4. tRPC setup: router structure, context (Firebase Admin SDK injection, `getCurrentUser()`), base middleware (requireAuth, requireTier)
 5. Core layout components: Sidebar, Header with Forge Score widget, MobileNav, app shell
 
 **Phase 2: Onboarding (Days 15–21)**
@@ -1425,7 +1436,7 @@ theme: {
 14. Daily check-in page: textarea, submit, display today's check-in (read-only if submitted)
 15. Gemini 2.5 Pro streaming debrief: SSE endpoint, system prompt construction, stream to UI
 16. Mood signal classification: Gemini 2.5 Flash classify endpoint, `updateMetadata` tRPC
-17. AI Forge Coach memory system: pgvector embedding pipeline (text-embedding-004), memory extraction agent, RAG retrieval
+17. AI Forge Coach memory system: embedding pipeline (text-embedding-004), memory extraction agent, cosine similarity RAG retrieval (in-process, embeddings stored in Firestore as number[] arrays)
 18. `/coach` direct chat page (Pro-gated)
 
 **Phase 5: Forge Score + Gamification (Days 51–60)**
@@ -1481,6 +1492,6 @@ theme: {
 
 ⚠️ ASSUMPTION: The `/coach` direct chat page is Pro-gated. The daily check-in debrief (one response per day, auto-triggered by check-in submission) is the primary AI touchpoint for Pro users. The `/coach` page provides unlimited additional conversation for Pro users, not just the debrief.
 
-⚠️ ASSUMPTION: Google text-embedding-004 produces 768-dimension vectors. pgvector column defined as `vector(768)`. If using a different embedding model with different dimensions (e.g., 1536), the schema must be updated before migration.
+⚠️ ASSUMPTION: Google text-embedding-004 produces 768-dimension vectors, stored as `number[]` in Firestore. Cosine similarity is computed in-process on the server. If a different embedding model is used (e.g., producing 1536 dimensions), the embedding storage format is unaffected (just a longer array), but any dimension-dependent config must be updated.
 
-⚠️ ASSUMPTION: Vercel cron is used for weekly reports. This requires a Vercel Pro plan (cron jobs are not available on the free Hobby plan). Alternatively, Supabase `pg_cron` extension can be used as a fallback.
+⚠️ ASSUMPTION: Vercel cron is used for weekly reports. This requires a Vercel Pro plan (cron jobs are not available on the free Hobby plan).

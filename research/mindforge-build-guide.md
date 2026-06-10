@@ -1,5 +1,5 @@
 # MindForge — Phase-by-Phase Build Guide
-**Version:** 1.3 | **Based on PRD v1.0** | **Total Timeline: 90 Days**
+**Version:** 1.4 | **Based on PRD v1.1** | **Total Timeline: 90 Days**
 
 This file contains every prompt needed to build MindForge end-to-end, organized by phase. Each prompt is self-contained and references the PRD for full spec details. Paste each prompt directly into your AI coding agent to complete that step.
 
@@ -76,238 +76,301 @@ ACCEPTANCE: `npm run dev` starts without errors. Page shows "MindForge — Comin
 
 ---
 
-### Step 1.2 — Supabase Database Schema
+### Step 1.2 — Firebase Firestore Data Model
 
 ```
-Set up the complete Supabase database schema for MindForge. Create the file supabase/migrations/001_initial_schema.sql with the following tables, all with Row Level Security enabled.
+Set up the Firestore database structure for MindForge. There is no migration file — Firestore is schemaless. Instead, define the TypeScript types in types/index.ts and document the collection layout below. Deploy Firestore Security Rules via the Firebase console or CLI.
 
-Enable the pgvector extension at the very top:
-CREATE EXTENSION IF NOT EXISTS vector;
+FIRESTORE COLLECTIONS (all server writes use Firebase Admin SDK):
 
-TABLE: users
-- id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
-- email TEXT NOT NULL
-- display_name TEXT
-- avatar_url TEXT
-- tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'elite'))
-- onboarding_step TEXT NOT NULL DEFAULT 'mirror' CHECK (onboarding_step IN ('mirror', 'why', 'environment', 'complete'))
-- onboarding_complete BOOLEAN NOT NULL DEFAULT false
-- why_statement TEXT
-- identity_declaration TEXT
-- coach_intensity TEXT NOT NULL DEFAULT 'hard' CHECK (coach_intensity IN ('hard', 'firm'))
-- timezone TEXT NOT NULL DEFAULT 'UTC'
-- environment_audit JSONB DEFAULT '[]'
-- forge_score INTEGER NOT NULL DEFAULT 0
-- xp INTEGER NOT NULL DEFAULT 0
-- level INTEGER NOT NULL DEFAULT 1
-- current_streak_days INTEGER NOT NULL DEFAULT 0
-- is_deleted BOOLEAN NOT NULL DEFAULT false
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-- updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: users
+Document path: users/{uid}  (uid = Firebase Auth UID)
+Fields:
+- uid: string
+- email: string
+- displayName: string | null
+- avatarUrl: string | null
+- tier: 'free' | 'pro' | 'elite'  (default: 'free')
+- onboardingStep: 'mirror' | 'why' | 'environment' | 'complete'  (default: 'mirror')
+- onboardingComplete: boolean  (default: false)
+- whyStatement: string | null
+- identityDeclaration: string | null
+- coachIntensity: 'hard' | 'firm'  (default: 'hard')
+- timezone: string  (default: 'UTC')
+- environmentAudit: Array<{ id: string, question: string, done: boolean }>  (default: [])
+- forgeScore: number  (default: 0)
+- xp: number  (default: 0)
+- level: number  (default: 1)
+- currentStreakDays: number  (default: 0)
+- isDeleted: boolean  (default: false)
+- createdAt: Timestamp
+- updatedAt: Timestamp
 
-TABLE: subscriptions
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- UNIQUE(user_id)
-- lemonsqueezy_customer_id TEXT UNIQUE
-- lemonsqueezy_subscription_id TEXT UNIQUE
-- tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'elite'))
-- status TEXT NOT NULL CHECK (status IN ('active', 'cancelled', 'past_due', 'expired'))
-- current_period_end TIMESTAMPTZ
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-- updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: subscriptions
+Document path: subscriptions/{uid}  (one subscription doc per user, keyed by uid)
+Fields:
+- userId: string
+- lemonsqueezyCustomerId: string | null
+- lemonsqueezySubscriptionId: string | null
+- tier: 'free' | 'pro' | 'elite'
+- status: 'active' | 'cancelled' | 'past_due' | 'expired'
+- currentPeriodEnd: Timestamp | null
+- createdAt: Timestamp
+- updatedAt: Timestamp
 
-TABLE: habits
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- name TEXT NOT NULL CHECK (char_length(name) <= 60)
-- category TEXT NOT NULL CHECK (category IN ('health', 'mind', 'avoid', 'perform'))
-- habit_type TEXT NOT NULL CHECK (habit_type IN ('build', 'avoid'))
-- target_frequency TEXT NOT NULL DEFAULT 'daily' CHECK (target_frequency IN ('daily', 'weekdays', 'custom'))
-- target_days INTEGER[] NOT NULL DEFAULT '{0,1,2,3,4,5,6}' -- 0=Sun, 6=Sat
-- sort_order INTEGER NOT NULL DEFAULT 0
-- is_active BOOLEAN NOT NULL DEFAULT true
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: habits
+Document path: habits/{habitId}  (auto-ID)
+Fields:
+- id: string  (same as doc ID, stored for convenience)
+- userId: string
+- name: string  (max 60 chars)
+- category: 'health' | 'mind' | 'avoid' | 'perform'
+- habit_type: 'build' | 'avoid'  (NOTE: snake_case intentional — must match this exactly in all queries)
+- targetFrequency: 'daily' | 'weekdays' | 'custom'  (default: 'daily')
+- targetDays: number[]  (0=Sun, 6=Sat; default: [0,1,2,3,4,5,6])
+- sortOrder: number  (default: 0)
+- isActive: boolean  (default: true)
+- createdAt: Timestamp
 
-TABLE: habit_completions
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- habit_id UUID NOT NULL REFERENCES habits(id) ON DELETE CASCADE
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- local_date DATE NOT NULL
-- completed BOOLEAN NOT NULL
-- notes TEXT
-- completion_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
-- UNIQUE(habit_id, local_date)
+COLLECTION: habit_completions
+Document path: habit_completions/{habitId}_{localDate}  (composite ID prevents duplicates)
+Fields:
+- id: string  (same as doc ID)
+- habitId: string
+- userId: string
+- localDate: string  ('YYYY-MM-DD')
+- completed: boolean
+- notes: string | null
+- completionTime: Timestamp
 
-TABLE: habit_streaks (cache table — always updated alongside habit_completions)
-- habit_id UUID PRIMARY KEY REFERENCES habits(id) ON DELETE CASCADE
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- current_streak INTEGER NOT NULL DEFAULT 0
-- longest_streak INTEGER NOT NULL DEFAULT 0
-- last_completed_date DATE
-- updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: habit_streaks
+Document path: habit_streaks/{habitId}  (one doc per habit)
+Fields:
+- habitId: string
+- userId: string
+- currentStreak: number  (default: 0)
+- longestStreak: number  (default: 0)
+- lastCompletedDate: string | null  ('YYYY-MM-DD')
+- updatedAt: Timestamp
 
-TABLE: daily_checkins
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- local_date DATE NOT NULL
-- raw_reflection TEXT NOT NULL
-- ai_response TEXT
-- mood_signal TEXT CHECK (mood_signal IN ('excusing', 'deflecting', 'owning', 'crushing'))
-- honesty_score INTEGER CHECK (honesty_score BETWEEN 1 AND 10)
-- forge_score_delta INTEGER NOT NULL DEFAULT 0
-- onboarding_mirror BOOLEAN NOT NULL DEFAULT false
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-- UNIQUE(user_id, local_date) WHERE (onboarding_mirror = false) -- partial unique: allows one mirror + one real check-in on the same day
+COLLECTION: daily_checkins
+Document path: daily_checkins/{userId}_{localDate}  (composite; use userId + '_mirror' suffix for onboarding mirror entry)
+Fields:
+- id: string
+- userId: string
+- localDate: string  ('YYYY-MM-DD')
+- rawReflection: string
+- aiResponse: string | null
+- moodSignal: 'excusing' | 'deflecting' | 'owning' | 'crushing' | null
+- honestyScore: number | null  (1–10)
+- forgeScoreDelta: number  (default: 0)
+- onboardingMirror: boolean  (default: false)
+- createdAt: Timestamp
 
-TABLE: coaching_sessions
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- checkin_id UUID REFERENCES daily_checkins(id)
-- session_type TEXT NOT NULL CHECK (session_type IN ('onboarding_mirror', 'why_excavation', 'daily_checkin', 'forty_percent_rule', 'direct_chat'))
-- messages JSONB NOT NULL DEFAULT '[]' -- [{role: 'user'|'model', content: string}]
-- session_summary TEXT
-- forge_score_delta INTEGER NOT NULL DEFAULT 0
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: coaching_sessions
+Document path: coaching_sessions/{autoId}
+Fields:
+- id: string
+- userId: string
+- checkinId: string | null
+- sessionType: 'onboarding_mirror' | 'why_excavation' | 'daily_checkin' | 'forty_percent_rule' | 'direct_chat'
+- messages: Array<{ role: 'user' | 'model', content: string }>
+- sessionSummary: string | null
+- forgeScoreDelta: number  (default: 0)
+- createdAt: Timestamp
 
-TABLE: user_memories
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- content TEXT NOT NULL
-- memory_type TEXT NOT NULL CHECK (memory_type IN ('preference', 'trigger', 'victory', 'fear', 'identity', 'pattern'))
-- embedding vector(768) -- pgvector: text-embedding-004 produces 768-dimension vectors
-- last_accessed TIMESTAMPTZ
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: user_memories
+Document path: user_memories/{autoId}
+Fields:
+- id: string
+- userId: string
+- content: string
+- memoryType: 'preference' | 'trigger' | 'victory' | 'fear' | 'identity' | 'pattern'
+- embedding: number[]  (768-dimension vector from text-embedding-004; stored as plain array — cosine similarity computed in-process on server)
+- lastAccessed: Timestamp | null
+- createdAt: Timestamp
 
-TABLE: cookie_jar_entries
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- title TEXT NOT NULL CHECK (char_length(title) <= 80)
-- description TEXT NOT NULL CHECK (char_length(description) <= 500)
-- date_of_victory DATE
-- embedding vector(768)
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: cookie_jar_entries
+Document path: cookie_jar_entries/{autoId}
+Fields:
+- id: string
+- userId: string
+- title: string  (max 80 chars)
+- description: string  (max 500 chars)
+- dateOfVictory: string | null  ('YYYY-MM-DD')
+- embedding: number[]  (768-dimension vector; cosine similarity computed in-process)
+- createdAt: Timestamp
 
-TABLE: challenges
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- title TEXT NOT NULL
-- description TEXT NOT NULL
-- difficulty INTEGER NOT NULL CHECK (difficulty BETWEEN 1 AND 5)
-- category TEXT NOT NULL CHECK (category IN ('cold', 'screen', 'physical', 'fast', 'social'))
-- duration_minutes INTEGER NOT NULL
-- xp_reward INTEGER NOT NULL DEFAULT 100
-- is_active BOOLEAN NOT NULL DEFAULT true
+COLLECTION: challenges
+Document path: challenges/{challengeId}  (seeded by admin script, not user data)
+Fields:
+- id: string
+- title: string
+- description: string
+- difficulty: number  (1–5)
+- category: 'cold' | 'screen' | 'physical' | 'fast' | 'social'
+- durationMinutes: number
+- xpReward: number  (default: 100)
+- isActive: boolean
 
-TABLE: user_challenges
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- challenge_id UUID NOT NULL REFERENCES challenges(id)
-- status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'failed'))
-- reflection TEXT
-- started_at TIMESTAMPTZ
-- completed_at TIMESTAMPTZ
--- NO unique constraint on (user_id, challenge_id) — PRD Feature 11 explicitly states "Completed challenges can be repeated (no cooldown in v1)"
+COLLECTION: user_challenges
+Document path: user_challenges/{autoId}
+Fields:
+- id: string
+- userId: string
+- challengeId: string
+- status: 'active' | 'completed' | 'failed'  (default: 'active')
+- reflection: string | null
+- startedAt: Timestamp | null
+- completedAt: Timestamp | null
+NOTE: No uniqueness enforced on (userId, challengeId) — per PRD, completed challenges can be repeated.
 
-TABLE: xp_events
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- xp_amount INTEGER NOT NULL
-- reason TEXT NOT NULL
-- event_type TEXT NOT NULL CHECK (event_type IN ('habit_complete', 'checkin', 'checkin_bonus', 'challenge', 'forty_percent', 'cookie_jar', 'environment', 'onboarding'))
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: xp_events
+Document path: xp_events/{autoId}
+Fields:
+- id: string
+- userId: string
+- xpAmount: number
+- reason: string
+- eventType: 'habit_complete' | 'checkin' | 'checkin_bonus' | 'challenge' | 'forty_percent' | 'cookie_jar' | 'environment' | 'onboarding'
+- createdAt: Timestamp
 
-TABLE: user_badges
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- badge_key TEXT NOT NULL CHECK (badge_key IN ('identity_locked', 'mirror_gazer', 'cookie_jar_founder', 'forty_percent_survivor', 'cold_mind', 'tempered'))
-- earned_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-- UNIQUE(user_id, badge_key)
+SUBCOLLECTION: users/{uid}/badges/{badgeKey}
+Fields:
+- badgeKey: 'identity_locked' | 'mirror_gazer' | 'cookie_jar_founder' | 'forty_percent_survivor' | 'cold_mind' | 'tempered'
+- earnedAt: Timestamp
+NOTE: Using subcollection under users/{uid} for badges. Document ID = badgeKey (guarantees idempotency — setting the same doc twice is safe).
 
-TABLE: rule_forty_events
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- triggered_by TEXT NOT NULL CHECK (triggered_by IN ('auto_habit', 'auto_checkin', 'manual'))
-- habit_id UUID REFERENCES habits(id)
-- choice TEXT NOT NULL CHECK (choice IN ('took_step', 'declined'))
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: rule_forty_events
+Document path: rule_forty_events/{autoId}
+Fields:
+- id: string
+- userId: string
+- triggeredBy: 'auto_habit' | 'auto_checkin' | 'manual'
+- habitId: string | null
+- choice: 'took_step' | 'declined'
+- createdAt: Timestamp
 
-TABLE: forge_score_history
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- score INTEGER NOT NULL
-- recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: forge_score_history
+Document path: forge_score_history/{autoId}
+Fields:
+- id: string
+- userId: string
+- score: number
+- recordedAt: Timestamp
 
-TABLE: weekly_reports
-- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-- week_start_date DATE NOT NULL
-- forge_score_change INTEGER NOT NULL DEFAULT 0
-- habit_completion_rate INTEGER NOT NULL DEFAULT 0
-- best_streak_this_week TEXT
-- behavioral_arc TEXT
-- key_insight TEXT
-- next_week_challenge TEXT
-- email_sent BOOLEAN NOT NULL DEFAULT false
-- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+COLLECTION: weekly_reports
+Document path: weekly_reports/{autoId}
+Fields:
+- id: string
+- userId: string
+- weekStartDate: string  ('YYYY-MM-DD')
+- forgeScoreChange: number  (default: 0)
+- habitCompletionRate: number  (default: 0)
+- bestStreakThisWeek: string | null
+- behavioralArc: string | null
+- keyInsight: string | null
+- nextWeekChallenge: string | null
+- emailSent: boolean  (default: false)
+- createdAt: Timestamp
 
-Enable RLS on every table. Add these policies:
-- For all user-data tables (users, subscriptions, habits, habit_completions, habit_streaks, daily_checkins, coaching_sessions, user_memories, cookie_jar_entries, user_challenges, xp_events, user_badges, rule_forty_events, forge_score_history, weekly_reports):
-  ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "Users can only access own data" ON [table] FOR ALL USING (auth.uid() = user_id);
-- For challenges (read-only for authenticated users): ENABLE ROW LEVEL SECURITY; CREATE POLICY "Authenticated users can read challenges" ON challenges FOR SELECT USING (auth.role() = 'authenticated');
+FIRESTORE SECURITY RULES (deploy via Firebase console → Firestore → Rules):
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      match /badges/{badgeKey} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;  // server-only (Admin SDK)
+      }
+    }
+    match /habits/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    match /habit_completions/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    match /habit_streaks/{docId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow write: if false;  // server-only
+    }
+    match /daily_checkins/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    match /challenges/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;  // admin-seeded only
+    }
+    match /{collection}/{docId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow write: if false;  // all other writes are server-only via Admin SDK
+    }
+  }
+}
+```
 
-Add indexes:
-- habits: (user_id, is_active)
-- habit_completions: (habit_id, local_date), (user_id, local_date)
-- daily_checkins: (user_id, local_date)
-- user_memories: (user_id, memory_type); ivfflat for embedding: CREATE INDEX memories_embedding_idx ON user_memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-- cookie_jar_entries: (user_id); ivfflat index on embedding: CREATE INDEX cookie_jar_embedding_idx ON cookie_jar_entries USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-- forge_score_history: (user_id, recorded_at DESC)
-- rule_forty_events: (user_id, created_at DESC)
+CREATE types/index.ts with TypeScript interfaces matching every collection's fields above (use camelCase field names as specified).
 
-Add a trigger to auto-update users.updated_at on row changes.
-Add a trigger to auto-create a users row when a new auth.users record is inserted:
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.users (id, email) VALUES (NEW.id, NEW.email);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
-ACCEPTANCE: Migration runs without errors in Supabase SQL editor. All tables visible in Table Editor. RLS shows lock icon on all tables. pgvector extension is active.
+ACCEPTANCE: types/index.ts compiles cleanly. Firestore Security Rules are valid (test in Firebase console Rules Playground). Admin SDK can write to all collections from server code.
 ```
 
 ---
 
-### Step 1.3 — Supabase Auth + Middleware
+### Step 1.3 — Firebase Auth + Middleware
 
 ```
-Implement Supabase Auth and Next.js middleware for MindForge.
+Implement Firebase Auth and Next.js middleware for MindForge.
 
-INSTALL: @supabase/ssr @supabase/supabase-js
+PACKAGES ALREADY INSTALLED: firebase (client SDK), firebase-admin (Admin SDK)
 
-CREATE lib/supabase/client.ts:
-Browser Supabase client using createBrowserClient from @supabase/ssr.
-Uses NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.
+CREATE lib/firebase/client.ts:
+- Initialize Firebase app (guard with `getApps().length` to prevent re-initialization)
+- Use NEXT_PUBLIC_FIREBASE_* env vars for firebaseConfig
+- Export: auth (getAuth(app)), db (getFirestore(app)), googleProvider (new GoogleAuthProvider())
+- This file is safe to import from client components
 
-CREATE lib/supabase/server.ts:
-Server Supabase client using createServerClient from @supabase/ssr.
-Uses cookies() from next/headers. Exports async function createClient().
+CREATE lib/firebase/admin.ts:
+- Add `import "server-only"` at the top — prevents accidental client-side import
+- Initialize Firebase Admin app using FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (use cert() from firebase-admin/app)
+- Guard with getApps() check to prevent re-initialization
+- Export: adminAuth (getAuth()), adminDb (getFirestore())
+- FIREBASE_PRIVATE_KEY contains literal \n in the env value — replace with real newlines: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
 
-CREATE middleware.ts (root level):
-- Use createServerClient from @supabase/ssr with request/response cookie handling
-- Get session via supabase.auth.getUser()
-- If no session AND path starts with /dashboard, /habits, /checkin, /coach, /cookie-jar, /challenges, /analytics, /settings, /upgrade: redirect to /login
-- If session AND path is /login: redirect based on onboarding status:
-  - Fetch users.onboarding_complete and users.onboarding_step for the user
-  - If onboarding_complete = false: redirect to /onboarding/[onboarding_step]
-  - If onboarding_complete = true: redirect to /dashboard
-- Apply middleware to: matcher: ['/((?!_next/static|_next/image|favicon.ico|api/billing/webhook).*)']
+CREATE lib/auth.ts:
+- Add `import "server-only"` at the top
+- Import adminAuth, adminDb from lib/firebase/admin
+- Export async function getCurrentUser(): Promise<UserProfile | null>
+  - Read 'mf_session' cookie from next/headers cookies()
+  - If no cookie: return null
+  - Call adminAuth.verifySessionCookie(sessionCookie, true) — the second arg `true` checks revocation
+  - On error (expired/invalid/revoked): return null
+  - Fetch users/{uid} from Firestore using adminDb
+  - Return the user profile data (uid, email, tier, onboardingComplete, onboardingStep, coachIntensity, timezone, etc.)
+- Export async function requireAuth(): Promise<UserProfile>
+  - Calls getCurrentUser(), throws TRPCError UNAUTHORIZED if null
+
+CREATE app/api/auth/session/route.ts:
+- POST endpoint (no authentication required — this IS the authentication step)
+- Parse body: { idToken: string }
+- Call adminAuth.verifyIdToken(idToken) to validate the Firebase ID token
+- Call adminAuth.createSessionCookie(idToken, { expiresIn: 14 * 24 * 60 * 60 * 1000 }) — 14-day expiry
+- Check if users/{uid} doc exists in Firestore; if not, create it with default values (tier: 'free', onboardingStep: 'mirror', onboardingComplete: false, email from decodedToken.email, createdAt: now, updatedAt: now)
+- Set 'mf_session' cookie: httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 14 * 24 * 60 * 60, path: '/'
+- Return { success: true, onboardingComplete: boolean, onboardingStep: string }
+
+CREATE app/api/auth/logout/route.ts:
+- POST endpoint (authenticated)
+- Clear 'mf_session' cookie by setting it with maxAge: 0
+- Return { success: true }
+
+CREATE middleware.ts (root level — MUST be Edge-compatible):
+- CRITICAL: Do NOT import firebase-admin or lib/auth.ts in middleware — Admin SDK uses Node.js APIs not available at Edge runtime
+- Instead: check for the presence of the 'mf_session' cookie only
+- If no 'mf_session' cookie AND path matches protected routes (/dashboard, /habits, /checkin, /coach, /cookie-jar, /challenges, /analytics, /settings, /upgrade): redirect to /login
+- If 'mf_session' cookie IS present AND path is /login: redirect to /dashboard (the tRPC context will do full verification; redirect is just UX)
+- Apply middleware to: matcher: ['/((?!_next/static|_next/image|favicon.ico|api/billing/webhook|api/auth).*)']
 
 Note on routes: The app uses Next.js route groups — (auth), (onboarding), and (app) — which are folder groupings only. The actual URLs do NOT include the group name:
 - app/(app)/dashboard/page.tsx → URL: /dashboard
@@ -320,18 +383,19 @@ CREATE app/(auth)/login/page.tsx:
 - MindForge logotype (text, bold, orange, font-heading, text-2xl)
 - Tagline below: "Rewire your brain. Forge your identity." (text-muted, text-sm)
 - 32px gap
-- "Continue with Email" section: email input (full width, dark bg #161514, border #2A2927, text-primary, sharp corners, focus ring orange) + "Send Magic Link" button (full width, bg orange #FF6B2B, text black, sharp corners, font-medium)
+- Email + password form: email input + password input (full width, dark bg #161514, border #2A2927, text-primary, sharp corners, focus ring orange) + "Sign In" button (full width, bg orange #FF6B2B, text black, sharp corners, font-medium)
+- Toggle between "Sign In" and "Create Account" modes (same form — registration shows confirm password field)
 - Divider: "or" with horizontal lines
 - "Continue with Google" button (full width, border #2A2927, bg transparent, text-primary, Google icon SVG on left)
-- Success state: "Magic link sent! Check your email." shown after submission
-- Use Supabase signInWithOtp for magic link, signInWithOAuth for Google
+- Error state: show error message below the form in text-danger (#EF4444)
+- On successful sign-in: get ID token via user.getIdToken(), POST to /api/auth/session, then router.push based on onboardingComplete
+- Use Firebase signInWithEmailAndPassword / createUserWithEmailAndPassword for email auth
+- Use Firebase signInWithPopup(googleProvider) for Google auth
 
 CREATE app/(auth)/callback/route.ts:
-- Exchange code for session via supabase.auth.exchangeCodeForSession(code)
-- On success: redirect to /dashboard (middleware will redirect to onboarding if needed)
-- On error: redirect to /login?error=auth_error
+- Simple GET handler that redirects to /dashboard (for legacy compatibility; not used in Firebase flow)
 
-ACCEPTANCE: Magic link email is received. Clicking it logs the user in. Unauthenticated /dashboard access redirects to /login. Google OAuth button initiates OAuth flow.
+ACCEPTANCE: User can register with email/password. User can sign in with email/password. Google OAuth popup works. After sign-in, mf_session cookie is set. Unauthenticated /dashboard access redirects to /login.
 ```
 
 ---
@@ -345,10 +409,8 @@ INSTALL: @trpc/server @trpc/client @trpc/react-query @trpc/next @tanstack/react-
 
 CREATE server/trpc/context.ts:
 - Export createTRPCContext that:
-  - Creates Supabase server client
-  - Gets user from supabase.auth.getUser()
-  - Fetches users row (id, tier, onboarding_complete, coach_intensity) if authenticated
-  - Returns { supabase, user: authUser | null, userProfile: dbUser | null }
+  - Calls getCurrentUser() from lib/auth.ts (reads mf_session cookie, verifies via Firebase Admin SDK, fetches Firestore user doc)
+  - Returns { user: UserProfile | null, adminDb: Firestore } (adminDb imported from lib/firebase/admin.ts for use in routers)
 
 CREATE server/trpc/trpc.ts:
 - Initialize tRPC with context and superjson transformer
@@ -545,7 +607,7 @@ Build the Server-Sent Events streaming endpoint and the mood classification endp
 CREATE app/api/coach/stream/route.ts:
 
 This is a POST endpoint that:
-1. Authenticates the user via Supabase server client (return 401 if not authenticated)
+1. Authenticates the user via getCurrentUser() from lib/auth.ts (verifies mf_session cookie using Firebase Admin SDK — return 401 if not authenticated)
 2. For session_type 'direct_chat' and 'daily_checkin': verify user is Pro/Elite tier; return 403 if Free
 3. Parses the request body: { session_type, messages, context }
    - session_type: 'onboarding_mirror' | 'why_excavation' | 'daily_checkin' | 'forty_percent_rule' | 'direct_chat'
@@ -1225,33 +1287,34 @@ Build the Callousing Challenge system and seed the challenge library.
 
 IMPORTANT: The challenges DB schema uses duration_minutes (not duration_days) and has an xp_reward field per the PRD data model. Challenge categories are: 'cold' | 'screen' | 'physical' | 'fast' | 'social' (per PRD data model — NOT 'mental'/'digital').
 
-Create supabase/seed.sql with 20 challenges:
+Create a server-side seed script scripts/seed-challenges.ts (run once via `npx ts-node scripts/seed-challenges.ts`) that inserts 20 challenges into Firestore using the Admin SDK. Each doc has a deterministic string ID (e.g., 'cold-shower-protocol') so re-running the script is idempotent (use adminDb.doc('challenges/' + id).set(..., { merge: true })).
 
-INSERT INTO challenges (title, description, difficulty, category, duration_minutes, xp_reward) VALUES
--- Difficulty 1 (Free tier accessible — exactly 5, per PRD Feature 11)
-('Cold Shower Protocol', 'End every shower with 60 seconds of cold water for 7 days straight. No warming back up. No exceptions. Cold exposure activates the noradrenergic system — this is a measurable intervention, not just discomfort.', 1, 'cold', 10080, 75),
-('Phone-Free Morning', 'No phone for the first 60 minutes after waking. Every day for 7 days. The morning cortisol spike is your highest-focus window. You are currently handing it to an algorithm.', 1, 'screen', 10080, 50),
-('No Complaint Protocol', 'Go an entire day without complaining — verbally or mentally. Restart if you slip. The point is not silence — it is rewiring the default toward agency.', 1, 'social', 1440, 50),
-('The Hard Conversation', 'Have one difficult conversation you have been avoiding. Complete it within 48 hours. Name the conversation before you begin.', 1, 'social', 2880, 75),
-('5AM Wake Protocol', 'Wake at 5AM every day for 5 days. No snooze. Get out of bed immediately. You are not a morning person — you are a discipline person.', 1, 'physical', 7200, 75),
--- Difficulty 3
-('Dopamine Detox Weekend', 'No social media, no streaming, no alcohol, no junk food for 48 hours. Only books, exercise, and intentional work. This is a reset, not a punishment.', 3, 'screen', 2880, 100),
-('10K This Week', 'Run or walk 10 kilometers total within 7 days. Track every kilometer. No weather excuses — you have legs.', 3, 'physical', 10080, 100),
-('Cold Immersion Week', 'Cold shower every morning for 7 days. Minimum 90 seconds cold. No warm water beforehand — cold from the start.', 3, 'cold', 10080, 100),
-('Public Rejection Training', 'Ask for something unreasonable in public 3 times this week — a discount, an impossible request. Train yourself to tolerate rejection. The fear is worse than the reality.', 3, 'social', 10080, 100),
-('Single-Tasking Week', 'No multitasking for 7 days. One thing at a time. No phone while eating. No background noise while working. This is harder than it sounds.', 3, 'screen', 10080, 100),
-('Social Media Elimination', 'Delete all social media apps for 14 days. Not muted — deleted. Reinstall after the 14 days if you choose. But experience the two weeks first.', 3, 'screen', 20160, 100),
-('Water-Only Week', 'No coffee, no alcohol, no juice, no soda for 7 days. Water and herbal tea only. Identify which dependencies are habits vs. choices.', 3, 'fast', 10080, 100),
--- Difficulty 4
-('30-Day No Algorithm Feed', 'Delete all social media apps for 30 days. Keep a journal of what you do with the time instead. Most people discover they were using the apps to avoid something.', 4, 'screen', 43200, 150),
-('Sleep Discipline Protocol', 'In bed by 10:30PM, awake by 5:30AM, every day for 14 days. Non-negotiable. Track your HRV or subjective energy daily.', 4, 'physical', 20160, 150),
-('Deliberate Discomfort Daily', 'Every day for 21 days, do one thing that makes you genuinely uncomfortable. Document it in your check-in. Comfort is the enemy of growth.', 4, 'physical', 30240, 150),
-('Zero Complaint Month', '30 days without a single complaint. Wear a rubber band on your wrist. Snap it every time you catch yourself complaining. Restart the count.', 4, 'social', 43200, 150),
-('One-Meal-a-Day Week', 'Eat one meal per day for 7 days. This is not about weight — it is about learning that discomfort is not an emergency. Consult a physician if you have health conditions.', 4, 'fast', 10080, 150),
--- Difficulty 5
-('The 75 Hard Protocol', 'Follow the Andy Frisella 75 Hard protocol for 75 days: two 45-minute workouts per day (one outdoor), diet, no alcohol, one gallon of water, 10 pages of nonfiction reading, progress photo. Restart from day 1 if you miss anything. This is the benchmark.', 5, 'physical', 108000, 200),
-('No Entertainment Month', 'Zero passive entertainment for 30 days: no TV, no streaming, no social media, no gaming. Only creation, learning, work, and relationships. Most people discover who they are without the noise.', 5, 'screen', 43200, 200),
-('Cold Water Protocol — 21 Days', 'Cold shower every morning, minimum 3 minutes cold, for 21 days. No exceptions for illness (reduce duration if sick, do not skip). Cold adaptation is neurological — you are literally rewiring your stress response.', 5, 'cold', 30240, 200);
+Seed data (use these exact values in the seed script — format as JS objects { id, title, description, difficulty, category, durationMinutes, xpReward, isActive: true }):
+
+// Difficulty 1 (Free tier accessible — exactly 5, per PRD Feature 11)
+{ id: 'cold-shower-protocol', title: 'Cold Shower Protocol', description: 'End every shower with 60 seconds of cold water for 7 days straight. No warming back up. No exceptions. Cold exposure activates the noradrenergic system — this is a measurable intervention, not just discomfort.', difficulty: 1, category: 'cold', durationMinutes: 10080, xpReward: 75 },
+{ id: 'phone-free-morning', title: 'Phone-Free Morning', description: 'No phone for the first 60 minutes after waking. Every day for 7 days. The morning cortisol spike is your highest-focus window. You are currently handing it to an algorithm.', difficulty: 1, category: 'screen', durationMinutes: 10080, xpReward: 50 },
+{ id: 'no-complaint-protocol', title: 'No Complaint Protocol', description: 'Go an entire day without complaining — verbally or mentally. Restart if you slip. The point is not silence — it is rewiring the default toward agency.', difficulty: 1, category: 'social', durationMinutes: 1440, xpReward: 50 },
+{ id: 'the-hard-conversation', title: 'The Hard Conversation', description: 'Have one difficult conversation you have been avoiding. Complete it within 48 hours. Name the conversation before you begin.', difficulty: 1, category: 'social', durationMinutes: 2880, xpReward: 75 },
+{ id: '5am-wake-protocol', title: '5AM Wake Protocol', description: 'Wake at 5AM every day for 5 days. No snooze. Get out of bed immediately. You are not a morning person — you are a discipline person.', difficulty: 1, category: 'physical', durationMinutes: 7200, xpReward: 75 },
+// Difficulty 3
+{ id: 'dopamine-detox-weekend', title: 'Dopamine Detox Weekend', description: 'No social media, no streaming, no alcohol, no junk food for 48 hours. Only books, exercise, and intentional work. This is a reset, not a punishment.', difficulty: 3, category: 'screen', durationMinutes: 2880, xpReward: 100 },
+{ id: '10k-this-week', title: '10K This Week', description: 'Run or walk 10 kilometers total within 7 days. Track every kilometer. No weather excuses — you have legs.', difficulty: 3, category: 'physical', durationMinutes: 10080, xpReward: 100 },
+{ id: 'cold-immersion-week', title: 'Cold Immersion Week', description: 'Cold shower every morning for 7 days. Minimum 90 seconds cold. No warm water beforehand — cold from the start.', difficulty: 3, category: 'cold', durationMinutes: 10080, xpReward: 100 },
+{ id: 'public-rejection-training', title: 'Public Rejection Training', description: 'Ask for something unreasonable in public 3 times this week — a discount, an impossible request. Train yourself to tolerate rejection. The fear is worse than the reality.', difficulty: 3, category: 'social', durationMinutes: 10080, xpReward: 100 },
+{ id: 'single-tasking-week', title: 'Single-Tasking Week', description: 'No multitasking for 7 days. One thing at a time. No phone while eating. No background noise while working. This is harder than it sounds.', difficulty: 3, category: 'screen', durationMinutes: 10080, xpReward: 100 },
+{ id: 'social-media-elimination', title: 'Social Media Elimination', description: 'Delete all social media apps for 14 days. Not muted — deleted. Reinstall after the 14 days if you choose. But experience the two weeks first.', difficulty: 3, category: 'screen', durationMinutes: 20160, xpReward: 100 },
+{ id: 'water-only-week', title: 'Water-Only Week', description: 'No coffee, no alcohol, no juice, no soda for 7 days. Water and herbal tea only. Identify which dependencies are habits vs. choices.', difficulty: 3, category: 'fast', durationMinutes: 10080, xpReward: 100 },
+// Difficulty 4
+{ id: '30-day-no-algorithm-feed', title: '30-Day No Algorithm Feed', description: 'Delete all social media apps for 30 days. Keep a journal of what you do with the time instead. Most people discover they were using the apps to avoid something.', difficulty: 4, category: 'screen', durationMinutes: 43200, xpReward: 150 },
+{ id: 'sleep-discipline-protocol', title: 'Sleep Discipline Protocol', description: 'In bed by 10:30PM, awake by 5:30AM, every day for 14 days. Non-negotiable. Track your HRV or subjective energy daily.', difficulty: 4, category: 'physical', durationMinutes: 20160, xpReward: 150 },
+{ id: 'deliberate-discomfort-daily', title: 'Deliberate Discomfort Daily', description: 'Every day for 21 days, do one thing that makes you genuinely uncomfortable. Document it in your check-in. Comfort is the enemy of growth.', difficulty: 4, category: 'physical', durationMinutes: 30240, xpReward: 150 },
+{ id: 'zero-complaint-month', title: 'Zero Complaint Month', description: '30 days without a single complaint. Wear a rubber band on your wrist. Snap it every time you catch yourself complaining. Restart the count.', difficulty: 4, category: 'social', durationMinutes: 43200, xpReward: 150 },
+{ id: 'one-meal-a-day-week', title: 'One-Meal-a-Day Week', description: 'Eat one meal per day for 7 days. This is not about weight — it is about learning that discomfort is not an emergency. Consult a physician if you have health conditions.', difficulty: 4, category: 'fast', durationMinutes: 10080, xpReward: 150 },
+// Difficulty 5
+{ id: 'the-75-hard-protocol', title: 'The 75 Hard Protocol', description: 'Follow the Andy Frisella 75 Hard protocol for 75 days: two 45-minute workouts per day (one outdoor), diet, no alcohol, one gallon of water, 10 pages of nonfiction reading, progress photo. Restart from day 1 if you miss anything. This is the benchmark.', difficulty: 5, category: 'physical', durationMinutes: 108000, xpReward: 200 },
+{ id: 'no-entertainment-month', title: 'No Entertainment Month', description: 'Zero passive entertainment for 30 days: no TV, no streaming, no social media, no gaming. Only creation, learning, work, and relationships. Most people discover who they are without the noise.', difficulty: 5, category: 'screen', durationMinutes: 43200, xpReward: 200 },
+{ id: 'cold-water-protocol-21-days', title: 'Cold Water Protocol — 21 Days', description: 'Cold shower every morning, minimum 3 minutes cold, for 21 days. No exceptions for illness (reduce duration if sick, do not skip). Cold adaptation is neurological — you are literally rewiring your stress response.', difficulty: 5, category: 'cold', durationMinutes: 30240, xpReward: 200 }
 
 Note on tier access: Per PRD Feature 11, Free tier users can VIEW all challenges but can only ACTIVATE difficulty-1 challenges (the 5 easiest). Pro tier unlocks the full library.
 
@@ -1389,7 +1452,7 @@ SECTIONS (use Tabs):
 
 1. PROFILE:
 - Display name input (updateable)
-- Email (read-only, from Supabase auth)
+- Email (read-only, from Firebase Auth / users/{uid}.email)
 - "Save changes" button → calls tRPC user.updateProfile({ displayName })
 
 2. IDENTITY:
@@ -1532,7 +1595,7 @@ CREATE vercel.json:
     }
   ]
 }
-This runs every Sunday at 8:00AM UTC. Note: Vercel cron requires Vercel Pro plan. As a fallback, Supabase pg_cron extension can be used.
+This runs every Sunday at 8:00AM UTC. Note: Vercel cron requires Vercel Pro plan.
 
 ACCEPTANCE: Email template renders with dark theme in email preview. Cron endpoint returns 401 without CRON_SECRET. With valid secret and seeded user data, reports generate and send. weekly_reports row inserted per user.
 ```
@@ -1750,8 +1813,9 @@ GDPR COMPLIANCE:
    - Rate limit: 1 export per 24 hours per user
 
 2. Delete Account flow (already in Settings) — verify:
-   - Set users.is_deleted = true
-   - Anonymize email to deleted_{id}@mindforge.app
+   - Set users/{uid}.isDeleted = true in Firestore
+   - Anonymize email to deleted_{uid}@mindforge.app
+   - Call adminAuth.deleteUser(uid) to remove Firebase Auth account
    - If subscription active: call Lemon Squeezy API to cancel subscription
    - Queue data anonymization (placeholder: log to Sentry for manual processing in v1)
 
@@ -1759,8 +1823,9 @@ GDPR COMPLIANCE:
 4. Create app/terms/page.tsx — static terms of service page (standard SaaS content, dark theme).
 
 SECURITY FINAL CHECKS:
-- Confirm no env var starting with NEXT_PUBLIC_ contains secrets. Run: grep -r "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE\|NEXT_PUBLIC_GEMINI\|NEXT_PUBLIC_LEMONSQUEEZY\|NEXT_PUBLIC_RESEND" . — must return zero results.
-- Confirm RLS is enabled on all Supabase tables
+- Confirm no env var starting with NEXT_PUBLIC_ contains secrets. Run: grep -r "NEXT_PUBLIC_FIREBASE_PRIVATE\|NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL\|NEXT_PUBLIC_GEMINI\|NEXT_PUBLIC_LEMONSQUEEZY\|NEXT_PUBLIC_RESEND" . — must return zero results.
+- Confirm Firebase Admin credentials (FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL) are NOT in any NEXT_PUBLIC_ var
+- Confirm lib/firebase/admin.ts and lib/auth.ts have `import "server-only"` at the top
 - Confirm Lemon Squeezy webhook HMAC verification is active (not bypassed)
 - Confirm rate limiting is active on /api/coach/stream
 
@@ -1796,10 +1861,18 @@ Connect repo to Vercel. Set all env vars in Vercel dashboard. Deploy. Verify on 
 ## ENVIRONMENT VARIABLES REFERENCE
 
 ```
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
+# Firebase (client-side — NEXT_PUBLIC_ prefix required)
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+
+# Firebase Admin (server-only — NO NEXT_PUBLIC_ prefix)
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
 
 # Google Gemini AI (server-only — no NEXT_PUBLIC_ prefix)
 GEMINI_API_KEY=
