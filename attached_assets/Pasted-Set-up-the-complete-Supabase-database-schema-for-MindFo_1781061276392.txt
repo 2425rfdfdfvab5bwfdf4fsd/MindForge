@@ -1,0 +1,201 @@
+Set up the complete Supabase database schema for MindForge. Create the file supabase/migrations/001_initial_schema.sql with the following tables, all with Row Level Security enabled.
+
+Enable the pgvector extension at the very top:
+CREATE EXTENSION IF NOT EXISTS vector;
+
+TABLE: users
+- id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE
+- email TEXT NOT NULL
+- display_name TEXT
+- avatar_url TEXT
+- tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'elite'))
+- onboarding_step TEXT NOT NULL DEFAULT 'mirror' CHECK (onboarding_step IN ('mirror', 'why', 'environment', 'complete'))
+- onboarding_complete BOOLEAN NOT NULL DEFAULT false
+- why_statement TEXT
+- identity_declaration TEXT
+- coach_intensity TEXT NOT NULL DEFAULT 'hard' CHECK (coach_intensity IN ('hard', 'firm'))
+- timezone TEXT NOT NULL DEFAULT 'UTC'
+- environment_audit JSONB DEFAULT '[]'
+- forge_score INTEGER NOT NULL DEFAULT 0
+- xp INTEGER NOT NULL DEFAULT 0
+- level INTEGER NOT NULL DEFAULT 1
+- current_streak_days INTEGER NOT NULL DEFAULT 0
+- is_deleted BOOLEAN NOT NULL DEFAULT false
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+- updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: subscriptions
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- UNIQUE(user_id)
+- lemonsqueezy_customer_id TEXT UNIQUE
+- lemonsqueezy_subscription_id TEXT UNIQUE
+- tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'elite'))
+- status TEXT NOT NULL CHECK (status IN ('active', 'cancelled', 'past_due', 'expired'))
+- current_period_end TIMESTAMPTZ
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+- updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: habits
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- name TEXT NOT NULL CHECK (char_length(name) <= 60)
+- category TEXT NOT NULL CHECK (category IN ('health', 'mind', 'avoid', 'perform'))
+- habit_type TEXT NOT NULL CHECK (habit_type IN ('build', 'avoid'))
+- target_frequency TEXT NOT NULL DEFAULT 'daily' CHECK (target_frequency IN ('daily', 'weekdays', 'custom'))
+- target_days INTEGER[] NOT NULL DEFAULT '{0,1,2,3,4,5,6}' -- 0=Sun, 6=Sat
+- sort_order INTEGER NOT NULL DEFAULT 0
+- is_active BOOLEAN NOT NULL DEFAULT true
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: habit_completions
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- habit_id UUID NOT NULL REFERENCES habits(id) ON DELETE CASCADE
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- local_date DATE NOT NULL
+- completed BOOLEAN NOT NULL
+- notes TEXT
+- completion_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
+- UNIQUE(habit_id, local_date)
+
+TABLE: habit_streaks (cache table — always updated alongside habit_completions)
+- habit_id UUID PRIMARY KEY REFERENCES habits(id) ON DELETE CASCADE
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- current_streak INTEGER NOT NULL DEFAULT 0
+- longest_streak INTEGER NOT NULL DEFAULT 0
+- last_completed_date DATE
+- updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: daily_checkins
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- local_date DATE NOT NULL
+- raw_reflection TEXT NOT NULL
+- ai_response TEXT
+- mood_signal TEXT CHECK (mood_signal IN ('excusing', 'deflecting', 'owning', 'crushing'))
+- honesty_score INTEGER CHECK (honesty_score BETWEEN 1 AND 10)
+- forge_score_delta INTEGER NOT NULL DEFAULT 0
+- onboarding_mirror BOOLEAN NOT NULL DEFAULT false
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+- UNIQUE(user_id, local_date) WHERE (onboarding_mirror = false) -- partial unique: allows one mirror + one real check-in on the same day
+
+TABLE: coaching_sessions
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- checkin_id UUID REFERENCES daily_checkins(id)
+- session_type TEXT NOT NULL CHECK (session_type IN ('onboarding_mirror', 'why_excavation', 'daily_checkin', 'forty_percent_rule', 'direct_chat'))
+- messages JSONB NOT NULL DEFAULT '[]' -- [{role: 'user'|'model', content: string}]
+- session_summary TEXT
+- forge_score_delta INTEGER NOT NULL DEFAULT 0
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: user_memories
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- content TEXT NOT NULL
+- memory_type TEXT NOT NULL CHECK (memory_type IN ('preference', 'trigger', 'victory', 'fear', 'identity', 'pattern'))
+- embedding vector(768) -- pgvector: text-embedding-004 produces 768-dimension vectors
+- last_accessed TIMESTAMPTZ
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: cookie_jar_entries
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- title TEXT NOT NULL CHECK (char_length(title) <= 80)
+- description TEXT NOT NULL CHECK (char_length(description) <= 500)
+- date_of_victory DATE
+- embedding vector(768)
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: challenges
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- title TEXT NOT NULL
+- description TEXT NOT NULL
+- difficulty INTEGER NOT NULL CHECK (difficulty BETWEEN 1 AND 5)
+- category TEXT NOT NULL CHECK (category IN ('cold', 'screen', 'physical', 'fast', 'social'))
+- duration_minutes INTEGER NOT NULL
+- xp_reward INTEGER NOT NULL DEFAULT 100
+- is_active BOOLEAN NOT NULL DEFAULT true
+
+TABLE: user_challenges
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- challenge_id UUID NOT NULL REFERENCES challenges(id)
+- status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'failed'))
+- reflection TEXT
+- started_at TIMESTAMPTZ
+- completed_at TIMESTAMPTZ
+-- NO unique constraint on (user_id, challenge_id) — PRD Feature 11 explicitly states "Completed challenges can be repeated (no cooldown in v1)"
+
+TABLE: xp_events
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- xp_amount INTEGER NOT NULL
+- reason TEXT NOT NULL
+- event_type TEXT NOT NULL CHECK (event_type IN ('habit_complete', 'checkin', 'checkin_bonus', 'challenge', 'forty_percent', 'cookie_jar', 'environment', 'onboarding'))
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: user_badges
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- badge_key TEXT NOT NULL CHECK (badge_key IN ('identity_locked', 'mirror_gazer', 'cookie_jar_founder', 'forty_percent_survivor', 'cold_mind', 'tempered'))
+- earned_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+- UNIQUE(user_id, badge_key)
+
+TABLE: rule_forty_events
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- triggered_by TEXT NOT NULL CHECK (triggered_by IN ('auto_habit', 'auto_checkin', 'manual'))
+- habit_id UUID REFERENCES habits(id)
+- choice TEXT NOT NULL CHECK (choice IN ('took_step', 'declined'))
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: forge_score_history
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- score INTEGER NOT NULL
+- recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+TABLE: weekly_reports
+- id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
+- week_start_date DATE NOT NULL
+- forge_score_change INTEGER NOT NULL DEFAULT 0
+- habit_completion_rate INTEGER NOT NULL DEFAULT 0
+- best_streak_this_week TEXT
+- behavioral_arc TEXT
+- key_insight TEXT
+- next_week_challenge TEXT
+- email_sent BOOLEAN NOT NULL DEFAULT false
+- created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+Enable RLS on every table. Add these policies:
+- For all user-data tables (users, subscriptions, habits, habit_completions, habit_streaks, daily_checkins, coaching_sessions, user_memories, cookie_jar_entries, user_challenges, xp_events, user_badges, rule_forty_events, forge_score_history, weekly_reports):
+  ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "Users can only access own data" ON [table] FOR ALL USING (auth.uid() = user_id);
+- For challenges (read-only for authenticated users): ENABLE ROW LEVEL SECURITY; CREATE POLICY "Authenticated users can read challenges" ON challenges FOR SELECT USING (auth.role() = 'authenticated');
+
+Add indexes:
+- habits: (user_id, is_active)
+- habit_completions: (habit_id, local_date), (user_id, local_date)
+- daily_checkins: (user_id, local_date)
+- user_memories: (user_id, memory_type); ivfflat for embedding: CREATE INDEX memories_embedding_idx ON user_memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+- cookie_jar_entries: (user_id); ivfflat index on embedding: CREATE INDEX cookie_jar_embedding_idx ON cookie_jar_entries USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+- forge_score_history: (user_id, recorded_at DESC)
+- rule_forty_events: (user_id, created_at DESC)
+
+Add a trigger to auto-update users.updated_at on row changes.
+Add a trigger to auto-create a users row when a new auth.users record is inserted:
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (id, email) VALUES (NEW.id, NEW.email);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+ACCEPTANCE: Migration runs without errors in Supabase SQL editor. All tables visible in Table Editor. RLS shows lock icon on all tables. pgvector extension is active.

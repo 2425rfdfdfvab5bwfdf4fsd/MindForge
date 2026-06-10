@@ -1,0 +1,50 @@
+Create a new Next.js 14 App Router project called "mindforge" with the following configuration:
+
+STACK:
+- Next.js 14 with App Router and TypeScript (strict mode)
+- Tailwind CSS
+- shadcn/ui (initialize with the CLI: `npx shadcn@latest init`)
+- Geist font (from `next/font/google`) for headings
+- Inter font (from `next/font/google`) for body text
+
+TAILWIND CONFIG (tailwind.config.ts):
+Extend the theme with these exact values:
+- Colors: forge.base=#0A0908, forge.subtle=#111110, forge.elevated=#1A1918, forge.overlay=#232220, forge.input=#161514, forge.border=#2A2927, forge.border-strong=#3D3B39, forge.orange=#FF6B2B, forge.orange-hover=#FF5214, forge.orange-text=#FFBDA3, forge.orange-glow=rgba(255,107,43,0.20), forge.blue=#3B82F6, forge.blue-hover=#2563EB, forge.blue-text=#93C5FD
+- Text colors: text.primary=#EDEDEF, text.secondary=#C2C0BE, text.muted=#87857F, text.disabled=#4A4845
+- Border radius: DEFAULT=0px (sharp), sm=2px, md=4px, full=9999px
+- Font families: heading=['Geist','Cal Sans','system-ui','sans-serif'], body=['Inter','system-ui','sans-serif'], mono=['Geist Mono','monospace']
+- Font sizes with line heights: display=3.052rem/1.05/800, 4xl=2.441rem/1.08/700, 3xl=1.953rem/1.15/700, 2xl=1.563rem/1.20/600, xl=1.25rem/1.30/600, base=1rem/1.65/400, sm=0.875rem/1.55/400, xs=0.75rem/1.40/400
+
+SHADCN CSS VARIABLES (globals.css — dark theme only, no light mode):
+--background: 10 6% 4%
+--foreground: 240 5% 93%
+--card: 40 5% 7%
+--card-foreground: 240 5% 93%
+--popover: 30 4% 13%
+--popover-foreground: 240 5% 93%
+--primary: 21 100% 58%
+--primary-foreground: 10 6% 4%
+--secondary: 217 91% 60%
+--secondary-foreground: 240 5% 93%
+--muted: 30 4% 13%
+--muted-foreground: 30 3% 53%
+--accent: 30 4% 13%
+--accent-foreground: 21 100% 58%
+--destructive: 0 84% 60%
+--destructive-foreground: 0 0% 98%
+--border: 30 3% 17%
+--input: 30 3% 10%
+--ring: 21 100% 58%
+--radius: 0rem
+
+Set `darkMode: 'class'` in Tailwind config and add `class="dark"` to the html element in the root layout. This is a dark-mode-only app — no light mode toggle.
+
+Install packages: @tanstack/react-query, framer-motion, recharts, zod
+
+Create a placeholder root layout (app/layout.tsx) with both fonts loaded, dark background (#0A0908), and a simple `<main>{children}</main>`. No navigation yet.
+
+Create app/page.tsx with just "MindForge — Coming Soon" centered on the dark background in orange (#FF6B2B) using the display font size. This confirms the theme is working.
+
+Create a types/index.ts file with a comment: "// Shared TypeScript types — populated as features are built"
+
+ACCEPTANCE: `npm run dev` starts without errors. Page shows "MindForge — Coming Soon" in orange on a near-black background. Tailwind IntelliSense shows forge.* color tokens.

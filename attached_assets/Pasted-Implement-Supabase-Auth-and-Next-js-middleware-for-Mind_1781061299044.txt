@@ -1,0 +1,45 @@
+Implement Supabase Auth and Next.js middleware for MindForge.
+
+INSTALL: @supabase/ssr @supabase/supabase-js
+
+CREATE lib/supabase/client.ts:
+Browser Supabase client using createBrowserClient from @supabase/ssr.
+Uses NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.
+
+CREATE lib/supabase/server.ts:
+Server Supabase client using createServerClient from @supabase/ssr.
+Uses cookies() from next/headers. Exports async function createClient().
+
+CREATE middleware.ts (root level):
+- Use createServerClient from @supabase/ssr with request/response cookie handling
+- Get session via supabase.auth.getUser()
+- If no session AND path starts with /dashboard, /habits, /checkin, /coach, /cookie-jar, /challenges, /analytics, /settings, /upgrade: redirect to /login
+- If session AND path is /login: redirect based on onboarding status:
+  - Fetch users.onboarding_complete and users.onboarding_step for the user
+  - If onboarding_complete = false: redirect to /onboarding/[onboarding_step]
+  - If onboarding_complete = true: redirect to /dashboard
+- Apply middleware to: matcher: ['/((?!_next/static|_next/image|favicon.ico|api/billing/webhook).*)']
+
+Note on routes: The app uses Next.js route groups — (auth), (onboarding), and (app) — which are folder groupings only. The actual URLs do NOT include the group name:
+- app/(app)/dashboard/page.tsx → URL: /dashboard
+- app/(onboarding)/mirror/page.tsx → URL: /onboarding/mirror
+- app/(auth)/login/page.tsx → URL: /login
+
+CREATE app/(auth)/login/page.tsx:
+- Full dark background (#0A0908)
+- Centered layout, max-width 400px
+- MindForge logotype (text, bold, orange, font-heading, text-2xl)
+- Tagline below: "Rewire your brain. Forge your identity." (text-muted, text-sm)
+- 32px gap
+- "Continue with Email" section: email input (full width, dark bg #161514, border #2A2927, text-primary, sharp corners, focus ring orange) + "Send Magic Link" button (full width, bg orange #FF6B2B, text black, sharp corners, font-medium)
+- Divider: "or" with horizontal lines
+- "Continue with Google" button (full width, border #2A2927, bg transparent, text-primary, Google icon SVG on left)
+- Success state: "Magic link sent! Check your email." shown after submission
+- Use Supabase signInWithOtp for magic link, signInWithOAuth for Google
+
+CREATE app/(auth)/callback/route.ts:
+- Exchange code for session via supabase.auth.exchangeCodeForSession(code)
+- On success: redirect to /dashboard (middleware will redirect to onboarding if needed)
+- On error: redirect to /login?error=auth_error
+
+ACCEPTANCE: Magic link email is received. Clicking it logs the user in. Unauthenticated /dashboard access redirects to /login. Google OAuth button initiates OAuth flow.
