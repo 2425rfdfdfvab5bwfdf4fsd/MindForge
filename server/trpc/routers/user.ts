@@ -275,6 +275,24 @@ export const userRouter = router({
       return { awarded: true, item: data };
     }),
 
+  getMemories: protectedProcedure.query(async ({ ctx }) => {
+    const { data } = await ctx.supabase
+      .from("user_memories")
+      .select("id, content, memory_type, created_at")
+      .eq("user_id", ctx.user.id)
+      .order("created_at", { ascending: false });
+
+    if (!data) return {} as Record<string, Array<{ id: string; content: string; created_at: string }>>;
+
+    // Group by memory_type
+    const grouped: Record<string, Array<{ id: string; content: string; created_at: string }>> = {};
+    for (const m of data) {
+      if (!grouped[m.memory_type]) grouped[m.memory_type] = [];
+      grouped[m.memory_type].push({ id: m.id, content: m.content, created_at: m.created_at });
+    }
+    return grouped;
+  }),
+
   completeOnboarding: protectedProcedure.mutation(async ({ ctx }) => {
     // 200 XP one-time onboarding completion bonus
     await grantXP(
