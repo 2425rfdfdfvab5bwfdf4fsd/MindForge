@@ -5,6 +5,7 @@ import { router, protectedProcedure } from "../trpc";
 import {
   users,
   userBadges,
+  subscriptions,
   environmentAuditItems,
   userMemories,
 } from "@/shared/schema";
@@ -262,5 +263,25 @@ export const userRouter = router({
       .returning();
 
     return updated;
+  }),
+
+  getSubscription: protectedProcedure.query(async ({ ctx }) => {
+    const [sub] = await ctx.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, ctx.user.id))
+      .limit(1);
+    return sub ?? null;
+  }),
+
+  getBadges: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .select({
+        id: userBadges.id,
+        badgeKey: userBadges.badgeKey,
+        earnedAt: userBadges.earnedAt,
+      })
+      .from(userBadges)
+      .where(eq(userBadges.userId, ctx.user.id));
   }),
 });
