@@ -60,73 +60,94 @@ export function LandingPricing() {
     <div>
       {/* Toggle */}
       <div className="flex items-center justify-center gap-4 mb-10">
-        <span className={`text-sm ${!annual ? "text-white" : "text-[#6B7280]"}`}>Monthly</span>
+        <span className={`text-sm transition-colors duration-200 ${!annual ? "text-white font-medium" : "text-[#6B7280]"}`}>
+          Monthly
+        </span>
         <button
           onClick={() => setAnnual((a) => !a)}
-          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+          className="relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-forge-orange"
           style={{ background: annual ? "#FF6B2B" : "#2A2927" }}
           aria-label="Toggle annual billing"
+          aria-checked={annual}
+          role="switch"
         >
           <span
-            className="inline-block h-4 w-4 rounded-full bg-white transition-transform"
-            style={{ transform: annual ? "translateX(24px)" : "translateX(4px)" }}
+            className="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-300"
+            style={{ transform: annual ? "translateX(26px)" : "translateX(4px)" }}
           />
         </button>
-        <span className={`text-sm ${annual ? "text-white" : "text-[#6B7280]"}`}>
+        <span className={`text-sm transition-colors duration-200 ${annual ? "text-white font-medium" : "text-[#6B7280]"}`}>
           Annual{" "}
-          <span className="text-[#FF6B2B] text-xs font-semibold ml-1">Save ~38%</span>
+          <span className="ml-1 bg-forge-orange px-1.5 py-0.5 text-[10px] font-bold text-white uppercase tracking-wide">
+            Save 38%
+          </span>
         </span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-px bg-[#2A2927]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {PLANS.map((plan) => (
           <div
             key={plan.name}
-            className="bg-[#0A0908] p-8 flex flex-col"
-            style={plan.highlighted ? { border: "1px solid #FF6B2B" } : {}}
+            className={`relative flex flex-col p-6 sm:p-8 transition-all duration-200 ${
+              plan.highlighted
+                ? "border border-forge-orange bg-[#0F0D0C] shadow-[0_0_32px_rgba(255,107,43,0.12)]"
+                : "border border-[#2A2927] bg-[#0A0908] hover:border-[#3D3B39]"
+            }`}
           >
             {plan.highlighted && (
-              <p className="text-xs font-semibold text-[#FF6B2B] tracking-widest uppercase mb-3">
+              <div className="absolute -top-px left-0 right-0 h-0.5 bg-forge-orange" />
+            )}
+
+            {plan.highlighted && (
+              <p className="mb-3 text-xs font-bold tracking-[0.15em] text-forge-orange uppercase">
                 Most Popular
               </p>
             )}
-            <h3 className="text-xl font-bold text-white mb-1">{plan.name}</h3>
-            <p className="text-sm text-[#6B7280] mb-5">{plan.description}</p>
+
+            <h3 className="font-heading text-xl font-bold text-white mb-1">{plan.name}</h3>
+            <p className="text-sm text-[#6B7280] mb-6 leading-relaxed">{plan.description}</p>
+
             <div className="mb-6">
               {plan.monthly === 0 ? (
-                <span className="text-4xl font-bold text-white">Free</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="font-heading text-4xl font-bold text-white">Free</span>
+                  <span className="text-[#6B7280] text-sm">forever</span>
+                </div>
               ) : (
-                <>
-                  <span className="text-4xl font-bold text-white">
-                    ${annual ? Math.round(plan.annual / 12) : plan.monthly}
-                  </span>
-                  <span className="text-[#6B7280] text-sm ml-1">/month</span>
+                <div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="font-heading text-4xl font-bold text-white">
+                      ${annual ? Math.round(plan.annual / 12) : plan.monthly}
+                    </span>
+                    <span className="text-[#6B7280] text-sm">/month</span>
+                  </div>
                   {annual && (
-                    <p className="text-xs text-[#6B7280] mt-1">
-                      ${plan.annual}/year billed annually
+                    <p className="mt-1 text-xs text-[#6B7280]">
+                      ${plan.annual} billed annually
                     </p>
                   )}
-                </>
+                </div>
               )}
             </div>
-            <ul className="space-y-2.5 mb-8 flex-1">
+
+            <ul className="mb-8 flex-1 space-y-3">
               {plan.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-[#A09FA0]">
-                  <span className="text-[#FF6B2B] flex-shrink-0 mt-0.5">—</span>
+                <li key={f} className="flex items-start gap-2.5 text-sm text-[#A09FA0] leading-relaxed">
+                  <span className="mt-0.5 flex-shrink-0 text-forge-orange font-bold">—</span>
                   {f}
                 </li>
               ))}
             </ul>
+
             <Link
               href="/login"
-              className="block text-center font-semibold text-sm py-3 transition-opacity"
-              style={
+              className={`flex min-h-[48px] items-center justify-center text-sm font-bold transition-all duration-200 ${
                 plan.highlighted
-                  ? { background: "#FF6B2B", color: "#fff" }
-                  : { border: "1px solid #2A2927", color: "#A09FA0" }
-              }
+                  ? "bg-forge-orange text-white hover:bg-forge-orange-hover hover:shadow-[0_0_20px_rgba(255,107,43,0.4)]"
+                  : "border border-[#2A2927] text-[#A09FA0] hover:border-[#3D3B39] hover:text-white"
+              }`}
             >
-              {plan.cta}
+              {plan.cta} →
             </Link>
           </div>
         ))}

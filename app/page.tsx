@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LandingNav } from "@/components/landing/LandingNav";
 import { LandingPricing } from "@/components/landing/LandingPricing";
 
 export const metadata: Metadata = {
@@ -23,6 +24,8 @@ export const metadata: Metadata = {
   },
 };
 
+// ─── Structured data ─────────────────────────────────────────────────────────
+
 const websiteSchema = {
   "@context": "https://schema.org",
   "@type": "WebSite",
@@ -40,11 +43,7 @@ const organizationSchema = {
   description:
     "MindForge builds AI-powered accountability tools grounded in neuroscience and behavior change research.",
   contactPoint: [
-    {
-      "@type": "ContactPoint",
-      email: "privacy@mindforge.app",
-      contactType: "customer support",
-    },
+    { "@type": "ContactPoint", email: "privacy@mindforge.app", contactType: "customer support" },
   ],
   sameAs: [],
 };
@@ -149,6 +148,88 @@ const faqSchema = {
   ],
 };
 
+// ─── Features list ────────────────────────────────────────────────────────────
+
+const FEATURES = [
+  {
+    title: "Forge Score",
+    body: "A real-time accountability score that reflects your actual behavior — not your effort.",
+  },
+  {
+    title: "AI Memory",
+    body: "Your coach remembers your patterns, triggers, and past victories across every session. No other app does this.",
+  },
+  {
+    title: "40% Rule Engine",
+    body: "When you are about to quit, the system triggers. Research shows you are at 40% of your true capacity.",
+  },
+  {
+    title: "Cookie Jar",
+    body: "Store your past victories. Your coach surfaces them when you are struggling.",
+  },
+  {
+    title: "Callousing Challenges",
+    body: "A library of graduated discomfort challenges that build real mental toughness.",
+  },
+  {
+    title: "No Skip Option",
+    body: "Completed or missed. No grace period. No undo. No excuses.",
+  },
+];
+
+const PROBLEMS = [
+  {
+    title: "Participation trophies",
+    body: "They reward showing up, not results. Your brain learns to tolerate failure.",
+  },
+  {
+    title: "No memory, no coaching",
+    body: "Generic reminders are not coaching. No app builds a real relationship with you.",
+  },
+  {
+    title: "Surface motivation collapses",
+    body: "Without your deepest why, streaks break and you abandon the app in two weeks.",
+  },
+];
+
+const STEPS = [
+  {
+    n: "01",
+    title: "Face the Mirror",
+    body: "Write the honest truth. Your AI coach responds without softening it.",
+  },
+  {
+    n: "02",
+    title: "Excavate Your Why",
+    body: "A Socratic AI dialogue uncovers your identity-level motivation — the anchor that does not break when motivation fails.",
+  },
+  {
+    n: "03",
+    title: "Forge Daily",
+    body: "Log habits honestly. Receive direct coaching. Watch your Forge Score reflect the truth of your behavior.",
+  },
+];
+
+const TESTIMONIALS = [
+  {
+    quote: "I've tried 7 habit apps. MindForge is the first one that does not let me off the hook.",
+    name: "Marcus",
+    role: "Software Engineer",
+  },
+  {
+    quote: "The AI coach actually remembers what I told it three weeks ago. That has never happened before.",
+    name: "Priya",
+    role: "Entrepreneur",
+  },
+  {
+    quote: "My Forge Score dropped when I missed my workouts. That is the accountability I needed.",
+    name: "James",
+    role: "Founder",
+  },
+];
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function LandingPage() {
   return (
     <>
@@ -173,130 +254,106 @@ export default function LandingPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
 
-      <div className="min-h-screen bg-[#0A0908] text-white">
-        {/* Nav */}
-        <nav className="flex items-center justify-between px-6 py-4 border-b border-[#2A2927]">
-          <span className="font-bold text-lg tracking-tight text-[#FF6B2B]" style={{ fontFamily: "var(--font-geist-sans)" }}>
-            MINDFORGE
-          </span>
-          <Link
-            href="/login"
-            className="text-sm text-[#A09FA0] hover:text-white transition-colors"
-          >
-            Sign In
-          </Link>
-        </nav>
+      <div className="min-h-screen bg-[#0A0908] text-white overflow-x-hidden">
 
-        {/* 1. HERO */}
+        {/* ── Navigation ───────────────────────────────────────────────── */}
+        <LandingNav />
+
+        {/* ── 1. Hero ──────────────────────────────────────────────────── */}
         <section
-          className="flex min-h-screen flex-col items-center justify-center px-6 text-center"
+          className="relative flex min-h-[90vh] sm:min-h-screen flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-20 text-center"
           style={{
             background:
-              "radial-gradient(ellipse at center, rgba(255,107,43,0.04) 0%, transparent 70%), #0A0908",
+              "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255,107,43,0.06) 0%, transparent 70%), #0A0908",
           }}
         >
-          <p className="text-xs tracking-widest text-[#6B7280] uppercase mb-6">
+          {/* Decorative top rule */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-48 sm:w-64 bg-gradient-to-r from-transparent via-forge-orange to-transparent opacity-60" />
+
+          <p className="mb-6 text-xs sm:text-sm tracking-[0.2em] text-[#6B7280] uppercase font-medium">
             The first accountability system that tells you the truth
           </p>
-          <h1
-            className="text-5xl lg:text-7xl font-bold text-white mb-6 leading-tight max-w-3xl"
-            style={{ fontFamily: "var(--font-geist-sans)" }}
-          >
+
+          <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-[1.06] max-w-[14ch] mb-6 sm:mb-8">
             Stop being soft with yourself.
           </h1>
-          <p className="text-xl text-[#A09FA0] max-w-[600px] mb-10">
+
+          <p className="text-base sm:text-lg md:text-xl text-[#A09FA0] max-w-[42ch] leading-[1.65] mb-10 sm:mb-12">
             MindForge uses neuroscience-backed behavior change and an AI coach
             that builds a persistent memory of who you are — and holds you to who
             you said you'd be.
           </p>
-          <Link
-            href="/login"
-            className="inline-block bg-[#FF6B2B] text-white font-bold px-8 py-4 text-base hover:opacity-90 transition-opacity"
-          >
-            Start Forging — It's Free
-          </Link>
-          <p className="mt-4 text-xs text-[#6B7280]">
+
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <Link
+              href="/login"
+              className="inline-flex min-h-[52px] w-full sm:w-auto items-center justify-center bg-forge-orange px-8 sm:px-10 text-sm sm:text-base font-bold text-white transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_28px_rgba(255,107,43,0.40)]"
+            >
+              Start Forging — It's Free →
+            </Link>
+            <Link
+              href="#pricing"
+              className="inline-flex min-h-[52px] w-full sm:w-auto items-center justify-center border border-[#2A2927] px-8 sm:px-10 text-sm font-medium text-[#87857F] transition-all duration-200 hover:border-[#3D3B39] hover:text-white"
+            >
+              View Pricing
+            </Link>
+          </div>
+
+          <p className="mt-5 text-xs text-[#4A4845]">
             No credit card. No gentle encouragement. Just accountability.
           </p>
         </section>
 
-        {/* 2. PROBLEM */}
-        <section className="bg-[#111110] px-6 py-20">
-          <div className="max-w-4xl mx-auto">
-            <h2
-              className="text-3xl font-bold text-white mb-12 text-center"
-              style={{ fontFamily: "var(--font-geist-sans)" }}
-            >
+        {/* ── 2. Problem ───────────────────────────────────────────────── */}
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+          <div className="mx-auto max-w-5xl">
+            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+              The problem
+            </p>
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-10 sm:mb-14 text-center">
               Every other app is lying to you.
             </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {[
-                {
-                  title: "Participation trophies",
-                  body: "They reward showing up, not results. Your brain learns to tolerate failure.",
-                },
-                {
-                  title: "No memory, no coaching",
-                  body: "Generic reminders are not coaching. No app builds a real relationship with you.",
-                },
-                {
-                  title: "Surface motivation collapses",
-                  body: "Without your deepest why, streaks break and you abandon the app in two weeks.",
-                },
-              ].map((card) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {PROBLEMS.map((card) => (
                 <div
                   key={card.title}
-                  className="border border-[#2A2927] bg-[#0A0908] p-6"
+                  className="group border border-[#2A2927] bg-[#0A0908] p-6 sm:p-8 transition-all duration-200 hover:border-[#3D3B39] hover:bg-[#0F0D0C]"
                 >
-                  <h3 className="text-base font-semibold text-white mb-3">
+                  <div className="mb-4 h-px w-8 bg-forge-orange opacity-60" />
+                  <h3 className="font-heading text-base sm:text-lg font-semibold text-white mb-3 group-hover:text-forge-orange-text transition-colors duration-200">
                     {card.title}
                   </h3>
-                  <p className="text-sm text-[#6B7280] leading-relaxed">{card.body}</p>
+                  <p className="text-sm leading-[1.65] text-[#6B7280]">{card.body}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* 3. HOW IT WORKS */}
-        <section className="bg-[#0A0908] px-6 py-20">
-          <div className="max-w-3xl mx-auto">
-            <h2
-              className="text-3xl font-bold text-white mb-14 text-center"
-              style={{ fontFamily: "var(--font-geist-sans)" }}
-            >
+        {/* ── 3. How It Works ──────────────────────────────────────────── */}
+        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+          <div className="mx-auto max-w-3xl">
+            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+              How it works
+            </p>
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-12 sm:mb-16 text-center">
               The Forge System
             </h2>
-            <div className="space-y-12">
-              {[
-                {
-                  n: "01",
-                  title: "Face the Mirror",
-                  body: "Write the honest truth. Your AI coach responds without softening it.",
-                },
-                {
-                  n: "02",
-                  title: "Excavate Your Why",
-                  body: "A Socratic AI dialogue uncovers your identity-level motivation. The anchor that does not break when motivation fails.",
-                },
-                {
-                  n: "03",
-                  title: "Forge Daily",
-                  body: "Log habits honestly. Receive direct coaching. Watch your Forge Score reflect the truth of your behavior.",
-                },
-              ].map((step) => (
-                <div key={step.n} className="flex items-start gap-8">
-                  <span
-                    className="text-4xl font-bold text-[#FF6B2B] flex-shrink-0 leading-none"
-                    style={{ fontFamily: "var(--font-geist-sans)" }}
-                  >
+            <div className="space-y-10 sm:space-y-14">
+              {STEPS.map((step, i) => (
+                <div key={step.n} className="relative flex items-start gap-6 sm:gap-10">
+                  {/* Connector line */}
+                  {i < STEPS.length - 1 && (
+                    <div className="absolute left-[22px] sm:left-[26px] top-12 h-[calc(100%+2rem)] sm:h-[calc(100%+3.5rem)] w-px bg-[#2A2927]" />
+                  )}
+                  <span className="font-heading text-3xl sm:text-4xl font-bold text-forge-orange flex-shrink-0 leading-none w-11 sm:w-14 text-center">
                     {step.n}
                   </span>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">
+                  <div className="pt-1">
+                    <h3 className="font-heading text-lg sm:text-xl font-semibold text-white mb-2 sm:mb-3">
                       {step.title}
                     </h3>
-                    <p className="text-[#A09FA0] text-sm leading-relaxed">{step.body}</p>
+                    <p className="text-sm sm:text-base text-[#A09FA0] leading-[1.65]">{step.body}</p>
                   </div>
                 </div>
               ))}
@@ -304,103 +361,73 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 4. FEATURE GRID */}
-        <section className="bg-[#111110] px-6 py-20">
-          <div className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-[#2A2927]">
-              {[
-                {
-                  title: "Forge Score",
-                  body: "A real-time accountability score that reflects your actual behavior — not your effort.",
-                },
-                {
-                  title: "AI Memory",
-                  body: "Your coach remembers your patterns, triggers, and past victories across every session. No other app does this.",
-                },
-                {
-                  title: "40% Rule Engine",
-                  body: "When you are about to quit, the system triggers. Research shows you are at 40% of your true capacity.",
-                },
-                {
-                  title: "Cookie Jar",
-                  body: "Store your past victories. Your coach surfaces them when you are struggling.",
-                },
-                {
-                  title: "Callousing Challenges",
-                  body: "A library of graduated discomfort challenges that build real mental toughness.",
-                },
-                {
-                  title: "No Skip Option",
-                  body: "Completed or missed. No grace period. No undo. No excuses.",
-                },
-              ].map((feat) => (
-                <div key={feat.title} className="bg-[#111110] p-8">
-                  <h3 className="text-base font-semibold text-white mb-2">
+        {/* ── 4. Feature Grid ──────────────────────────────────────────── */}
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+          <div className="mx-auto max-w-5xl">
+            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+              The arsenal
+            </p>
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-10 sm:mb-14 text-center">
+              Built for people who are serious.
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-[#2A2927]">
+              {FEATURES.map((feat) => (
+                <div
+                  key={feat.title}
+                  className="group bg-[#111110] p-6 sm:p-8 transition-colors duration-200 hover:bg-[#141312]"
+                >
+                  <h3 className="font-heading text-base sm:text-lg font-semibold text-white mb-2 group-hover:text-forge-orange-text transition-colors duration-200">
                     {feat.title}
                   </h3>
-                  <p className="text-sm text-[#6B7280] leading-relaxed">{feat.body}</p>
+                  <p className="text-sm leading-[1.65] text-[#6B7280]">{feat.body}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* 5. PRICING */}
-        <section className="bg-[#0A0908] px-6 py-20" id="pricing">
-          <div className="max-w-4xl mx-auto">
-            <h2
-              className="text-3xl font-bold text-white mb-3 text-center"
-              style={{ fontFamily: "var(--font-geist-sans)" }}
-            >
+        {/* ── 5. Pricing ───────────────────────────────────────────────── */}
+        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24" id="pricing">
+          <div className="mx-auto max-w-5xl">
+            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
               Pricing
-            </h2>
-            <p className="text-center text-[#6B7280] text-sm mb-12">
+            </p>
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3 text-center">
               Start free. Upgrade when you're serious.
+            </h2>
+            <p className="text-center text-sm text-[#6B7280] mb-10 sm:mb-14">
+              No trial periods. No upsell pressure. Just pick your level.
             </p>
             <LandingPricing />
           </div>
         </section>
 
-        {/* 6. SOCIAL PROOF */}
-        <section className="bg-[#111110] px-6 py-20">
-          <div className="max-w-4xl mx-auto">
-            <h2
-              className="text-3xl font-bold text-white mb-12 text-center"
-              style={{ fontFamily: "var(--font-geist-sans)" }}
-            >
+        {/* ── 6. Social Proof ──────────────────────────────────────────── */}
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+          <div className="mx-auto max-w-5xl">
+            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+              Early forgers
+            </p>
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-10 sm:mb-14 text-center">
               Built for people who are done making excuses.
             </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {[
-                {
-                  quote:
-                    "I've tried 7 habit apps. MindForge is the first one that does not let me off the hook.",
-                  name: "Marcus",
-                  role: "Software Engineer",
-                },
-                {
-                  quote:
-                    "The AI coach actually remembers what I told it three weeks ago. That has never happened before.",
-                  name: "Priya",
-                  role: "Entrepreneur",
-                },
-                {
-                  quote:
-                    "My Forge Score dropped when I missed my workouts. That is the accountability I needed.",
-                  name: "James",
-                  role: "Founder",
-                },
-              ].map((t) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {TESTIMONIALS.map((t) => (
                 <div
                   key={t.name}
-                  className="border border-[#2A2927] bg-[#0A0908] p-6"
+                  className="flex flex-col justify-between border border-[#2A2927] bg-[#0A0908] p-6 sm:p-8 transition-all duration-200 hover:border-[#3D3B39]"
                 >
-                  <p className="text-sm text-[#A09FA0] leading-relaxed mb-5">
+                  <p className="text-sm sm:text-base text-[#A09FA0] leading-[1.7] mb-6 italic">
                     "{t.quote}"
                   </p>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{t.name}</p>
-                    <p className="text-xs text-[#6B7280]">{t.role}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center bg-forge-orange font-heading text-sm font-bold text-white">
+                      {t.name[0]}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white leading-tight">{t.name}</p>
+                      <p className="text-xs text-[#6B7280]">{t.role}</p>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -408,44 +435,85 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* 7. FINAL CTA */}
-        <section className="bg-[#0A0908] px-6 py-24 text-center">
-          <p className="text-xl text-[#A09FA0] max-w-xl mx-auto mb-8">
-            The version of yourself you keep imagining? It is built in the forge.
-          </p>
-          <Link
-            href="/login"
-            className="inline-block bg-[#FF6B2B] text-white font-bold px-8 py-4 text-base hover:opacity-90 transition-opacity"
-          >
-            Start Forging — It's Free
-          </Link>
-          <p className="mt-4 text-xs text-[#6B7280]">No credit card required.</p>
+        {/* ── 7. Final CTA ─────────────────────────────────────────────── */}
+        <section className="relative bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-20 sm:py-28 text-center overflow-hidden">
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse 70% 50% at 50% 100%, rgba(255,107,43,0.07) 0%, transparent 70%)",
+            }}
+          />
+          <div className="relative mx-auto max-w-2xl">
+            <p className="mb-3 text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+              The forge awaits
+            </p>
+            <p className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4 leading-snug">
+              The version of yourself you keep imagining?
+            </p>
+            <p className="text-base sm:text-lg text-[#A09FA0] mb-10 leading-[1.65]">
+              It is built in the forge — one honest day at a time.
+            </p>
+            <Link
+              href="/login"
+              className="inline-flex min-h-[56px] w-full sm:w-auto items-center justify-center bg-forge-orange px-10 sm:px-14 text-base font-bold text-white transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_32px_rgba(255,107,43,0.45)]"
+            >
+              Start Forging — It's Free →
+            </Link>
+            <p className="mt-5 text-xs text-[#4A4845]">No credit card required.</p>
+          </div>
         </section>
 
-        {/* 8. FOOTER */}
-        <footer className="bg-[#111110] border-t border-[#2A2927] px-6 py-10">
-          <div className="max-w-4xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
-            <div>
-              <p className="font-bold text-[#FF6B2B] tracking-tight" style={{ fontFamily: "var(--font-geist-sans)" }}>
-                MINDFORGE
-              </p>
-              <p className="text-xs text-[#6B7280] mt-1">
-                Rewire your brain. Forge your identity.
-              </p>
+        {/* ── 8. Footer ────────────────────────────────────────────────── */}
+        <footer className="bg-[#111110] border-t border-[#2A2927] px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+          <div className="mx-auto max-w-5xl">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="text-center sm:text-left">
+                <p className="font-heading text-base font-bold tracking-tight text-forge-orange">
+                  MINDFORGE
+                </p>
+                <p className="mt-1 text-xs text-[#6B7280] leading-relaxed">
+                  Rewire your brain. Forge your identity.
+                </p>
+              </div>
+              <nav
+                className="flex flex-wrap items-center justify-center sm:justify-end gap-x-6 gap-y-3"
+                aria-label="Footer navigation"
+              >
+                <Link
+                  href="/privacy"
+                  className="text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
+                >
+                  Privacy Policy
+                </Link>
+                <Link
+                  href="/terms"
+                  className="text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
+                >
+                  Terms of Service
+                </Link>
+                <Link
+                  href="/login"
+                  className="text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/login"
+                  className="inline-flex min-h-[36px] items-center border border-[#2A2927] px-4 text-xs font-semibold text-[#A09FA0] hover:border-forge-orange hover:text-forge-orange transition-all duration-200"
+                >
+                  Start Free
+                </Link>
+              </nav>
             </div>
-            <div className="flex items-center gap-6">
-              <Link href="/privacy" className="text-xs text-[#6B7280] hover:text-white transition-colors">
-                Privacy Policy
-              </Link>
-              <Link href="/terms" className="text-xs text-[#6B7280] hover:text-white transition-colors">
-                Terms of Service
-              </Link>
-              <Link href="/login" className="text-xs text-[#6B7280] hover:text-white transition-colors">
-                Sign In
-              </Link>
+            <div className="mt-8 border-t border-[#1A1918] pt-6">
+              <p className="text-center text-xs text-[#4A4845]">
+                © {new Date().getFullYear()} MindForge. All rights reserved.
+              </p>
             </div>
           </div>
         </footer>
+
       </div>
     </>
   );
