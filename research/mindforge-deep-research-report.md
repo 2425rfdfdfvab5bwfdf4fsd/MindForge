@@ -113,7 +113,7 @@ The research confirms a clear "golden stack" for solo/small-team SaaS [9][10]:
 - **Backend**: Next.js API Routes + tRPC (type-safe APIs)
 - **Database**: Supabase (PostgreSQL + pgvector for embeddings + Supabase Auth)
 - **AI Layer**: Google Gemini 2.5 Pro for coaching conversations + text-embedding-004 for vector search
-- **Payments**: Stripe (with Lemon Squeezy as alternative for global tax handling)
+- **Payments**: Lemon Squeezy (Merchant of Record — handles global VAT/tax automatically)
 - **Hosting**: Vercel (seamless Next.js deployment, edge functions)
 - **Email**: Resend
 - **Analytics**: PostHog (open-source, GDPR-friendly)
@@ -392,7 +392,7 @@ The 90-day MVP delivers:
 - Forge Score (basic formula)
 - 40% Rule Intervention (triggered on missed habits)
 - Callousing Challenges library (20 challenges)
-- Stripe billing (Free + Pro)
+- Lemon Squeezy billing (Free + Pro)
 - Basic analytics dashboard
 - Weekly Neural Report (email)
 
@@ -418,7 +418,7 @@ The 90-day MVP delivers:
         ┌─────────────────────┼─────────────────────┐
         │                     │                     │
 ┌───────▼───────┐   ┌─────────▼────────┐  ┌────────▼────────┐
-│  Supabase DB   │   │  Gemini Service  │  │  Stripe Service  │
+│  Supabase DB   │   │  Gemini Service  │  │  LemonSqueezy    │
 │  (PostgreSQL)  │   │  (Gemini + RAG)  │  │  (Billing)       │
 │  + pgvector    │   └─────────────────┘  └─────────────────┘
 └───────────────┘
@@ -474,7 +474,7 @@ User Message
 | Vector Search | pgvector (Supabase extension) | AI memory without extra infra |
 | AI | Google Gemini 2.5 Pro + text-embedding-004 | Best quality/cost for coaching |
 | Auth | Supabase Auth | Built-in, RLS, social login |
-| Payments | Stripe | Industry standard, excellent DX |
+| Payments | Lemon Squeezy | Merchant of Record, auto global VAT/tax, no tax registration needed |
 | Email | Resend + React Email | Developer-first, weekly reports |
 | Hosting | Vercel | Instant Next.js deploy, edge functions |
 | Analytics | PostHog | Open-source, GDPR, behavior tracking |
@@ -649,8 +649,8 @@ CREATE TABLE pod_members (
 CREATE TABLE subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-  stripe_customer_id TEXT UNIQUE,
-  stripe_subscription_id TEXT UNIQUE,
+  lemonsqueezy_customer_id TEXT UNIQUE,
+  lemonsqueezy_subscription_id TEXT UNIQUE,
   tier TEXT DEFAULT 'free',
   status TEXT DEFAULT 'active',
   current_period_end TIMESTAMPTZ,
@@ -684,8 +684,8 @@ CREATE INDEX idx_cookie_jar_embedding ON cookie_jar_entries USING ivfflat (embed
 | `/api/challenges/[id]/start` | POST | Activate a challenge |
 | `/api/challenges/[id]/complete` | POST | Mark challenge done + XP |
 | `/api/analytics` | GET | User performance data for dashboard |
-| `/api/billing/create-checkout` | POST | Create Stripe checkout session |
-| `/api/billing/webhook` | POST | Stripe webhook handler |
+| `/api/billing/create-checkout` | POST | Create Lemon Squeezy checkout session |
+| `/api/billing/webhook` | POST | Lemon Squeezy webhook handler |
 | `/api/pods` | GET | Get user's accountability pod |
 | `/api/weekly-report` | POST (cron) | Generate + send weekly neural report |
 
@@ -739,7 +739,7 @@ The David Goggins and peak performance community is enormous, active, and unders
 | Week 1–4 | Core infrastructure (auth, DB, habit tracker, check-in) |
 | Week 5–8 | AI coach integration (Gemini 2.5 Pro, memory engine, debrief) |
 | Week 9–10 | Forge Score, Cookie Jar, Callousing Challenges |
-| Week 11–12 | Stripe billing, email (Resend), basic analytics |
+| Week 11–12 | Lemon Squeezy billing, email (Resend), basic analytics |
 | Week 12 | **Soft launch: Founding Forgers waitlist opens** |
 | Week 13 | **Public launch: Product Hunt + community seeding** |
 | Month 4 | Accountability Pods shipped |
@@ -866,7 +866,7 @@ MindForge is a web-based SaaS application that helps users avoid bad habits, bui
 **FR-005**: AI coach must retrieve user memories from pgvector using cosine similarity before generating any response.
 **FR-006**: After every AI coaching session, a memory extraction agent must parse new facts and upsert to user_memories table.
 **FR-007**: All AI responses must stream to the UI in real time (SSE or streaming API response).
-**FR-008**: Stripe webhook must update subscription tier and status in the subscriptions table within 30 seconds of event.
+**FR-008**: Lemon Squeezy webhook must update subscription tier and status in the subscriptions table within 30 seconds of event.
 **FR-009**: Weekly Neural Report must be generated every Sunday and delivered via email and in-app notification.
 **FR-010**: Free tier must be limited to 3 habits and no AI debrief access.
 
@@ -1172,10 +1172,10 @@ Your coaching sessions and personal reflections are used solely to personalize y
 
 ## PHASE 3: MONETIZATION + LAUNCH (Days 61–90)
 
-### Week 9 — Stripe Integration
-- [ ] Configure Stripe products (Free, Pro, Elite)
-- [ ] Build checkout session creation endpoint
-- [ ] Implement Stripe webhook handler (subscription created/updated/canceled)
+### Week 9 — Lemon Squeezy Integration
+- [ ] Configure Lemon Squeezy products + variants (Free, Pro, Elite)
+- [ ] Build checkout session creation endpoint (Lemon Squeezy Checkout API)
+- [ ] Implement Lemon Squeezy webhook handler (subscription_created / subscription_updated / subscription_cancelled)
 - [ ] Sync subscription status to subscriptions table
 - [ ] Implement feature gating by tier (middleware check)
 - [ ] Build upgrade flow UI + pricing page
