@@ -4,25 +4,24 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/trpc/client";
 import { useStreamingResponse } from "@/hooks/useStreamingResponse";
+import { OnboardingHeader } from "@/components/onboarding/OnboardingHeader";
 
 const MIN_CHARS = 100;
 
 function PulsingDots() {
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex items-center gap-1.5">
       {[0, 1, 2].map((i) => (
         <span
           key={i}
           className="inline-block h-1.5 w-1.5 rounded-full bg-forge-orange"
-          style={{
-            animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-          }}
+          style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
         />
       ))}
       <style>{`
         @keyframes pulse {
           0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
-          40% { opacity: 1; transform: scale(1); }
+          40%            { opacity: 1;   transform: scale(1);   }
         }
       `}</style>
     </span>
@@ -41,15 +40,11 @@ export default function MirrorPage() {
   const { streamedText, isStreaming, isComplete, error, startStream } =
     useStreamingResponse();
 
-  // tRPC mutations
-  const submitCheckin = api.checkins.submit.useMutation();
+  const submitCheckin  = api.checkins.submit.useMutation();
   const updateMetadata = api.checkins.updateMetadata.useMutation();
-  const updateProfile = api.user.updateProfile.useMutation();
+  const updateProfile  = api.user.updateProfile.useMutation();
 
-  // Redirect if already past this step
-  const { data: profile } = api.user.getProfile.useQuery(undefined, {
-    retry: false,
-  });
+  const { data: profile } = api.user.getProfile.useQuery(undefined, { retry: false });
 
   useEffect(() => {
     if (profile && profile.onboardingStep !== "mirror") {
@@ -57,14 +52,10 @@ export default function MirrorPage() {
     }
   }, [profile, router]);
 
-  // Once streaming starts, hide the pulsing dots
   useEffect(() => {
-    if (streamedText.length > 0 && waitingForFirst) {
-      setWaitingForFirst(false);
-    }
+    if (streamedText.length > 0 && waitingForFirst) setWaitingForFirst(false);
   }, [streamedText, waitingForFirst]);
 
-  // Scroll response area into view after it appears
   useEffect(() => {
     if (showResponse) {
       setTimeout(
@@ -74,13 +65,9 @@ export default function MirrorPage() {
     }
   }, [showResponse]);
 
-  // After stream completes, save the AI response to the checkin
   useEffect(() => {
     if (isComplete && streamedText && checkinId) {
-      updateMetadata.mutate({
-        checkinId: checkinId,
-        aiResponse: streamedText,
-      });
+      updateMetadata.mutate({ checkinId, aiResponse: streamedText });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isComplete, checkinId]);
@@ -90,8 +77,6 @@ export default function MirrorPage() {
     setSubmitted(true);
 
     const localDate = new Date().toISOString().split("T")[0];
-
-    // Store checkin
     const result = await submitCheckin.mutateAsync({
       localDate,
       text,
@@ -102,26 +87,18 @@ export default function MirrorPage() {
       setCheckinId((result as { id: string }).id);
     }
 
-    // Show response area and start streaming
     setShowResponse(true);
     setWaitingForFirst(true);
 
     await startStream("/api/coach/stream", {
       session_type: "onboarding_mirror",
-      messages: [
-        {
-          role: "user",
-          parts: [{ text }],
-        },
-      ],
+      messages: [{ role: "user", parts: [{ text }] }],
       context: {},
     });
   }
 
   async function handleContinue() {
-    await updateProfile.mutateAsync({
-      onboardingStep: "why",
-    });
+    await updateProfile.mutateAsync({ onboardingStep: "why" });
     router.push("/onboarding/why");
   }
 
@@ -129,32 +106,30 @@ export default function MirrorPage() {
   const canSubmit = charCount >= MIN_CHARS && !submitted;
 
   return (
-    <div className="flex min-h-screen flex-col bg-forge-base px-6 py-12">
-      <div className="mx-auto w-full max-w-[720px]">
-        {/* Breadcrumb */}
-        <p className="mb-4 text-xs tracking-widest text-text-muted uppercase">
-          Step 1 of 3
-        </p>
+    <div className="flex min-h-screen flex-col bg-forge-base">
+      <div className="mx-auto w-full max-w-[720px] px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+
+        <OnboardingHeader step={1} />
 
         {/* Heading */}
-        <h1 className="font-heading text-4xl font-bold text-text-primary">
+        <h1 className="font-heading text-3xl sm:text-4xl font-bold text-text-primary leading-tight">
           Face the Mirror
         </h1>
-        <p className="mt-4 max-w-[560px] text-base text-text-secondary">
+        <p className="mt-3 sm:mt-4 max-w-[560px] text-sm sm:text-base leading-[1.65] text-text-secondary">
           Write the truth about where you are right now. Your failures. Your
           excuses. Your wasted potential. Don't filter it.
         </p>
 
         {/* Textarea */}
-        <div className="mt-10">
+        <div className="mt-8 sm:mt-10">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             disabled={submitted}
-            placeholder="Start writing..."
-            className="w-full border border-forge-border bg-forge-input p-5 text-base text-text-primary placeholder-text-disabled outline-none transition focus:border-forge-orange focus:ring-1 focus:ring-forge-orange disabled:opacity-60"
+            placeholder="Start writing…"
+            className="w-full border border-forge-border bg-forge-input px-4 sm:px-5 py-4 sm:py-5 text-sm sm:text-base text-text-primary placeholder:text-text-disabled outline-none transition-all duration-200 focus:border-forge-orange focus:ring-1 focus:ring-forge-orange disabled:opacity-60"
             style={{
-              minHeight: "clamp(200px, 50vh, 60vh)",
+              minHeight: "clamp(200px, 45vh, 480px)",
               resize: "vertical",
               lineHeight: "1.65",
               fontFamily: "inherit",
@@ -162,10 +137,15 @@ export default function MirrorPage() {
           />
 
           {/* Character count */}
-          <div className="mt-2 flex justify-end">
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-xs text-text-disabled">
+              {charCount < MIN_CHARS
+                ? `${MIN_CHARS - charCount} more characters to unlock`
+                : ""}
+            </span>
             <span
-              className={`text-xs tabular-nums ${
-                charCount >= MIN_CHARS ? "text-forge-orange" : "text-text-muted"
+              className={`text-xs tabular-nums transition-colors duration-200 ${
+                charCount >= MIN_CHARS ? "text-forge-orange font-medium" : "text-text-muted"
               }`}
             >
               {charCount} / {MIN_CHARS} min
@@ -175,33 +155,40 @@ export default function MirrorPage() {
 
         {/* Submit button */}
         {!submitted && (
-          <div className="relative mt-6">
+          <div className="mt-5 sm:mt-6">
             <button
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="group relative w-full overflow-hidden bg-forge-orange py-4 font-heading font-bold text-forge-base transition-colors hover:bg-forge-orange-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="group relative w-full min-h-[52px] overflow-hidden bg-forge-orange font-heading text-sm sm:text-base font-bold text-forge-base transition-all duration-200 hover:bg-forge-orange-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               Submit to the Mirror
-              {/* Hover glow */}
               <span
                 className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
                 style={{ boxShadow: "inset 0 0 30px rgba(255,107,43,0.3)" }}
               />
             </button>
+            {!canSubmit && charCount > 0 && (
+              <p className="mt-2 text-center text-xs text-text-disabled">
+                Keep writing — be honest with yourself.
+              </p>
+            )}
           </div>
         )}
 
         {/* AI Response area */}
         {showResponse && (
-          <div ref={responseRef} className="mt-10">
-            <div
-              className="border-l-[3px] border-forge-orange p-5"
-              style={{ background: "rgba(255,107,43,0.04)" }}
-            >
+          <div ref={responseRef} className="mt-8 sm:mt-10">
+            <div className="border-l-[3px] border-forge-orange px-4 sm:px-5 py-4 sm:py-5" style={{ background: "rgba(255,107,43,0.04)" }}>
+
+              {/* Label */}
+              <p className="mb-3 text-xs tracking-[0.12em] uppercase text-forge-orange font-semibold">
+                Forge Coach
+              </p>
+
               {/* Waiting for first token */}
               {waitingForFirst && !streamedText && (
                 <div className="flex items-center gap-3 text-sm text-text-muted">
-                  <span>Forge Coach is thinking</span>
+                  <span>Thinking</span>
                   <PulsingDots />
                 </div>
               )}
@@ -209,7 +196,7 @@ export default function MirrorPage() {
               {/* Streamed response */}
               {streamedText && (
                 <div
-                  className="whitespace-pre-wrap text-base text-text-primary"
+                  className="whitespace-pre-wrap text-sm sm:text-base text-text-primary"
                   style={{ lineHeight: "1.75" }}
                 >
                   {streamedText}
@@ -221,15 +208,14 @@ export default function MirrorPage() {
 
               {/* Error state */}
               {error && !isStreaming && (
-                <div className="text-sm">
+                <div className="text-sm space-y-2">
                   {error === "GEMINI_API_KEY_MISSING" ? (
-                    <div className="space-y-1">
-                      <p className="font-semibold text-forge-orange">
-                        Gemini API key not configured
-                      </p>
-                      <p className="text-text-muted">
-                        Add your <code className="rounded bg-white/10 px-1 py-0.5 font-mono">GEMINI_API_KEY</code> in the{" "}
-                        <strong className="text-text-secondary">Secrets</strong> tab (🔒 in the sidebar), then refresh the page.
+                    <>
+                      <p className="font-semibold text-forge-orange">Gemini API key not configured</p>
+                      <p className="text-text-muted leading-[1.65]">
+                        Add your{" "}
+                        <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-xs">GEMINI_API_KEY</code>{" "}
+                        in the <strong className="text-text-secondary">Secrets</strong> tab, then refresh.
                       </p>
                       <p className="text-text-disabled">
                         Get your key at{" "}
@@ -237,16 +223,14 @@ export default function MirrorPage() {
                           href="https://aistudio.google.com"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="underline hover:text-forge-orange"
+                          className="underline hover:text-forge-orange transition-colors"
                         >
                           aistudio.google.com
                         </a>
                       </p>
-                    </div>
+                    </>
                   ) : (
-                    <p className="text-red-400">
-                      Coach unavailable — please try refreshing.
-                    </p>
+                    <p className="text-red-400">Coach unavailable — please try refreshing.</p>
                   )}
                 </div>
               )}
@@ -257,9 +241,9 @@ export default function MirrorPage() {
               <button
                 onClick={handleContinue}
                 disabled={updateProfile.isPending}
-                className="mt-8 w-full bg-forge-orange py-4 font-heading font-bold text-forge-base transition-colors hover:bg-forge-orange-hover disabled:opacity-50"
+                className="mt-6 sm:mt-8 w-full min-h-[52px] bg-forge-orange font-heading text-sm sm:text-base font-bold text-forge-base transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_24px_rgba(255,107,43,0.35)] disabled:opacity-50"
               >
-                {updateProfile.isPending ? "Saving…" : "I'm Ready — Continue"}
+                {updateProfile.isPending ? "Saving…" : "I'm Ready — Continue →"}
               </button>
             )}
           </div>

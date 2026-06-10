@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import { useStreamingResponse } from "@/hooks/useStreamingResponse";
+import { OnboardingHeader } from "@/components/onboarding/OnboardingHeader";
 
 const MAX_TURNS = 8;
 const MAX_REFINEMENTS = 2;
@@ -19,7 +20,6 @@ interface Message {
   content: string;
 }
 
-// Detect "You want to…" statement in coach text
 function extractWhyStatement(text: string): string | null {
   const match = text.match(/you want to [^.!?\n]+[.!?]?/i);
   return match ? match[0].trim() : null;
@@ -29,7 +29,7 @@ function CoachBubble({ content, isStreaming }: { content: string; isStreaming?: 
   return (
     <div className="flex justify-start">
       <div
-        className="max-w-[85%] border border-[#1A3A6E] bg-forge-subtle p-4 text-sm text-text-secondary"
+        className="max-w-[90%] sm:max-w-[82%] border border-[#1A3A6E] bg-forge-subtle px-4 py-3 sm:px-5 sm:py-4 text-sm text-text-secondary"
         style={{ lineHeight: "1.75" }}
       >
         <span className="whitespace-pre-wrap">{content}</span>
@@ -45,7 +45,7 @@ function UserBubble({ content }: { content: string }) {
   return (
     <div className="flex justify-end">
       <div
-        className="max-w-[85%] border border-forge-border bg-forge-elevated p-4 text-sm text-text-primary"
+        className="max-w-[90%] sm:max-w-[82%] border border-forge-border bg-forge-elevated px-4 py-3 sm:px-5 sm:py-4 text-sm text-text-primary"
         style={{ lineHeight: "1.75" }}
       >
         <span className="whitespace-pre-wrap">{content}</span>
@@ -64,25 +64,21 @@ export default function WhyPage() {
   const [turnCount, setTurnCount] = useState(0);
   const [refinements, setRefinements] = useState(0);
 
-  // Why statement flow
   const [whyStatement, setWhyStatement] = useState<string | null>(null);
   const [whyAccepted, setWhyAccepted] = useState(false);
   const [identityDecl, setIdentityDecl] = useState("");
   const [identitySubmitted, setIdentitySubmitted] = useState(false);
   const [showBadge, setShowBadge] = useState(false);
 
-  // Streaming
   const { streamedText, isStreaming, isComplete, startStream, reset } =
     useStreamingResponse();
   const [streamingFor, setStreamingFor] = useState<"opening" | "reply" | null>(null);
 
-  // tRPC
   const { data: profile } = api.user.getProfile.useQuery(undefined, { retry: false });
-  const updateWhy = api.user.updateWhy.useMutation();
+  const updateWhy    = api.user.updateWhy.useMutation();
   const updateProfile = api.user.updateProfile.useMutation();
-  const awardBadge = api.user.awardBadge.useMutation();
+  const awardBadge   = api.user.awardBadge.useMutation();
 
-  // Redirect guard
   useEffect(() => {
     if (profile && profile.onboardingStep !== "why") {
       if (profile.onboardingStep === "mirror") router.replace("/onboarding/mirror");
@@ -90,7 +86,6 @@ export default function WhyPage() {
     }
   }, [profile, router]);
 
-  // Stream opening message on mount
   useEffect(() => {
     setStreamingFor("opening");
     startStream("/api/coach/stream", {
@@ -101,7 +96,6 @@ export default function WhyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When opening stream completes, add to messages
   useEffect(() => {
     if (isComplete && streamingFor === "opening" && streamedText) {
       setMessages([{ role: "coach", content: OPENING_MESSAGE }]);
@@ -111,19 +105,16 @@ export default function WhyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isComplete, streamingFor]);
 
-  // When reply stream completes, add coach message + check for why statement
   useEffect(() => {
     if (isComplete && streamingFor === "reply" && streamedText) {
       const coachMsg: Message = { role: "coach", content: streamedText };
       setMessages((prev) => [...prev, coachMsg]);
 
-      // Detect why statement
       if (!whyStatement && WHY_PATTERN.test(streamedText)) {
         const extracted = extractWhyStatement(streamedText);
         if (extracted) setWhyStatement(extracted);
       }
 
-      // Force synthesis at turn 6 if no why statement yet
       if (!whyStatement && turnCount >= 6) {
         setWhyStatement(
           streamedText.match(/you want to [^.!?\n]+[.!?]?/i)?.[0]?.trim() ??
@@ -137,12 +128,10 @@ export default function WhyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isComplete, streamingFor]);
 
-  // Scroll to bottom on new messages / streaming
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamedText]);
 
-  // Auto-expand textarea
   function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setInput(e.target.value);
     e.target.style.height = "auto";
@@ -219,11 +208,7 @@ export default function WhyPage() {
       ? identityDecl
       : `I am someone who ${identityDecl}`;
 
-    await updateWhy.mutateAsync({
-      whyStatement,
-      identityDeclaration: fullDeclaration,
-    });
-
+    await updateWhy.mutateAsync({ whyStatement, identityDeclaration: fullDeclaration });
     await awardBadge.mutateAsync({ badgeKey: "identity_locked" });
     setShowBadge(true);
   }
@@ -238,24 +223,25 @@ export default function WhyPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-forge-base">
-      <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col px-6 py-12">
+      <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+
         {/* Header */}
-        <div className="mb-8 shrink-0">
-          <p className="mb-4 text-xs uppercase tracking-widest text-text-muted">
-            Step 2 of 3
-          </p>
-          <h1 className="font-heading text-4xl font-bold text-text-primary">
+        <OnboardingHeader step={2} />
+
+        {/* Title */}
+        <div className="mb-5 sm:mb-8 shrink-0">
+          <h1 className="font-heading text-3xl sm:text-4xl font-bold text-text-primary leading-tight">
             Excavate Your Why
           </h1>
-          <p className="mt-3 text-base text-text-secondary">
+          <p className="mt-2 sm:mt-3 text-sm sm:text-base leading-[1.65] text-text-secondary">
             Your coach will guide you to the motivation that won't break.
           </p>
         </div>
 
         {/* Messages */}
         <div
-          className="mb-4 flex flex-1 flex-col gap-4 overflow-y-auto"
-          style={{ maxHeight: "65vh" }}
+          className="mb-4 flex flex-1 flex-col gap-3 sm:gap-4 overflow-y-auto scroll-smooth"
+          style={{ maxHeight: "clamp(280px, 52vh, 540px)", minHeight: 0 }}
         >
           {messages.map((msg, i) =>
             msg.role === "coach" ? (
@@ -272,17 +258,14 @@ export default function WhyPage() {
 
           {/* Opening stream */}
           {isStreaming && streamingFor === "opening" && (
-            <CoachBubble
-              content={streamedText || ""}
-              isStreaming
-            />
+            <CoachBubble content={streamedText || ""} isStreaming />
           )}
 
-          {/* Waiting dots if no text yet */}
+          {/* Waiting dots */}
           {isStreaming && !streamedText && (
             <div className="flex justify-start">
-              <div className="border border-[#1A3A6E] bg-forge-subtle px-5 py-4">
-                <span className="flex gap-1">
+              <div className="border border-[#1A3A6E] bg-forge-subtle px-5 py-3.5">
+                <span className="flex gap-1.5">
                   {[0, 1, 2].map((i) => (
                     <span
                       key={i}
@@ -302,19 +285,19 @@ export default function WhyPage() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="border-2 border-forge-orange p-6"
+                className="border-2 border-forge-orange px-5 py-5 sm:px-6 sm:py-6"
                 style={{ background: "#1A0A04" }}
               >
-                <p className="mb-2 text-xs uppercase tracking-widest text-text-muted">
+                <p className="mb-2 text-xs tracking-[0.15em] uppercase text-forge-orange font-semibold">
                   Your Why Statement
                 </p>
-                <p className="mb-6 text-base font-medium text-text-primary capitalize">
+                <p className="mb-5 sm:mb-6 text-sm sm:text-base font-medium text-text-primary capitalize leading-[1.65]">
                   {whyStatement}
                 </p>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={handleAcceptWhy}
-                    className="flex-1 bg-forge-orange py-3 text-sm font-bold text-forge-base hover:bg-forge-orange-hover"
+                    className="flex-1 min-h-[48px] bg-forge-orange text-sm font-bold text-forge-base transition-all duration-200 hover:bg-forge-orange-hover"
                   >
                     This is my truth — Accept
                   </button>
@@ -322,7 +305,7 @@ export default function WhyPage() {
                     <button
                       onClick={handleRefine}
                       disabled={isStreaming}
-                      className="flex-1 border border-forge-border py-3 text-sm text-text-muted hover:border-forge-border-strong hover:text-text-primary disabled:opacity-40"
+                      className="flex-1 min-h-[48px] border border-forge-border text-sm text-text-muted transition-all duration-200 hover:border-forge-border-strong hover:text-text-primary disabled:opacity-40"
                     >
                       Refine it ({MAX_REFINEMENTS - refinements} left)
                     </button>
@@ -338,9 +321,9 @@ export default function WhyPage() {
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="space-y-3"
+                className="space-y-3 sm:space-y-4"
               >
-                <p className="text-sm text-text-secondary">
+                <p className="text-sm leading-[1.65] text-text-secondary">
                   Now lock it in. Complete this statement:
                 </p>
                 <p className="font-heading text-base font-semibold text-text-primary">
@@ -351,17 +334,15 @@ export default function WhyPage() {
                   value={identityDecl}
                   onChange={(e) => setIdentityDecl(e.target.value)}
                   placeholder="never quits when it matters most"
-                  className="w-full border border-forge-border bg-forge-input px-4 py-3 text-sm text-text-primary placeholder-text-disabled outline-none focus:border-forge-orange focus:ring-1 focus:ring-forge-orange"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleIdentitySubmit();
-                  }}
+                  className="w-full min-h-[48px] border border-forge-border bg-forge-input px-4 py-3 text-sm text-text-primary placeholder:text-text-disabled outline-none transition-all duration-200 focus:border-forge-orange focus:ring-1 focus:ring-forge-orange"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleIdentitySubmit(); }}
                 />
                 <button
                   onClick={handleIdentitySubmit}
                   disabled={!identityDecl.trim() || updateWhy.isPending}
-                  className="w-full bg-forge-orange py-3 text-sm font-bold text-forge-base hover:bg-forge-orange-hover disabled:opacity-50"
+                  className="w-full min-h-[48px] bg-forge-orange text-sm font-bold text-forge-base transition-all duration-200 hover:bg-forge-orange-hover disabled:opacity-50"
                 >
-                  {updateWhy.isPending ? "Locking in…" : "Lock My Identity"}
+                  {updateWhy.isPending ? "Locking in…" : "Lock My Identity →"}
                 </button>
               </motion.div>
             )}
@@ -373,30 +354,30 @@ export default function WhyPage() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex flex-col items-center gap-4 py-6"
+                className="flex flex-col items-center gap-4 py-6 sm:py-8"
               >
                 <motion.div
                   initial={{ scale: 0, rotate: -15 }}
                   animate={{ scale: [0, 1.15, 1], rotate: [-15, 5, 0] }}
                   transition={{ type: "spring", stiffness: 250, damping: 12 }}
-                  className="flex h-20 w-20 items-center justify-center rounded-full bg-forge-orange"
+                  className="flex h-20 w-20 items-center justify-center rounded-full bg-forge-orange shadow-[0_0_32px_rgba(255,107,43,0.4)]"
                 >
                   <ShieldCheck size={40} className="text-forge-base" />
                 </motion.div>
                 <div className="text-center">
-                  <p className="font-heading text-lg font-bold text-text-primary">
+                  <p className="font-heading text-lg sm:text-xl font-bold text-text-primary">
                     Identity Locked
                   </p>
-                  <p className="mt-1 text-sm text-text-muted">
+                  <p className="mt-1 text-sm text-text-muted leading-[1.65]">
                     You know who you are now. That changes everything.
                   </p>
                 </div>
                 <button
                   onClick={handleContinue}
                   disabled={updateProfile.isPending}
-                  className="mt-2 w-full max-w-xs bg-forge-orange py-3 text-sm font-bold text-forge-base hover:bg-forge-orange-hover disabled:opacity-50"
+                  className="mt-2 w-full max-w-xs min-h-[48px] bg-forge-orange text-sm font-bold text-forge-base transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_20px_rgba(255,107,43,0.35)] disabled:opacity-50"
                 >
-                  {updateProfile.isPending ? "Saving…" : "Continue to Step 3"}
+                  {updateProfile.isPending ? "Saving…" : "Continue to Step 3 →"}
                 </button>
               </motion.div>
             )}
@@ -405,25 +386,25 @@ export default function WhyPage() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input area — hidden after why statement detected */}
+        {/* Input area */}
         {!whyStatement && !whyAccepted && (
           <div className="shrink-0 border-t border-forge-border pt-4">
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Your response…"
+                placeholder="Your response… (Enter to send)"
                 rows={1}
                 disabled={isStreaming}
-                className="flex-1 resize-none border border-forge-border bg-forge-input px-4 py-3 text-sm text-text-primary placeholder-text-disabled outline-none focus:border-forge-orange focus:ring-1 focus:ring-forge-orange disabled:opacity-50"
+                className="flex-1 min-h-[44px] resize-none border border-forge-border bg-forge-input px-3 sm:px-4 py-3 text-sm text-text-primary placeholder:text-text-disabled outline-none transition-all duration-200 focus:border-forge-orange focus:ring-1 focus:ring-forge-orange disabled:opacity-50"
                 style={{ lineHeight: "1.65", overflow: "hidden" }}
               />
               <button
                 onClick={handleSend}
                 disabled={!canSend}
-                className="shrink-0 bg-forge-orange px-6 py-3 text-sm font-bold text-forge-base hover:bg-forge-orange-hover disabled:opacity-50"
+                className="shrink-0 min-h-[44px] min-w-[64px] sm:min-w-[72px] bg-forge-orange px-4 sm:px-6 text-sm font-bold text-forge-base transition-all duration-200 hover:bg-forge-orange-hover disabled:opacity-50"
               >
                 Send
               </button>
@@ -439,7 +420,7 @@ export default function WhyPage() {
         <style>{`
           @keyframes pulse {
             0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
-            40% { opacity: 1; transform: scale(1); }
+            40%            { opacity: 1;   transform: scale(1);   }
           }
         `}</style>
       </div>
