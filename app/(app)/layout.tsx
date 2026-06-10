@@ -1,9 +1,34 @@
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import { db } from "@/server/db";
+import { users } from "@/shared/schema";
+import { eq } from "drizzle-orm";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Header } from "@/components/layout/Header";
 import { Toaster } from "sonner";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession();
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  const [profile] = await db
+    .select({
+      onboardingComplete: users.onboardingComplete,
+      onboardingStep: users.onboardingStep,
+    })
+    .from(users)
+    .where(eq(users.id, session.id))
+    .limit(1);
+
+  if (!profile || !profile.onboardingComplete) {
+    const step = profile?.onboardingStep ?? "mirror";
+    redirect(`/onboarding/${step}`);
+  }
+
   return (
     <div className="min-h-screen bg-forge-base">
       {/* Desktop sidebar */}
