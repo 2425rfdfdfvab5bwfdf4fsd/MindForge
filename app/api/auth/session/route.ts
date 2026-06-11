@@ -56,7 +56,8 @@ export async function POST(request: Request) {
     response.cookies.set(COOKIE_NAME, sessionCookie, sessionCookieOptions());
     return response;
   } catch (err) {
-    console.error("Session creation error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[/api/auth/session] Session creation error:", message, err);
     return NextResponse.json({ error: "Failed to create session" }, { status: 401 });
   }
 }
