@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   ChevronLeft,
   Archive,
@@ -104,8 +105,16 @@ export default function HabitDetailPage() {
   }
 
   async function handleSaveEdit() {
-    if (!editName.trim()) return;
-    await updateMutation.mutateAsync({ id, name: editName.trim() });
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      toast.error("Habit name cannot be empty.");
+      return;
+    }
+    try {
+      await updateMutation.mutateAsync({ id, name: trimmed });
+    } catch {
+      toast.error("Failed to save. Please try again.");
+    }
   }
 
   /* ── Not found ── */
@@ -349,10 +358,7 @@ export default function HabitDetailPage() {
                 value={completionRate}
                 color={completionRate >= 80 ? "#22c55e" : completionRate >= 50 ? "#fb923c" : "#ef4444"}
               />
-              <span
-                className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-text-primary"
-                style={{ transform: "rotate(90deg)" }}
-              >
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-text-primary">
                 {completionRate}%
               </span>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { Flame, ChevronRight, Check, X, Zap } from "lucide-react";
 import { api } from "@/lib/trpc/client";
@@ -54,6 +54,11 @@ function makeParticles(n: number) {
 export function HabitCard({ habit, localDate, onUpdate }: HabitCardProps) {
   const [status, setStatus] = useState(habit.today_status);
   const [sparks, setSparks] = useState<ReturnType<typeof makeParticles>>([]);
+
+  /* Keep local status in sync when the parent refetches and passes new data */
+  useEffect(() => {
+    setStatus(habit.today_status);
+  }, [habit.today_status]);
 
   const logCompletion = api.habits.logCompletion.useMutation({
     onSuccess: () => onUpdate?.(),

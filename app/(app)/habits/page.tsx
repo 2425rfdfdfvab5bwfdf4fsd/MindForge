@@ -200,9 +200,12 @@ export default function HabitsPage() {
                 Upgrade to Pro for unlimited habits and the full forge experience.
               </p>
             </div>
-            <button className="shrink-0 border border-forge-orange px-4 py-2 text-xs font-bold text-forge-orange hover:bg-forge-orange hover:text-forge-base transition-colors">
+            <Link
+              href="/upgrade"
+              className="shrink-0 border border-forge-orange px-4 py-2 text-xs font-bold text-forge-orange hover:bg-forge-orange hover:text-forge-base transition-colors"
+            >
               Upgrade to Pro →
-            </button>
+            </Link>
           </div>
         </div>
       )}
