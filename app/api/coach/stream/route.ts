@@ -186,7 +186,9 @@ export async function POST(request: Request) {
           }
         }
         controller.enqueue(encode("data: [DONE]\n\n"));
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Coach unavailable";
+        console.error("[coach/stream] Gemini error:", msg);
         controller.enqueue(
           encode(
             `data: ${JSON.stringify({ error: "Coach unavailable" })}\n\n`
