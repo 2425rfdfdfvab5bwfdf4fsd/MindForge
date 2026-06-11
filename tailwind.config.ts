@@ -11,6 +11,7 @@ const config: Config = {
     extend: {
       maxWidth: {
         "8xl": "90rem",
+        "9xl": "100rem",
       },
       colors: {
         forge: {

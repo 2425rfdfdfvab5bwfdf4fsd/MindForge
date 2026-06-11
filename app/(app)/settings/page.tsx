@@ -238,7 +238,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0908] px-4 py-8 2xl:py-12">
-      <div className="max-w-4xl 2xl:max-w-6xl mx-auto">
+      <div className="max-w-4xl 2xl:max-w-7xl mx-auto">
         <h1 className="text-2xl 2xl:text-3xl font-bold text-white mb-8">Settings</h1>
 
         <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 2xl:gap-8">

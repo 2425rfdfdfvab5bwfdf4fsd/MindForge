@@ -124,7 +124,7 @@ function DashboardContent() {
   const levelInfo = getLevelFromXP(xp);
 
   return (
-    <div className="mx-auto max-w-6xl 2xl:max-w-8xl px-4 sm:px-6 py-6 sm:py-8 2xl:py-10">
+    <div className="mx-auto max-w-6xl 2xl:max-w-9xl px-4 sm:px-6 py-6 sm:py-8 2xl:py-10">
       {/* Page header */}
       <div className="mb-8">
         <h1 className="font-heading text-2xl sm:text-3xl 2xl:text-4xl font-bold text-text-primary">
@@ -303,7 +303,7 @@ function DashboardContent() {
 
 function DashboardSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl 2xl:max-w-8xl px-4 sm:px-6 py-6 sm:py-8 2xl:py-10">
+    <div className="mx-auto max-w-6xl 2xl:max-w-9xl px-4 sm:px-6 py-6 sm:py-8 2xl:py-10">
       <div className="mb-8 space-y-2 animate-pulse">
         <div className="h-8 w-64 rounded bg-forge-border" />
         <div className="h-4 w-40 rounded bg-forge-border" />
