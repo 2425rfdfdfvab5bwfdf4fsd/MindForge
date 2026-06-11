@@ -15,14 +15,16 @@ function getLocalDate(timezone: string): string {
 }
 
 export default function HabitsPage() {
-  const [localDate, setLocalDate] = useState("");
+  const [localDate, setLocalDate] = useState(() => getLocalDate("UTC"));
 
   const { data: profile } = api.user.getProfile.useQuery(undefined, {
     retry: false,
   });
 
   useEffect(() => {
-    setLocalDate(getLocalDate(profile?.timezone ?? "UTC"));
+    if (profile?.timezone) {
+      setLocalDate(getLocalDate(profile.timezone));
+    }
   }, [profile?.timezone]);
 
   const {
@@ -30,8 +32,8 @@ export default function HabitsPage() {
     isLoading,
     refetch,
   } = api.habits.list.useQuery(
-    { localDate: localDate || new Date().toISOString().slice(0, 10) },
-    { enabled: !!localDate, retry: false }
+    { localDate },
+    { retry: false }
   );
 
   const isFree = !profile || profile.tier === "free";
