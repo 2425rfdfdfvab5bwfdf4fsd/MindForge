@@ -31,14 +31,17 @@ export const challengesRouter = router({
       adminDb
         .collection("user_challenges")
         .where("userId", "==", ctx.user.id)
-        .orderBy("startedAt", "desc")
         .get(),
     ]);
 
     const now = new Date();
-    const userChals = userChalsSnap.docs.map(
-      (d) => ({ id: d.id, ...d.data() } as ActiveUserChallenge)
-    );
+    const userChals = userChalsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as ActiveUserChallenge))
+      .sort((a, b) => {
+        const aTime = a.startedAt ? new Date(a.startedAt).getTime() : 0;
+        const bTime = b.startedAt ? new Date(b.startedAt).getTime() : 0;
+        return bTime - aTime; // most recent first
+      });
 
     // Auto-expire challenges whose deadline has passed
     const toExpire = userChals.filter((uc) => {
