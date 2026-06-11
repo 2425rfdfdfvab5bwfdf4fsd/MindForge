@@ -70,7 +70,7 @@ export function HabitGrid({ history }: HabitGridProps) {
         .habit-grid-cell:hover { opacity: 0.75; transform: scale(1.2); }
       `}</style>
 
-      <div className="w-full">
+      <div className="w-full max-w-[280px]">
         {/* Day-of-week header */}
         <div className="mb-2 grid grid-cols-7 gap-1">
           {DAYS_OF_WEEK.map((d, i) => (
