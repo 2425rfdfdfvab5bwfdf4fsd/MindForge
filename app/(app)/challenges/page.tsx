@@ -86,8 +86,8 @@ export default function ChallengesPage() {
 
   return (
     <>
-      <div className="min-h-screen px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
-        <div className="mx-auto max-w-6xl">
+      <div className="min-h-screen px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 py-8 sm:py-10 lg:py-12">
+        <div className="mx-auto max-w-[1400px]">
 
           {/* ── Page header ──────────────────────────────────────────────── */}
           <div className="mb-8 lg:mb-10">
@@ -116,7 +116,7 @@ export default function ChallengesPage() {
           </div>
 
           {/* ── Two-column grid ──────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_300px] gap-6 lg:gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_300px] 2xl:grid-cols-[1fr_340px] gap-6 lg:gap-8 2xl:gap-10 items-start">
 
             {/* ── LEFT: Tabs + cards ───────────────────────────────────── */}
             <div className="min-w-0 space-y-5">
@@ -192,9 +192,9 @@ export default function ChallengesPage() {
 
               {/* Cards */}
               {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-[160px] animate-pulse bg-forge-elevated border border-forge-border" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="h-[180px] animate-pulse bg-forge-elevated border border-forge-border" />
                   ))}
                 </div>
               ) : displayed.length === 0 ? (
@@ -237,7 +237,7 @@ export default function ChallengesPage() {
                 </motion.div>
               ) : (
                 <AnimatePresence mode="popLayout">
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3 2xl:gap-4">
                     {displayed.map((c, i) => (
                       <motion.div
                         key={c.id + (c.userChallenge?.id ?? "")}
