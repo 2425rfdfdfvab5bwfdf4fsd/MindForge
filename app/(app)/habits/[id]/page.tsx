@@ -94,6 +94,36 @@ export default function HabitDetailPage() {
 
   const cat = habit ? (CATEGORY_COLORS[habit.category] ?? CATEGORY_COLORS.perform) : null;
 
+  /* ── Heatmap card — reused in both mobile and desktop columns ── */
+  const HeatmapCard = (
+    <div className="border border-forge-border bg-forge-elevated p-4 2xl:p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wider text-text-muted">Last 90 Days</p>
+        <span className="text-xs text-text-disabled">{completedCount} done</span>
+      </div>
+      <HabitGrid history={historyArr} />
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-text-muted">
+        {[
+          { color: "#22C55E", label: "Done" },
+          { color: "#EF4444", label: "Missed" },
+          { color: "#2A2927", label: "No data" },
+        ].map(({ color, label }) => (
+          <span key={label} className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 flex-shrink-0 rounded-[2px]" style={{ background: color }} />
+            {label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1">
+          <span
+            className="inline-block h-2 w-2 flex-shrink-0 rounded-[2px]"
+            style={{ background: "#2A2927", outline: "1px solid #FF6B2B", outlineOffset: "1px" }}
+          />
+          Today
+        </span>
+      </div>
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-6xl 2xl:max-w-9xl px-4 sm:px-6 py-6 sm:py-8 2xl:py-10">
 
@@ -107,22 +137,26 @@ export default function HabitDetailPage() {
       </Link>
 
       {!habit ? (
-        /* Loading skeleton — matches dashboard skeleton style */
+        /* Loading skeleton */
         <div className="animate-pulse space-y-6">
           <div className="space-y-2">
             <div className="h-8 w-2/3 rounded bg-forge-border" />
             <div className="h-4 w-1/4 rounded bg-forge-border" />
           </div>
-          <div className="grid grid-cols-3 gap-4 sm:gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 rounded border border-forge-border bg-forge-elevated" />
-            ))}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="space-y-4 lg:col-span-2">
+              <div className="grid grid-cols-3 gap-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-24 border border-forge-border bg-forge-elevated" />
+                ))}
+              </div>
+            </div>
+            <div className="h-48 border border-forge-border bg-forge-elevated" />
           </div>
-          <div className="h-48 rounded border border-forge-border bg-forge-elevated" />
         </div>
       ) : (
         <>
-          {/* Page header — matches dashboard h1 style */}
+          {/* Page header — full width on all screens */}
           <div className="mb-6 sm:mb-8 flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               {editing ? (
@@ -156,7 +190,7 @@ export default function HabitDetailPage() {
                 </div>
               ) : (
                 <>
-                  <h1 className="font-heading text-2xl sm:text-3xl 2xl:text-4xl font-bold text-text-primary leading-tight break-words">
+                  <h1 className="font-heading text-2xl sm:text-3xl 2xl:text-4xl font-bold leading-tight break-words text-text-primary">
                     {habit.name}
                   </h1>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -197,80 +231,54 @@ export default function HabitDetailPage() {
             )}
           </div>
 
-          {/* Stat cards — same card pattern as dashboard */}
-          <div className="mb-6 sm:mb-8 grid grid-cols-1 gap-4 sm:gap-6 xs:grid-cols-3 sm:grid-cols-3">
-            {[
-              {
-                label: "Current Streak",
-                value: `${habit.current_streak}d`,
-                sub: habit.current_streak === 0 ? "Start today" : habit.current_streak === 1 ? "Day 1 🔥" : "Keep going",
-              },
-              {
-                label: "Longest Streak",
-                value: `${habit.longest_streak}d`,
-                sub: "Personal best",
-              },
-              {
-                label: "Completion Rate",
-                value: `${completionRate}%`,
-                sub: `${completedCount} of ${totalLogged} days`,
-              },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="border border-forge-border bg-forge-elevated p-4 2xl:p-5 text-center"
-              >
-                <p className="font-heading text-3xl 2xl:text-4xl font-bold tabular-nums text-forge-orange">
-                  {stat.value}
-                </p>
-                <p className="mt-1 text-xs 2xl:text-sm font-medium uppercase tracking-wider text-text-muted">
-                  {stat.label}
-                </p>
-                <p className="mt-0.5 text-[11px] text-text-disabled">{stat.sub}</p>
+          {/* ── Mobile: heatmap above stats ── */}
+          <div className="mb-4 lg:hidden">{HeatmapCard}</div>
+
+          {/* ── Two-column grid (desktop) / single column (mobile) ── */}
+          <div className="grid grid-cols-1 gap-6 2xl:gap-8 lg:grid-cols-3">
+
+            {/* Left — stat cards (2/3 width on desktop) */}
+            <div className="lg:col-span-2">
+              <div className="grid grid-cols-3 gap-4 2xl:gap-6">
+                {[
+                  {
+                    label: "Current Streak",
+                    value: `${habit.current_streak}d`,
+                    sub: habit.current_streak === 0
+                      ? "Start today"
+                      : habit.current_streak === 1
+                      ? "Day 1 🔥"
+                      : "Keep going",
+                  },
+                  {
+                    label: "Longest Streak",
+                    value: `${habit.longest_streak}d`,
+                    sub: "Personal best",
+                  },
+                  {
+                    label: "Completion",
+                    value: `${completionRate}%`,
+                    sub: `${completedCount} / ${totalLogged} days`,
+                  },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="border border-forge-border bg-forge-elevated p-4 2xl:p-5 text-center"
+                  >
+                    <p className="font-heading text-2xl sm:text-3xl 2xl:text-4xl font-bold tabular-nums text-forge-orange">
+                      {stat.value}
+                    </p>
+                    <p className="mt-1 text-[10px] sm:text-xs 2xl:text-sm font-medium uppercase tracking-wider text-text-muted">
+                      {stat.label}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-text-disabled">{stat.sub}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-
-          {/* Heatmap section — same card pattern as dashboard */}
-          <div className="border border-forge-border bg-forge-elevated p-4 2xl:p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-xs 2xl:text-sm uppercase tracking-wider text-text-muted">
-                Last 90 Days
-              </p>
-              <span className="text-xs 2xl:text-sm text-text-disabled">
-                {completedCount} completed
-              </span>
             </div>
 
-            <HabitGrid history={historyArr} />
-
-            {/* Legend */}
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs 2xl:text-sm text-text-muted">
-              {[
-                { color: "#22C55E", label: "Completed" },
-                { color: "#EF4444", label: "Missed" },
-                { color: "#2A2927", label: "No data" },
-              ].map(({ color, label }) => (
-                <span key={label} className="flex items-center gap-1.5">
-                  <span
-                    className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-[2px]"
-                    style={{ background: color }}
-                  />
-                  {label}
-                </span>
-              ))}
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-[2px]"
-                  style={{
-                    background: "#2A2927",
-                    outline: "1px solid #FF6B2B",
-                    outlineOffset: "1px",
-                  }}
-                />
-                Today
-              </span>
-            </div>
+            {/* Right — heatmap (1/3 width on desktop, hidden on mobile — shown above instead) */}
+            <div className="hidden lg:block">{HeatmapCard}</div>
           </div>
         </>
       )}
