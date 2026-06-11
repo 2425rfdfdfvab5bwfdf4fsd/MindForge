@@ -261,7 +261,7 @@ export default function LandingPage() {
 
         {/* ── 1. Hero ──────────────────────────────────────────────────── */}
         <section
-          className="relative flex min-h-[90vh] sm:min-h-screen flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-20 2xl:py-32 text-center"
+          className="relative flex min-h-[85vh] sm:min-h-screen flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-14 sm:py-20 2xl:py-32 text-center"
           style={{
             background:
               "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255,107,43,0.06) 0%, transparent 70%), #0A0908",
@@ -274,11 +274,11 @@ export default function LandingPage() {
             The first accountability system that tells you the truth
           </p>
 
-          <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl lg:text-7xl 2xl:text-8xl font-bold text-white leading-[1.06] max-w-[14ch] mb-6 sm:mb-8 2xl:mb-10">
+          <h1 className="font-heading text-3xl sm:text-5xl md:text-6xl lg:text-7xl 2xl:text-8xl font-bold text-white leading-[1.06] max-w-[14ch] mb-6 sm:mb-8 2xl:mb-10">
             Stop being soft with yourself.
           </h1>
 
-          <p className="text-base sm:text-lg md:text-xl 2xl:text-2xl text-[#A09FA0] max-w-[42ch] leading-[1.65] mb-10 sm:mb-12 2xl:mb-14">
+          <p className="text-sm sm:text-base md:text-lg lg:text-xl 2xl:text-2xl text-[#A09FA0] max-w-[42ch] leading-[1.65] mb-10 sm:mb-12 2xl:mb-14">
             MindForge uses neuroscience-backed behavior change and an AI coach
             that builds a persistent memory of who you are — and holds you to who
             you said you'd be.
@@ -305,7 +305,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 2. Problem ───────────────────────────────────────────────── */}
-        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32">
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-12 sm:py-24 2xl:py-32">
           <div className="mx-auto max-w-5xl 2xl:max-w-8xl">
             <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               The problem
@@ -331,7 +331,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 3. How It Works ──────────────────────────────────────────── */}
-        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32">
+        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-12 sm:py-24 2xl:py-32">
           <div className="mx-auto max-w-3xl 2xl:max-w-5xl">
             <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               How it works
@@ -362,7 +362,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 4. Feature Grid ──────────────────────────────────────────── */}
-        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32">
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-12 sm:py-24 2xl:py-32">
           <div className="mx-auto max-w-5xl 2xl:max-w-8xl">
             <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               The arsenal
@@ -370,7 +370,7 @@ export default function LandingPage() {
             <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-bold text-white mb-10 sm:mb-14 text-center">
               Built for people who are serious.
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-[#2A2927]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-[#2A2927]">
               {FEATURES.map((feat) => (
                 <div
                   key={feat.title}
@@ -387,7 +387,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 5. Pricing ───────────────────────────────────────────────── */}
-        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32" id="pricing">
+        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-12 sm:py-24 2xl:py-32" id="pricing">
           <div className="mx-auto max-w-5xl 2xl:max-w-8xl">
             <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               Pricing
@@ -403,7 +403,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 6. Social Proof ──────────────────────────────────────────── */}
-        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32">
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-12 sm:py-24 2xl:py-32">
           <div className="mx-auto max-w-5xl 2xl:max-w-8xl">
             <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               Early forgers
@@ -436,7 +436,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 7. Final CTA ─────────────────────────────────────────────── */}
-        <section className="relative bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-20 sm:py-28 2xl:py-40 text-center overflow-hidden">
+        <section className="relative bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-14 sm:py-28 2xl:py-40 text-center overflow-hidden">
           <div
             className="pointer-events-none absolute inset-0"
             style={{
@@ -477,24 +477,24 @@ export default function LandingPage() {
                 </p>
               </div>
               <nav
-                className="flex flex-wrap items-center justify-center sm:justify-end gap-x-6 gap-y-3"
+                className="flex flex-wrap items-center justify-center sm:justify-end gap-x-6 gap-y-1"
                 aria-label="Footer navigation"
               >
                 <Link
                   href="/privacy"
-                  className="text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
+                  className="inline-flex min-h-[40px] items-center text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
                 >
                   Privacy Policy
                 </Link>
                 <Link
                   href="/terms"
-                  className="text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
+                  className="inline-flex min-h-[40px] items-center text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
                 >
                   Terms of Service
                 </Link>
                 <Link
                   href="/login"
-                  className="text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
+                  className="inline-flex min-h-[40px] items-center text-xs text-[#6B7280] hover:text-white transition-colors duration-200"
                 >
                   Sign In
                 </Link>
