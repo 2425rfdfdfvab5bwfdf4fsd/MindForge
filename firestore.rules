@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MindForge — Firestore Security Rules
+    //
+    // All reads and writes go through Firebase Admin SDK on the server.
+    // Admin SDK bypasses these rules entirely, so the app works normally.
+    // These rules exist to block any direct client-side Firestore access,
+    // which is never intended by this architecture.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Users — allow a signed-in user to read their own document only.
+    // Write is blocked: profile updates go through the server/Admin SDK.
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+
+      // Badges subcollection — same rule: read-only for the owner
+      match /badges/{badgeId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+
+    // Challenges — public read so the client can list available challenges
+    // without a server round-trip if needed in future. No client writes.
+    match /challenges/{challengeId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Everything else is server-only. Deny all direct client access.
+    match /habits/{doc} {
+      allow read, write: if false;
+    }
+    match /habit_completions/{doc} {
+      allow read, write: if false;
+    }
+    match /habit_streaks/{doc} {
+      allow read, write: if false;
+    }
+    match /daily_checkins/{doc} {
+      allow read, write: if false;
+    }
+    match /coaching_sessions/{doc} {
+      allow read, write: if false;
+    }
+    match /user_memories/{doc} {
+      allow read, write: if false;
+    }
+    match /cookie_jar_entries/{doc} {
+      allow read, write: if false;
+    }
+    match /user_challenges/{doc} {
+      allow read, write: if false;
+    }
+    match /xp_events/{doc} {
+      allow read, write: if false;
+    }
+    match /rule_forty_events/{doc} {
+      allow read, write: if false;
+    }
+    match /forge_score_history/{doc} {
+      allow read, write: if false;
+    }
+    match /weekly_reports/{doc} {
+      allow read, write: if false;
+    }
+    match /environment_audit_items/{doc} {
+      allow read, write: if false;
+    }
+    match /subscriptions/{doc} {
+      allow read, write: if false;
+    }
+
+    // Catch-all: deny any collection not explicitly listed above
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
