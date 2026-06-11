@@ -65,8 +65,9 @@ export default function RootLayout({
     <html
       lang="en"
       className={`dark ${GeistSans.variable} ${GeistMono.variable} ${inter.variable}`}
+      suppressHydrationWarning
     >
-      <body className="font-body bg-forge-base antialiased">
+      <body className="font-body bg-forge-base antialiased" suppressHydrationWarning>
         <TRPCProvider>
           <Suspense fallback={null}>
             <PostHogProvider>
