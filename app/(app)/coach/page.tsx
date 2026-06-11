@@ -248,8 +248,9 @@ export default function CoachPage() {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let streamDone = false;
 
-        while (true) {
+        while (!streamDone) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
@@ -259,11 +260,12 @@ export default function CoachPage() {
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             const raw = line.slice(6).trim();
-            if (raw === "[DONE]") break;
+            if (raw === "[DONE]") { streamDone = true; break; }
             try {
-              const { text } = JSON.parse(raw);
-              if (text) {
-                full += text;
+              const parsed = JSON.parse(raw);
+              if (parsed.error) { streamDone = true; break; }
+              if (parsed.text) {
+                full += parsed.text;
                 setStreamingText(full);
               }
             } catch { /* skip */ }

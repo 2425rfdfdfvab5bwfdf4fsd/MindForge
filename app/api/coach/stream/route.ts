@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getSessionFromRequest } from "@/lib/auth";
 import { adminDb } from "@/lib/firebase/admin";
 import { geminiPro } from "@/lib/gemini/client";
