@@ -22,7 +22,6 @@ export const dashboardRouter = router({
           .collection("habits")
           .where("userId", "==", userId)
           .where("isActive", "==", true)
-          .orderBy("sortOrder")
           .get(),
         adminDb
           .collection("habit_completions")
@@ -97,12 +96,13 @@ export const dashboardRouter = router({
             habit_type: h.habitType,
             target_frequency: h.targetFrequency,
             target_days: h.targetDays as number[],
-            sort_order: h.sortOrder,
+            sort_order: (h.sortOrder as number) ?? 0,
             current_streak: streak?.currentStreak ?? 0,
             longest_streak: streak?.longestStreak ?? 0,
             today_status,
           };
-        });
+        })
+        .sort((a, b) => a.sort_order - b.sort_order);
 
       const topStreaks = habitsSnap.docs
         .map((d) => ({

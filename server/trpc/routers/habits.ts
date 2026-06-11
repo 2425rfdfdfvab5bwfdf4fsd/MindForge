@@ -16,7 +16,6 @@ export const habitsRouter = router({
         .collection("habits")
         .where("userId", "==", ctx.user.id)
         .where("isActive", "==", true)
-        .orderBy("sortOrder")
         .get();
 
       if (habitsSnap.empty) return [];
@@ -54,25 +53,27 @@ export const habitsRouter = router({
         }
       });
 
-      return habitsSnap.docs.map((d) => {
-        const h = d.data();
-        const completedVal = completionMap.get(d.id);
-        const today_status =
-          completedVal === undefined ? "pending" : completedVal ? "completed" : "missed";
-        const streak = streakMap.get(d.id);
-        return {
-          id: d.id,
-          name: h.name,
-          category: h.category,
-          habit_type: h.habitType,
-          target_frequency: h.targetFrequency,
-          target_days: h.targetDays as number[],
-          sort_order: h.sortOrder,
-          current_streak: streak?.currentStreak ?? 0,
-          longest_streak: streak?.longestStreak ?? 0,
-          today_status,
-        };
-      });
+      return habitsSnap.docs
+        .map((d) => {
+          const h = d.data();
+          const completedVal = completionMap.get(d.id);
+          const today_status =
+            completedVal === undefined ? "pending" : completedVal ? "completed" : "missed";
+          const streak = streakMap.get(d.id);
+          return {
+            id: d.id,
+            name: h.name,
+            category: h.category,
+            habit_type: h.habitType,
+            target_frequency: h.targetFrequency,
+            target_days: h.targetDays as number[],
+            sort_order: (h.sortOrder as number) ?? 0,
+            current_streak: streak?.currentStreak ?? 0,
+            longest_streak: streak?.longestStreak ?? 0,
+            today_status,
+          };
+        })
+        .sort((a, b) => a.sort_order - b.sort_order);
     }),
 
   create: protectedProcedure
