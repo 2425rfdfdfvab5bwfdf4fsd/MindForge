@@ -1,0 +1,34 @@
+I have a problem with my Vercel-hosted website/app.
+
+Problem: created habits not visbal
+
+It happens when I: went to create habits than after clicking and closing habit creating form than not show created habit in habits page
+
+Please analyze this properly and find the real root cause first. Do not guess and do not apply random fixes.
+
+Check everything related, including:
+
+Frontend code
+Backend/API routes
+Authentication/session
+Database connection
+Environment variables
+Vercel deployment settings
+Build logs and runtime logs
+Dependencies/packages
+Routing, middleware, and config files
+After finding the root cause, fix it properly from A to Z.
+
+Please provide:
+
+The exact root cause
+Why this problem is happening
+Which files/configs need to be changed
+The correct fix with code/config changes
+Any Vercel environment variables/settings I need to update
+How to test and verify the issue is fixed after deployment
+If you need more information, ask only for the exact file, log, or screenshot needed.
+
+Important: Do not expose or print any secret keys, tokens, passwords, or private environment variables.
+
+
