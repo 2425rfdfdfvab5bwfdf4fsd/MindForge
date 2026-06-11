@@ -28,7 +28,7 @@ export function LandingNav() {
           : "border-b border-[#2A2927] bg-[#0A0908]"
       }`}
     >
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
+      <nav className="mx-auto flex max-w-6xl 2xl:max-w-8xl items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
         {/* Logo */}
         <Link
           href="/"

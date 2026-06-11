@@ -88,7 +88,7 @@ export default function UpgradePage() {
 
   return (
     <div className="min-h-screen bg-[#0A0908] px-4 py-12">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-5xl 2xl:max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3 tracking-tight">
             Forge Your Best Self

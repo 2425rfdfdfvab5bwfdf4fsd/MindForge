@@ -306,7 +306,7 @@ export default function LandingPage() {
 
         {/* ── 2. Problem ───────────────────────────────────────────────── */}
         <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
             <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
               The problem
             </p>
@@ -332,7 +332,7 @@ export default function LandingPage() {
 
         {/* ── 3. How It Works ──────────────────────────────────────────── */}
         <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-3xl 2xl:max-w-4xl">
             <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
               How it works
             </p>
@@ -363,7 +363,7 @@ export default function LandingPage() {
 
         {/* ── 4. Feature Grid ──────────────────────────────────────────── */}
         <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
             <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
               The arsenal
             </p>
@@ -388,7 +388,7 @@ export default function LandingPage() {
 
         {/* ── 5. Pricing ───────────────────────────────────────────────── */}
         <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24" id="pricing">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
             <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
               Pricing
             </p>
@@ -404,7 +404,7 @@ export default function LandingPage() {
 
         {/* ── 6. Social Proof ──────────────────────────────────────────── */}
         <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
             <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
               Early forgers
             </p>
@@ -466,7 +466,7 @@ export default function LandingPage() {
 
         {/* ── 8. Footer ────────────────────────────────────────────────── */}
         <footer className="bg-[#111110] border-t border-[#2A2927] px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
               <div className="text-center sm:text-left">
                 <p className="font-heading text-base font-bold tracking-tight text-forge-orange">

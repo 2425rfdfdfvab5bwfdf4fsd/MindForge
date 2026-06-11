@@ -9,6 +9,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      maxWidth: {
+        "8xl": "90rem",
+      },
       colors: {
         forge: {
           base: "#0A0908",
