@@ -51,6 +51,16 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@firebase/util",
+      "@google/genai",
+      "@sentry/cli",
+      "core-js",
+      "protobufjs",
+      "unrs-resolver"
+    ]
+  },
   "devDependencies": {
     "@types/node": "^20.19.42",
     "@types/react": "^18.3.31",
