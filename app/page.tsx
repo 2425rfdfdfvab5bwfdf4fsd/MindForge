@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LandingNav } from "@/components/landing/LandingNav";
 import { LandingPricing } from "@/components/landing/LandingPricing";
+import { BarChart2, Brain, Zap, Cookie, Flame, Ban, Trophy, MessageSquareOff, TrendingDown } from "lucide-react";
 
 export const metadata: Metadata = {
   title: {
@@ -152,26 +153,32 @@ const faqSchema = {
 
 const FEATURES = [
   {
+    icon: BarChart2,
     title: "Forge Score",
     body: "A real-time accountability score that reflects your actual behavior — not your effort.",
   },
   {
+    icon: Brain,
     title: "AI Memory",
     body: "Your coach remembers your patterns, triggers, and past victories across every session. No other app does this.",
   },
   {
+    icon: Zap,
     title: "40% Rule Engine",
     body: "When you are about to quit, the system triggers. Research shows you are at 40% of your true capacity.",
   },
   {
+    icon: Cookie,
     title: "Cookie Jar",
     body: "Store your past victories. Your coach surfaces them when you are struggling.",
   },
   {
+    icon: Flame,
     title: "Callousing Challenges",
     body: "A library of graduated discomfort challenges that build real mental toughness.",
   },
   {
+    icon: Ban,
     title: "No Skip Option",
     body: "Completed or missed. No grace period. No undo. No excuses.",
   },
@@ -179,14 +186,17 @@ const FEATURES = [
 
 const PROBLEMS = [
   {
+    icon: Trophy,
     title: "Participation trophies",
     body: "They reward showing up, not results. Your brain learns to tolerate failure.",
   },
   {
+    icon: MessageSquareOff,
     title: "No memory, no coaching",
     body: "Generic reminders are not coaching. No app builds a real relationship with you.",
   },
   {
+    icon: TrendingDown,
     title: "Surface motivation collapses",
     body: "Without your deepest why, streaks break and you abandon the app in two weeks.",
   },
@@ -261,48 +271,141 @@ export default function LandingPage() {
 
         {/* ── 1. Hero ──────────────────────────────────────────────────── */}
         <section
-          className="relative flex min-h-[85vh] sm:min-h-screen flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-14 sm:py-20 2xl:py-32 text-center"
+          className="relative overflow-hidden px-4 sm:px-6 lg:px-8 py-14 sm:py-20 2xl:py-28"
           style={{
             background:
-              "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255,107,43,0.06) 0%, transparent 70%), #0A0908",
+              "radial-gradient(ellipse 80% 70% at 60% 40%, rgba(255,107,43,0.07) 0%, transparent 65%), #0A0908",
           }}
         >
           {/* Decorative top rule */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-48 sm:w-64 bg-gradient-to-r from-transparent via-forge-orange to-transparent opacity-60" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-64 sm:w-96 bg-gradient-to-r from-transparent via-forge-orange to-transparent opacity-50" />
+          {/* Faint grid texture */}
+          <div className="pointer-events-none absolute inset-0 opacity-[0.02]" style={{ backgroundImage: "linear-gradient(#FF6B2B 1px, transparent 1px), linear-gradient(90deg, #FF6B2B 1px, transparent 1px)", backgroundSize: "64px 64px" }} />
 
-          <p className="mb-6 text-xs sm:text-sm 2xl:text-base tracking-[0.2em] text-[#6B7280] uppercase font-medium">
-            The first accountability system that tells you the truth
-          </p>
+          <div className="relative mx-auto max-w-6xl 2xl:max-w-9xl">
+            <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16 2xl:gap-24">
 
-          <h1 className="font-heading text-3xl sm:text-5xl md:text-6xl lg:text-7xl 2xl:text-8xl font-bold text-white leading-[1.06] max-w-[14ch] mb-6 sm:mb-8 2xl:mb-10">
-            Stop being soft with yourself.
-          </h1>
+              {/* Left: copy */}
+              <div className="flex-1 text-center lg:text-left">
+                <div className="mb-5 inline-flex items-center gap-2 border border-forge-orange/25 bg-forge-orange/5 px-3 py-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-forge-orange animate-pulse" />
+                  <span className="text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+                    The first accountability system that tells you the truth
+                  </span>
+                </div>
 
-          <p className="text-sm sm:text-base md:text-lg lg:text-xl 2xl:text-2xl text-[#A09FA0] max-w-[42ch] leading-[1.65] mb-10 sm:mb-12 2xl:mb-14">
-            MindForge uses neuroscience-backed behavior change and an AI coach
-            that builds a persistent memory of who you are — and holds you to who
-            you said you'd be.
-          </p>
+                <h1 className="font-heading text-3xl sm:text-5xl md:text-6xl lg:text-[4.25rem] xl:text-7xl 2xl:text-8xl font-bold text-white leading-[1.04] mb-6 sm:mb-8 2xl:mb-10">
+                  Stop being soft<br className="hidden sm:block" /> with yourself.
+                </h1>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <Link
-              href="/login"
-              className="inline-flex min-h-[52px] 2xl:min-h-[60px] w-full sm:w-auto items-center justify-center bg-forge-orange px-8 sm:px-10 2xl:px-12 text-sm sm:text-base 2xl:text-lg font-bold text-white transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_28px_rgba(255,107,43,0.40)]"
-            >
-              Start Forging — It's Free →
-            </Link>
-            <Link
-              href="#pricing"
-              className="inline-flex min-h-[52px] w-full sm:w-auto items-center justify-center border border-[#2A2927] px-8 sm:px-10 text-sm font-medium text-[#87857F] transition-all duration-200 hover:border-[#3D3B39] hover:text-white"
-            >
-              View Pricing
-            </Link>
+                <p className="text-sm sm:text-base md:text-lg lg:text-xl 2xl:text-2xl text-[#A09FA0] max-w-[42ch] mx-auto lg:mx-0 leading-[1.7] mb-10 sm:mb-12 2xl:mb-14">
+                  MindForge uses neuroscience-backed behavior change and an AI coach
+                  that builds a persistent memory of who you are — and holds you to who
+                  you said you&apos;d be.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-center lg:items-start gap-3 sm:gap-4">
+                  <Link
+                    href="/login"
+                    className="inline-flex min-h-[52px] 2xl:min-h-[60px] w-full sm:w-auto items-center justify-center bg-forge-orange px-8 sm:px-10 2xl:px-12 text-sm sm:text-base 2xl:text-lg font-bold text-white transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_32px_rgba(255,107,43,0.45)] active:scale-[0.98]"
+                  >
+                    Start Forging — It&apos;s Free →
+                  </Link>
+                  <Link
+                    href="#pricing"
+                    className="inline-flex min-h-[52px] w-full sm:w-auto items-center justify-center border border-[#2A2927] px-8 sm:px-10 text-sm font-medium text-[#87857F] transition-all duration-200 hover:border-[#3D3B39] hover:text-white"
+                  >
+                    View Pricing
+                  </Link>
+                </div>
+
+                <p className="mt-5 text-xs text-[#4A4845] text-center lg:text-left">
+                  No credit card. No gentle encouragement. Just accountability.
+                </p>
+              </div>
+
+              {/* Right: product mockup */}
+              <div className="w-full max-w-[360px] sm:max-w-sm lg:max-w-[400px] 2xl:max-w-[460px] flex-shrink-0 mx-auto lg:mx-0">
+                <div className="relative">
+                  <div className="absolute -inset-6 bg-forge-orange/5 blur-3xl" />
+                  <div className="absolute -inset-px bg-gradient-to-b from-forge-orange/20 to-transparent" />
+                  <div className="relative border border-[#2A2927] bg-[#111110]">
+                    {/* Card header */}
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#2A2927] bg-[#0F0E0D]">
+                      <div>
+                        <p className="text-[10px] text-[#4A4845] uppercase tracking-widest">Thursday · Jan 16</p>
+                        <p className="font-heading text-sm font-bold text-white mt-0.5">Daily Forge</p>
+                      </div>
+                      <div className="border border-forge-orange/30 bg-forge-orange/8 px-2.5 py-1">
+                        <span className="text-[10px] font-bold text-forge-orange tracking-wider">DAY 47</span>
+                      </div>
+                    </div>
+
+                    <div className="p-5">
+                      {/* Forge Score */}
+                      <div className="mb-4 border border-[#2A2927] bg-[#0A0908] px-4 py-4 text-center">
+                        <p className="text-[9px] tracking-[0.2em] text-[#6B7280] uppercase mb-1.5">Forge Score</p>
+                        <p className="font-heading text-5xl font-bold text-forge-orange leading-none tabular-nums">847</p>
+                        <div className="mt-3 h-1 bg-[#2A2927] overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-forge-orange to-[#FF9A5C]" style={{ width: "84.7%" }} />
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between">
+                          <span className="text-[10px] text-[#6B7280]">Elite tier</span>
+                          <span className="text-[10px] text-forge-orange font-semibold">Top 12%</span>
+                        </div>
+                      </div>
+
+                      {/* Habits */}
+                      <div className="space-y-1.5 mb-4">
+                        {[
+                          { label: "Morning Run", done: true, xp: "+15 XP" },
+                          { label: "Cold Shower", done: true, xp: "+10 XP" },
+                          { label: "Deep Work Block", done: false },
+                        ].map((h) => (
+                          <div key={h.label} className="flex items-center gap-2.5 px-3 py-2 bg-[#0A0908] border border-[#2A2927]">
+                            <div className={`h-3.5 w-3.5 flex-shrink-0 flex items-center justify-center ${h.done ? "bg-forge-orange" : "border border-[#3D3B39]"}`}>
+                              {h.done && <span className="text-[8px] text-white font-black leading-none">✓</span>}
+                            </div>
+                            <span className={`text-xs flex-1 ${h.done ? "text-[#4A4845] line-through" : "text-[#C2C0BE]"}`}>{h.label}</span>
+                            {h.done && <span className="text-[10px] text-green-400 font-semibold tabular-nums">{h.xp}</span>}
+                            {!h.done && <span className="text-[10px] text-[#4A4845]">pending</span>}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* AI message */}
+                      <div className="flex bg-[#0A0908] border border-[#2A2927]">
+                        <div className="w-0.5 bg-forge-orange flex-shrink-0" />
+                        <div className="px-3 py-2.5">
+                          <p className="text-[9px] text-[#6B7280] uppercase tracking-widest mb-1">AI Coach</p>
+                          <p className="text-xs text-[#A09FA0] leading-relaxed italic">&ldquo;47 days in. You said you&apos;d never miss two in a row. Deep Work is still pending.&rdquo;</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
-
-          <p className="mt-5 text-xs text-[#4A4845]">
-            No credit card. No gentle encouragement. Just accountability.
-          </p>
         </section>
+
+        {/* ── Stats strip ──────────────────────────────────────────────── */}
+        <div className="border-y border-[#2A2927] bg-[#111110] px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <div className="mx-auto max-w-5xl 2xl:max-w-8xl grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+            {([
+              { value: "100%", label: "Honest feedback" },
+              { value: "0", label: "Participation trophies" },
+              { value: "3", label: "Steps to accountability" },
+              { value: "∞", label: "Excuses eliminated" },
+            ] as const).map((s) => (
+              <div key={s.label} className="text-center">
+                <p className="font-heading text-2xl sm:text-3xl 2xl:text-4xl font-bold text-forge-orange tabular-nums">{s.value}</p>
+                <p className="text-xs sm:text-sm text-[#6B7280] mt-1 leading-snug">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* ── 2. Problem ───────────────────────────────────────────────── */}
         <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-12 sm:py-24 2xl:py-32">
@@ -319,7 +422,9 @@ export default function LandingPage() {
                   key={card.title}
                   className="group border border-[#2A2927] bg-[#0A0908] p-6 sm:p-8 2xl:p-10 transition-all duration-200 hover:border-[#3D3B39] hover:bg-[#0F0D0C]"
                 >
-                  <div className="mb-4 h-px w-8 bg-forge-orange opacity-60" />
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center border border-[#2A2927] bg-[#111110] group-hover:border-forge-orange/30 transition-colors duration-200">
+                    <card.icon className="h-5 w-5 text-forge-orange" aria-hidden="true" />
+                  </div>
                   <h3 className="font-heading text-base sm:text-lg 2xl:text-xl font-semibold text-white mb-3 group-hover:text-forge-orange-text transition-colors duration-200">
                     {card.title}
                   </h3>
@@ -376,6 +481,9 @@ export default function LandingPage() {
                   key={feat.title}
                   className="group bg-[#111110] p-6 sm:p-8 2xl:p-10 transition-colors duration-200 hover:bg-[#141312]"
                 >
+                  <div className="mb-4 flex h-9 w-9 items-center justify-center bg-forge-orange/10 border border-forge-orange/20 group-hover:bg-forge-orange/15 transition-colors duration-200">
+                    <feat.icon className="h-4 w-4 text-forge-orange" aria-hidden="true" />
+                  </div>
                   <h3 className="font-heading text-base sm:text-lg 2xl:text-xl font-semibold text-white mb-2 group-hover:text-forge-orange-text transition-colors duration-200">
                     {feat.title}
                   </h3>
@@ -417,10 +525,19 @@ export default function LandingPage() {
                   key={t.name}
                   className="flex flex-col justify-between border border-[#2A2927] bg-[#0A0908] p-6 sm:p-8 2xl:p-10 transition-all duration-200 hover:border-[#3D3B39]"
                 >
-                  <p className="text-sm sm:text-base 2xl:text-lg text-[#A09FA0] leading-[1.7] mb-6 italic">
-                    "{t.quote}"
-                  </p>
-                  <div className="flex items-center gap-3">
+                  <div>
+                    <div className="flex gap-0.5 mb-4" aria-label="5 out of 5 stars">
+                      {[...Array(5)].map((_, i) => (
+                        <svg key={i} className="h-3.5 w-3.5 fill-forge-orange text-forge-orange" viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                    <p className="text-sm sm:text-base 2xl:text-lg text-[#A09FA0] leading-[1.7] mb-6 italic">
+                      &ldquo;{t.quote}&rdquo;
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 pt-4 border-t border-[#1A1918]">
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center bg-forge-orange font-heading text-sm font-bold text-white">
                       {t.name[0]}
                     </div>
