@@ -8,61 +8,70 @@ export const dashboardRouter = router({
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id;
 
+      // All queries use only a single where("userId") equality filter so that
+      // Firestore's automatic single-field index is sufficient — no composite
+      // indexes required. Secondary filtering is done in JavaScript.
       const [
         userSnap,
         habitsSnap,
         completionsSnap,
         checkinSnap,
-        activeChalSnap,
+        challengesSnap,
         cookieJarSnap,
-        todayXPSnap,
+        xpEventsSnap,
       ] = await Promise.all([
         adminDb.collection("users").doc(userId).get(),
         adminDb
           .collection("habits")
           .where("userId", "==", userId)
-          .where("isActive", "==", true)
           .get(),
         adminDb
           .collection("habit_completions")
           .where("userId", "==", userId)
-          .where("localDate", "==", input.localDate)
+          .limit(500)
           .get(),
         adminDb
           .collection("daily_checkins")
           .where("userId", "==", userId)
-          .where("localDate", "==", input.localDate)
-          .where("onboardingMirror", "==", false)
-          .limit(1)
+          .limit(60)
           .get(),
         adminDb
           .collection("user_challenges")
           .where("userId", "==", userId)
-          .where("status", "==", "active")
-          .limit(1)
+          .limit(20)
           .get(),
         adminDb
           .collection("cookie_jar_entries")
           .where("userId", "==", userId)
-          .orderBy("createdAt", "desc")
-          .limit(3)
+          .limit(100)
           .get(),
         adminDb
           .collection("xp_events")
           .where("userId", "==", userId)
-          .where("createdAt", ">=", input.localDate + "T00:00:00.000Z")
-          .where("createdAt", "<=", input.localDate + "T23:59:59.999Z")
+          .limit(500)
           .get(),
       ]);
 
       const user = userSnap.data() ?? null;
-      const habitIds = habitsSnap.docs.map((d) => d.id);
+
+      // Filter active habits and sort by sortOrder in JS
+      const activeHabitDocs = habitsSnap.docs.filter(
+        (d) => d.data().isActive === true
+      );
+      const habitIds = activeHabitDocs.map((d) => d.id);
 
       const streakResults = habitIds.length
-        ? await Promise.all(habitIds.map((id) => adminDb.collection("habit_streaks").doc(id).get()))
+        ? await Promise.all(
+            habitIds.map((id) =>
+              adminDb.collection("habit_streaks").doc(id).get()
+            )
+          )
         : [];
 
-      const streakMap = new Map<string, { currentStreak: number; longestStreak: number }>();
+      const streakMap = new Map<
+        string,
+        { currentStreak: number; longestStreak: number }
+      >();
       streakResults.forEach((s) => {
         if (s.exists) {
           streakMap.set(s.id, {
@@ -72,13 +81,16 @@ export const dashboardRouter = router({
         }
       });
 
+      // Filter completions for today in JS
       const completionMap = new Map<string, boolean>();
       completionsSnap.docs.forEach((d) => {
-        completionMap.set(d.data().habitId, d.data().completed);
+        if (d.data().localDate === input.localDate) {
+          completionMap.set(d.data().habitId, d.data().completed);
+        }
       });
 
       const todayDow = new Date(input.localDate + "T12:00:00").getDay();
-      const todayHabits = habitsSnap.docs
+      const todayHabits = activeHabitDocs
         .filter((d) => {
           const days = d.data().targetDays as number[];
           return !days || days.includes(todayDow);
@@ -87,7 +99,11 @@ export const dashboardRouter = router({
           const h = d.data();
           const completedVal = completionMap.get(d.id);
           const today_status =
-            completedVal === undefined ? "pending" : completedVal ? "completed" : "missed";
+            completedVal === undefined
+              ? "pending"
+              : completedVal
+              ? "completed"
+              : "missed";
           const streak = streakMap.get(d.id);
           return {
             id: d.id,
@@ -104,7 +120,7 @@ export const dashboardRouter = router({
         })
         .sort((a, b) => a.sort_order - b.sort_order);
 
-      const topStreaks = habitsSnap.docs
+      const topStreaks = activeHabitDocs
         .map((d) => ({
           name: d.data().name as string,
           current_streak: streakMap.get(d.id)?.currentStreak ?? 0,
@@ -112,18 +128,35 @@ export const dashboardRouter = router({
         .sort((a, b) => b.current_streak - a.current_streak)
         .slice(0, 3);
 
-      const todayXPDelta = todayXPSnap.docs.reduce(
-        (sum, d) => sum + (d.data().xpAmount as number),
-        0
+      // Filter today's check-in in JS (non-onboarding only)
+      const todayCheckinDoc = checkinSnap.docs.find(
+        (d) =>
+          d.data().localDate === input.localDate &&
+          d.data().onboardingMirror === false
       );
+      const todayCheckin = todayCheckinDoc
+        ? {
+            id: todayCheckinDoc.id,
+            mood_signal: todayCheckinDoc.data().moodSignal,
+            honesty_score: todayCheckinDoc.data().honestyScore,
+            created_at: todayCheckinDoc.data().createdAt,
+          }
+        : null;
 
+      // Find active challenge in JS
+      const activeChalDoc = challengesSnap.docs.find(
+        (d) => d.data().status === "active"
+      );
       let activeChallenge = null;
-      if (!activeChalSnap.empty) {
-        const uc = activeChalSnap.docs[0].data();
-        const chalSnap = await adminDb.collection("challenges").doc(uc.challengeId).get();
+      if (activeChalDoc) {
+        const uc = activeChalDoc.data();
+        const chalSnap = await adminDb
+          .collection("challenges")
+          .doc(uc.challengeId)
+          .get();
         const chal = chalSnap.data();
         activeChallenge = {
-          id: activeChalSnap.docs[0].id,
+          id: activeChalDoc.id,
           started_at: uc.startedAt,
           status: uc.status,
           challenges: chal
@@ -137,15 +170,29 @@ export const dashboardRouter = router({
         };
       }
 
-      const checkinDoc = checkinSnap.empty ? null : checkinSnap.docs[0];
-      const todayCheckin = checkinDoc
-        ? {
-            id: checkinDoc.id,
-            mood_signal: checkinDoc.data().moodSignal,
-            honesty_score: checkinDoc.data().honestyScore,
-            created_at: checkinDoc.data().createdAt,
-          }
-        : null;
+      // Sort cookie jar entries by createdAt desc in JS, take top 3
+      const recentCookieJar = cookieJarSnap.docs
+        .sort((a, b) => {
+          const aTime = a.data().createdAt ?? "";
+          const bTime = b.data().createdAt ?? "";
+          return bTime > aTime ? 1 : bTime < aTime ? -1 : 0;
+        })
+        .slice(0, 3)
+        .map((d) => ({
+          id: d.id,
+          title: d.data().title,
+          date_of_victory: d.data().dateOfVictory,
+        }));
+
+      // Filter today's XP events in JS
+      const dayStart = input.localDate + "T00:00:00.000Z";
+      const dayEnd = input.localDate + "T23:59:59.999Z";
+      const todayXPDelta = xpEventsSnap.docs
+        .filter((d) => {
+          const t = d.data().createdAt ?? "";
+          return t >= dayStart && t <= dayEnd;
+        })
+        .reduce((sum, d) => sum + (d.data().xpAmount as number), 0);
 
       return {
         user: user
@@ -165,11 +212,7 @@ export const dashboardRouter = router({
         xp: user?.xp ?? 0,
         level: user?.level ?? 1,
         topStreaks,
-        recentCookieJar: cookieJarSnap.docs.map((d) => ({
-          id: d.id,
-          title: d.data().title,
-          date_of_victory: d.data().dateOfVictory,
-        })),
+        recentCookieJar,
         todayXPDelta,
       };
     }),

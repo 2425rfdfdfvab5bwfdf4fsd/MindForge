@@ -111,13 +111,30 @@ function DashboardContent() {
   const { data: profile } = api.user.getProfile.useQuery(undefined, { retry: false });
   const localDate = getLocalDate(profile?.timezone ?? "UTC");
 
-  const { data, isLoading, refetch } = api.dashboard.getAll.useQuery(
+  const { data, isLoading, isError, refetch } = api.dashboard.getAll.useQuery(
     { localDate },
     { retry: false }
   );
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return <DashboardSkeleton />;
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-4 text-center">
+        <p className="text-2xl">⚠️</p>
+        <p className="text-base font-medium text-text-secondary">
+          Failed to load dashboard. Please try again.
+        </p>
+        <button
+          onClick={() => refetch()}
+          className="bg-forge-orange px-6 py-3 text-sm font-bold text-forge-base hover:bg-forge-orange-hover"
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   const { habits, todayCheckin, activeChallenge, forgeScore, xp, level, recentCookieJar, todayXPDelta } = data;
