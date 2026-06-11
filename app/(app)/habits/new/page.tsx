@@ -28,6 +28,7 @@ const FREQ_OPTIONS = [
 
 export default function NewHabitPage() {
   const router = useRouter();
+  const utils = api.useUtils();
   const [name, setName] = useState("");
   const [category, setCategory] = useState<"health" | "mind" | "avoid" | "perform">("health");
   const [habitType, setHabitType] = useState<"build" | "avoid">("build");
@@ -37,6 +38,7 @@ export default function NewHabitPage() {
 
   const createHabit = api.habits.create.useMutation({
     onSuccess: () => {
+      utils.habits.list.invalidate();
       router.push("/habits");
     },
     onError: (err) => {
