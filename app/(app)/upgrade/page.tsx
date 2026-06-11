@@ -87,13 +87,13 @@ export default function UpgradePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0908] px-4 py-12">
+    <div className="min-h-screen bg-[#0A0908] px-4 py-12 2xl:py-16">
       <div className="max-w-5xl 2xl:max-w-7xl mx-auto">
         <div className="text-center mb-12">
-          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3 tracking-tight">
+          <h1 className="text-3xl sm:text-4xl 2xl:text-5xl font-bold text-white mb-3 tracking-tight">
             Forge Your Best Self
           </h1>
-          <p className="text-[#6B7280] text-base sm:text-lg max-w-xl mx-auto">
+          <p className="text-[#6B7280] text-base sm:text-lg 2xl:text-xl max-w-xl mx-auto">
             Choose the level of accountability that matches your ambition.
           </p>
 
@@ -127,7 +127,7 @@ export default function UpgradePage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 2xl:gap-10">
           {(["free", "pro", "elite"] as const).map((tier) => {
             const plan = PLANS[tier];
             const isPro = tier === "pro";
@@ -150,7 +150,7 @@ export default function UpgradePage() {
             return (
               <div
                 key={tier}
-                className={`relative flex flex-col bg-[#111110] rounded-xl p-6 border transition-colors ${
+                className={`relative flex flex-col bg-[#111110] rounded-xl p-6 2xl:p-8 border transition-colors ${
                   isPro
                     ? "border-[#FF6B2B]"
                     : "border-[#2A2927]"
@@ -179,12 +179,12 @@ export default function UpgradePage() {
                   >
                     <Icon className="w-5 h-5" style={{ color: plan.color }} />
                   </div>
-                  <span className="text-white font-bold text-lg">{plan.name}</span>
+                  <span className="text-white font-bold text-lg 2xl:text-xl">{plan.name}</span>
                 </div>
 
                 <div className="mb-6">
                   {tier === "free" ? (
-                    <div className="text-4xl font-bold text-white">
+                    <div className="text-4xl 2xl:text-5xl font-bold text-white">
                       $0
                       <span className="text-base font-normal text-[#6B7280] ml-1">
                         / forever
@@ -192,7 +192,7 @@ export default function UpgradePage() {
                     </div>
                   ) : (
                     <>
-                      <div className="text-4xl font-bold text-white">
+                      <div className="text-4xl 2xl:text-5xl font-bold text-white">
                         ${billing === "annual" ? plan.annualPrice : plan.monthlyPrice}
                         <span className="text-base font-normal text-[#6B7280] ml-1">
                           / {billing === "annual" ? "year" : "month"}
@@ -217,7 +217,7 @@ export default function UpgradePage() {
 
                 <ul className="space-y-3 flex-1 mb-8">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2.5 text-sm">
+                    <li key={feature} className="flex items-start gap-2.5 text-sm 2xl:text-base">
                       <Check
                         className="w-4 h-4 mt-0.5 flex-shrink-0"
                         style={{ color: plan.color }}
@@ -253,7 +253,7 @@ export default function UpgradePage() {
           })}
         </div>
 
-        <p className="text-center text-[#6B7280] text-xs mt-10">
+        <p className="text-center text-[#6B7280] text-xs 2xl:text-sm mt-10">
           Payments processed securely by Lemon Squeezy. Cancel anytime. No hidden fees.
         </p>
       </div>

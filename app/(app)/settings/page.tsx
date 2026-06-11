@@ -237,12 +237,12 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0A0908] px-4 py-8">
+    <div className="min-h-screen bg-[#0A0908] px-4 py-8 2xl:py-12">
       <div className="max-w-4xl 2xl:max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-8">Settings</h1>
+        <h1 className="text-2xl 2xl:text-3xl font-bold text-white mb-8">Settings</h1>
 
-        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
-          <aside className="w-full lg:w-52 lg:flex-shrink-0">
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 2xl:gap-8">
+          <aside className="w-full lg:w-52 2xl:w-64 lg:flex-shrink-0">
             <nav className="flex overflow-x-auto gap-1 pb-1 lg:flex-col lg:overflow-visible lg:pb-0 lg:space-y-1">
               {tabs.map((t) => (
                 <TabButton
@@ -257,13 +257,13 @@ export default function SettingsPage() {
             </nav>
           </aside>
 
-          <main className="flex-1 bg-[#111110] border border-[#2A2927] rounded-xl p-5 sm:p-6 space-y-8">
+          <main className="flex-1 bg-[#111110] border border-[#2A2927] rounded-xl p-5 sm:p-6 2xl:p-8 space-y-8 2xl:space-y-10">
             {tab === "profile" && (
               <>
                 <Section title="Profile">
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm text-[#A09FA0] mb-1.5">
+                      <label className="block text-sm 2xl:text-base text-[#A09FA0] mb-1.5">
                         Display Name
                       </label>
                       <input
@@ -271,7 +271,7 @@ export default function SettingsPage() {
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
                         placeholder="Your name"
-                        className="w-full bg-[#1A1918] border border-[#2A2927] rounded-lg px-4 py-2.5 text-white text-sm placeholder-[#4A4947] focus:outline-none focus:border-[#FF6B2B] transition-colors"
+                        className="w-full bg-[#1A1918] border border-[#2A2927] rounded-lg px-4 py-2.5 2xl:py-3 text-white text-sm 2xl:text-base placeholder-[#4A4947] focus:outline-none focus:border-[#FF6B2B] transition-colors"
                       />
                     </div>
                     <div>

@@ -261,7 +261,7 @@ export default function LandingPage() {
 
         {/* ── 1. Hero ──────────────────────────────────────────────────── */}
         <section
-          className="relative flex min-h-[90vh] sm:min-h-screen flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-20 text-center"
+          className="relative flex min-h-[90vh] sm:min-h-screen flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-20 2xl:py-32 text-center"
           style={{
             background:
               "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255,107,43,0.06) 0%, transparent 70%), #0A0908",
@@ -270,15 +270,15 @@ export default function LandingPage() {
           {/* Decorative top rule */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-48 sm:w-64 bg-gradient-to-r from-transparent via-forge-orange to-transparent opacity-60" />
 
-          <p className="mb-6 text-xs sm:text-sm tracking-[0.2em] text-[#6B7280] uppercase font-medium">
+          <p className="mb-6 text-xs sm:text-sm 2xl:text-base tracking-[0.2em] text-[#6B7280] uppercase font-medium">
             The first accountability system that tells you the truth
           </p>
 
-          <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-[1.06] max-w-[14ch] mb-6 sm:mb-8">
+          <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl lg:text-7xl 2xl:text-8xl font-bold text-white leading-[1.06] max-w-[14ch] mb-6 sm:mb-8 2xl:mb-10">
             Stop being soft with yourself.
           </h1>
 
-          <p className="text-base sm:text-lg md:text-xl text-[#A09FA0] max-w-[42ch] leading-[1.65] mb-10 sm:mb-12">
+          <p className="text-base sm:text-lg md:text-xl 2xl:text-2xl text-[#A09FA0] max-w-[42ch] leading-[1.65] mb-10 sm:mb-12 2xl:mb-14">
             MindForge uses neuroscience-backed behavior change and an AI coach
             that builds a persistent memory of who you are — and holds you to who
             you said you'd be.
@@ -287,7 +287,7 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <Link
               href="/login"
-              className="inline-flex min-h-[52px] w-full sm:w-auto items-center justify-center bg-forge-orange px-8 sm:px-10 text-sm sm:text-base font-bold text-white transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_28px_rgba(255,107,43,0.40)]"
+              className="inline-flex min-h-[52px] 2xl:min-h-[60px] w-full sm:w-auto items-center justify-center bg-forge-orange px-8 sm:px-10 2xl:px-12 text-sm sm:text-base 2xl:text-lg font-bold text-white transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_28px_rgba(255,107,43,0.40)]"
             >
               Start Forging — It's Free →
             </Link>
@@ -305,25 +305,25 @@ export default function LandingPage() {
         </section>
 
         {/* ── 2. Problem ───────────────────────────────────────────────── */}
-        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32">
           <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
-            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+            <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               The problem
             </p>
-            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-10 sm:mb-14 text-center">
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-bold text-white mb-10 sm:mb-14 text-center">
               Every other app is lying to you.
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 2xl:gap-8">
               {PROBLEMS.map((card) => (
                 <div
                   key={card.title}
-                  className="group border border-[#2A2927] bg-[#0A0908] p-6 sm:p-8 transition-all duration-200 hover:border-[#3D3B39] hover:bg-[#0F0D0C]"
+                  className="group border border-[#2A2927] bg-[#0A0908] p-6 sm:p-8 2xl:p-10 transition-all duration-200 hover:border-[#3D3B39] hover:bg-[#0F0D0C]"
                 >
                   <div className="mb-4 h-px w-8 bg-forge-orange opacity-60" />
-                  <h3 className="font-heading text-base sm:text-lg font-semibold text-white mb-3 group-hover:text-forge-orange-text transition-colors duration-200">
+                  <h3 className="font-heading text-base sm:text-lg 2xl:text-xl font-semibold text-white mb-3 group-hover:text-forge-orange-text transition-colors duration-200">
                     {card.title}
                   </h3>
-                  <p className="text-sm leading-[1.65] text-[#6B7280]">{card.body}</p>
+                  <p className="text-sm 2xl:text-base leading-[1.65] text-[#6B7280]">{card.body}</p>
                 </div>
               ))}
             </div>
@@ -331,29 +331,29 @@ export default function LandingPage() {
         </section>
 
         {/* ── 3. How It Works ──────────────────────────────────────────── */}
-        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32">
           <div className="mx-auto max-w-3xl 2xl:max-w-4xl">
-            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+            <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               How it works
             </p>
-            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-12 sm:mb-16 text-center">
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-bold text-white mb-12 sm:mb-16 text-center">
               The Forge System
             </h2>
-            <div className="space-y-10 sm:space-y-14">
+            <div className="space-y-10 sm:space-y-14 2xl:space-y-20">
               {STEPS.map((step, i) => (
                 <div key={step.n} className="relative flex items-start gap-6 sm:gap-10">
                   {/* Connector line */}
                   {i < STEPS.length - 1 && (
                     <div className="absolute left-[22px] sm:left-[26px] top-12 h-[calc(100%+2rem)] sm:h-[calc(100%+3.5rem)] w-px bg-[#2A2927]" />
                   )}
-                  <span className="font-heading text-3xl sm:text-4xl font-bold text-forge-orange flex-shrink-0 leading-none w-11 sm:w-14 text-center">
+                  <span className="font-heading text-3xl sm:text-4xl 2xl:text-5xl font-bold text-forge-orange flex-shrink-0 leading-none w-11 sm:w-14 2xl:w-16 text-center">
                     {step.n}
                   </span>
                   <div className="pt-1">
-                    <h3 className="font-heading text-lg sm:text-xl font-semibold text-white mb-2 sm:mb-3">
+                    <h3 className="font-heading text-lg sm:text-xl 2xl:text-2xl font-semibold text-white mb-2 sm:mb-3 2xl:mb-4">
                       {step.title}
                     </h3>
-                    <p className="text-sm sm:text-base text-[#A09FA0] leading-[1.65]">{step.body}</p>
+                    <p className="text-sm sm:text-base 2xl:text-lg text-[#A09FA0] leading-[1.65]">{step.body}</p>
                   </div>
                 </div>
               ))}
@@ -362,24 +362,24 @@ export default function LandingPage() {
         </section>
 
         {/* ── 4. Feature Grid ──────────────────────────────────────────── */}
-        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32">
           <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
-            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+            <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               The arsenal
             </p>
-            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-10 sm:mb-14 text-center">
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-bold text-white mb-10 sm:mb-14 text-center">
               Built for people who are serious.
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-[#2A2927]">
               {FEATURES.map((feat) => (
                 <div
                   key={feat.title}
-                  className="group bg-[#111110] p-6 sm:p-8 transition-colors duration-200 hover:bg-[#141312]"
+                  className="group bg-[#111110] p-6 sm:p-8 2xl:p-10 transition-colors duration-200 hover:bg-[#141312]"
                 >
-                  <h3 className="font-heading text-base sm:text-lg font-semibold text-white mb-2 group-hover:text-forge-orange-text transition-colors duration-200">
+                  <h3 className="font-heading text-base sm:text-lg 2xl:text-xl font-semibold text-white mb-2 group-hover:text-forge-orange-text transition-colors duration-200">
                     {feat.title}
                   </h3>
-                  <p className="text-sm leading-[1.65] text-[#6B7280]">{feat.body}</p>
+                  <p className="text-sm 2xl:text-base leading-[1.65] text-[#6B7280]">{feat.body}</p>
                 </div>
               ))}
             </div>
@@ -387,12 +387,12 @@ export default function LandingPage() {
         </section>
 
         {/* ── 5. Pricing ───────────────────────────────────────────────── */}
-        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24" id="pricing">
+        <section className="bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32" id="pricing">
           <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
-            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+            <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               Pricing
             </p>
-            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3 text-center">
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-bold text-white mb-3 text-center">
               Start free. Upgrade when you're serious.
             </h2>
             <p className="text-center text-sm text-[#6B7280] mb-10 sm:mb-14">
@@ -403,21 +403,21 @@ export default function LandingPage() {
         </section>
 
         {/* ── 6. Social Proof ──────────────────────────────────────────── */}
-        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+        <section className="bg-[#111110] px-4 sm:px-6 lg:px-8 py-16 sm:py-24 2xl:py-32">
           <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
-            <p className="mb-3 text-center text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+            <p className="mb-3 text-center text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               Early forgers
             </p>
-            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-10 sm:mb-14 text-center">
+            <h2 className="font-heading text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-bold text-white mb-10 sm:mb-14 text-center">
               Built for people who are done making excuses.
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 2xl:gap-8">
               {TESTIMONIALS.map((t) => (
                 <div
                   key={t.name}
-                  className="flex flex-col justify-between border border-[#2A2927] bg-[#0A0908] p-6 sm:p-8 transition-all duration-200 hover:border-[#3D3B39]"
+                  className="flex flex-col justify-between border border-[#2A2927] bg-[#0A0908] p-6 sm:p-8 2xl:p-10 transition-all duration-200 hover:border-[#3D3B39]"
                 >
-                  <p className="text-sm sm:text-base text-[#A09FA0] leading-[1.7] mb-6 italic">
+                  <p className="text-sm sm:text-base 2xl:text-lg text-[#A09FA0] leading-[1.7] mb-6 italic">
                     "{t.quote}"
                   </p>
                   <div className="flex items-center gap-3">
@@ -436,7 +436,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 7. Final CTA ─────────────────────────────────────────────── */}
-        <section className="relative bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-20 sm:py-28 text-center overflow-hidden">
+        <section className="relative bg-[#0A0908] px-4 sm:px-6 lg:px-8 py-20 sm:py-28 2xl:py-40 text-center overflow-hidden">
           <div
             className="pointer-events-none absolute inset-0"
             style={{
@@ -445,18 +445,18 @@ export default function LandingPage() {
             }}
           />
           <div className="relative mx-auto max-w-2xl">
-            <p className="mb-3 text-xs tracking-[0.18em] text-forge-orange uppercase font-semibold">
+            <p className="mb-3 text-xs 2xl:text-sm tracking-[0.18em] text-forge-orange uppercase font-semibold">
               The forge awaits
             </p>
-            <p className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4 leading-snug">
+            <p className="font-heading text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-bold text-white mb-4 leading-snug">
               The version of yourself you keep imagining?
             </p>
-            <p className="text-base sm:text-lg text-[#A09FA0] mb-10 leading-[1.65]">
+            <p className="text-base sm:text-lg 2xl:text-xl text-[#A09FA0] mb-10 leading-[1.65]">
               It is built in the forge — one honest day at a time.
             </p>
             <Link
               href="/login"
-              className="inline-flex min-h-[56px] w-full sm:w-auto items-center justify-center bg-forge-orange px-10 sm:px-14 text-base font-bold text-white transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_32px_rgba(255,107,43,0.45)]"
+              className="inline-flex min-h-[56px] 2xl:min-h-[64px] w-full sm:w-auto items-center justify-center bg-forge-orange px-10 sm:px-14 2xl:px-16 text-base 2xl:text-lg font-bold text-white transition-all duration-200 hover:bg-forge-orange-hover hover:shadow-[0_0_32px_rgba(255,107,43,0.45)]"
             >
               Start Forging — It's Free →
             </Link>
@@ -465,11 +465,11 @@ export default function LandingPage() {
         </section>
 
         {/* ── 8. Footer ────────────────────────────────────────────────── */}
-        <footer className="bg-[#111110] border-t border-[#2A2927] px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+        <footer className="bg-[#111110] border-t border-[#2A2927] px-4 sm:px-6 lg:px-8 py-10 sm:py-12 2xl:py-16">
           <div className="mx-auto max-w-5xl 2xl:max-w-7xl">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
               <div className="text-center sm:text-left">
-                <p className="font-heading text-base font-bold tracking-tight text-forge-orange">
+                <p className="font-heading text-base 2xl:text-lg font-bold tracking-tight text-forge-orange">
                   MINDFORGE
                 </p>
                 <p className="mt-1 text-xs text-[#6B7280] leading-relaxed">

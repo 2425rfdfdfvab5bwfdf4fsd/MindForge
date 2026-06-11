@@ -50,10 +50,10 @@ function StatCard({
   accent?: boolean;
 }) {
   return (
-    <div className="bg-[#111110] border border-[#2A2927] rounded-xl p-5">
-      <div className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">{label}</div>
+    <div className="bg-[#111110] border border-[#2A2927] rounded-xl p-5 2xl:p-6">
+      <div className="text-xs 2xl:text-sm text-[#6B7280] uppercase tracking-wider mb-1">{label}</div>
       <div
-        className={`text-3xl font-bold ${accent ? "text-[#FF6B2B]" : "text-white"}`}
+        className={`text-3xl 2xl:text-4xl font-bold ${accent ? "text-[#FF6B2B]" : "text-white"}`}
       >
         {value}
       </div>
@@ -72,7 +72,7 @@ function ChartShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-[#111110] border border-[#2A2927] rounded-xl p-5">
+    <div className="bg-[#111110] border border-[#2A2927] rounded-xl p-5 2xl:p-6">
       <div className="flex items-center gap-2 mb-5">
         <Icon className="w-4 h-4 text-[#6B7280]" />
         <span className="text-sm font-semibold text-white">{title}</span>
@@ -104,14 +104,14 @@ export default function AnalyticsPage() {
   const isPro = profile?.tier === "pro" || profile?.tier === "elite";
 
   return (
-    <div className="min-h-screen bg-[#0A0908] px-4 py-8">
-      <div className="max-w-5xl 2xl:max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#0A0908] px-4 py-8 2xl:py-12">
+      <div className="max-w-5xl 2xl:max-w-7xl mx-auto space-y-8 2xl:space-y-10">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl 2xl:text-4xl font-bold text-white tracking-tight">
               Your Neural Progress
             </h1>
-            <p className="text-[#6B7280] text-sm mt-1">
+            <p className="text-[#6B7280] text-sm 2xl:text-base mt-1">
               Forge Score history, habit patterns, and honesty trends
             </p>
           </div>
@@ -134,7 +134,7 @@ export default function AnalyticsPage() {
           <WeeklyReportCard report={weeklyReport} />
         )}
         {isPro && !weeklyReport && (
-          <div className="bg-[#111110] border border-[#2A2927] rounded-xl p-5">
+          <div className="bg-[#111110] border border-[#2A2927] rounded-xl p-5 2xl:p-6">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-[#FF6B2B]/15 flex items-center justify-center">
                 <TrendingUp className="w-4 h-4 text-[#FF6B2B]" />
@@ -149,7 +149,7 @@ export default function AnalyticsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 2xl:gap-6">
           <StatCard
             label="Check-ins"
             value={stats?.checkinCount ?? 0}
@@ -172,7 +172,7 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 2xl:gap-8">
           <div className="md:col-span-2">
             <ChartShell title="Forge Score History" icon={TrendingUp}>
               {forgeHistory.length === 0 ? (

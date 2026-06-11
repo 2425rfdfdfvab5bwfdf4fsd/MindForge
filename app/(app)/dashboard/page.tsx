@@ -124,13 +124,13 @@ function DashboardContent() {
   const levelInfo = getLevelFromXP(xp);
 
   return (
-    <div className="mx-auto max-w-6xl 2xl:max-w-8xl px-4 sm:px-6 py-6 sm:py-8">
+    <div className="mx-auto max-w-6xl 2xl:max-w-8xl px-4 sm:px-6 py-6 sm:py-8 2xl:py-10">
       {/* Page header */}
       <div className="mb-8">
-        <h1 className="font-heading text-2xl sm:text-3xl font-bold text-text-primary">
+        <h1 className="font-heading text-2xl sm:text-3xl 2xl:text-4xl font-bold text-text-primary">
           {data.user?.display_name ? `Welcome back, ${data.user.display_name}` : "The Forge"}
         </h1>
-        <p className="mt-1 text-sm text-text-muted">{formatDate(localDate)}</p>
+        <p className="mt-1 text-sm 2xl:text-base text-text-muted">{formatDate(localDate)}</p>
       </div>
 
       {/* Mobile-only: Forge Score full-width above grid */}
@@ -152,15 +152,15 @@ function DashboardContent() {
       </div>
 
       {/* Two-column grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 2xl:gap-8 lg:grid-cols-3">
         {/* Left column — 2/3 */}
-        <div className="space-y-6 lg:col-span-2">
+        <div className="space-y-6 2xl:space-y-8 lg:col-span-2">
           {/* Daily Mirror CTA */}
           <CheckinCTA done={!!todayCheckin} />
 
           {/* Today's Habits */}
           <div>
-            <h2 className="mb-4 font-heading text-2xl font-bold text-text-primary">
+            <h2 className="mb-4 font-heading text-2xl 2xl:text-3xl font-bold text-text-primary">
               Today's Habits
             </h2>
 
@@ -196,14 +196,14 @@ function DashboardContent() {
         </div>
 
         {/* Right column — 1/3 */}
-        <div className="space-y-5">
+        <div className="space-y-5 2xl:space-y-6">
           {/* Desktop-only: Forge Score */}
           <div className="hidden lg:block">
-            <div className="border border-forge-border bg-forge-elevated p-6 text-center">
+            <div className="border border-forge-border bg-forge-elevated p-6 2xl:p-8 text-center">
               <ForgeScore score={forgeScore} level={level} />
               {todayXPDelta !== 0 && (
                 <p
-                  className={`mt-2 text-sm font-medium ${todayXPDelta > 0 ? "text-green-400" : "text-red-400"}`}
+                  className={`mt-2 text-sm 2xl:text-base font-medium ${todayXPDelta > 0 ? "text-green-400" : "text-red-400"}`}
                 >
                   {todayXPDelta > 0 ? "+" : ""}
                   {todayXPDelta} today
@@ -214,9 +214,9 @@ function DashboardContent() {
 
           {/* XP Bar — desktop only (shown in mobile block above) */}
           <div className="hidden lg:block">
-            <div className="border border-forge-border bg-forge-elevated p-4">
+            <div className="border border-forge-border bg-forge-elevated p-4 2xl:p-5">
               <XPBar xp={xp} />
-              <div className="mt-3 flex justify-between text-xs text-text-muted">
+              <div className="mt-3 flex justify-between text-xs 2xl:text-sm text-text-muted">
                 <span>Level {levelInfo.level}</span>
                 <span>{levelInfo.name}</span>
               </div>
@@ -241,7 +241,7 @@ function DashboardContent() {
 
           {/* Recent Cookie Jar */}
           {recentCookieJar && recentCookieJar.length > 0 && (
-            <div className="border border-forge-border bg-forge-elevated p-4">
+            <div className="border border-forge-border bg-forge-elevated p-4 2xl:p-5">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-xs uppercase tracking-wider text-text-muted">
                   Cookie Jar
@@ -266,24 +266,24 @@ function DashboardContent() {
           )}
 
           {/* Quick stats */}
-          <div className="border border-forge-border bg-forge-elevated p-4">
-            <p className="mb-3 text-xs uppercase tracking-wider text-text-muted">
+          <div className="border border-forge-border bg-forge-elevated p-4 2xl:p-5">
+            <p className="mb-3 text-xs 2xl:text-sm uppercase tracking-wider text-text-muted">
               Quick Stats
             </p>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm 2xl:text-base">
                 <span className="text-text-muted">Total Habits</span>
                 <span className="tabular-nums text-text-primary">
                   {habits.length}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm 2xl:text-base">
                 <span className="text-text-muted">Done Today</span>
                 <span className="tabular-nums text-green-400">
                   {habits.filter((h) => h.today_status === "completed").length}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm 2xl:text-base">
                 <span className="text-text-muted">Pending</span>
                 <span className="tabular-nums text-forge-orange">
                   {habits.filter((h) => h.today_status === "pending").length}
@@ -303,7 +303,7 @@ function DashboardContent() {
 
 function DashboardSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl 2xl:max-w-8xl px-4 sm:px-6 py-6 sm:py-8">
+    <div className="mx-auto max-w-6xl 2xl:max-w-8xl px-4 sm:px-6 py-6 sm:py-8 2xl:py-10">
       <div className="mb-8 space-y-2 animate-pulse">
         <div className="h-8 w-64 rounded bg-forge-border" />
         <div className="h-4 w-40 rounded bg-forge-border" />
@@ -319,8 +319,8 @@ function DashboardSkeleton() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 2xl:gap-8 lg:grid-cols-3">
+        <div className="space-y-6 2xl:space-y-8 lg:col-span-2">
           <div className="h-24 animate-pulse bg-forge-elevated" />
           <div className="space-y-3">
             <div className="mb-4 h-7 w-40 animate-pulse rounded bg-forge-border" />
