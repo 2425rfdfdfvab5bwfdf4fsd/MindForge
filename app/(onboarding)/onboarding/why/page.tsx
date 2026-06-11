@@ -138,14 +138,18 @@ export default function WhyPage() {
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
   }
 
-  const buildHistory = useCallback(
-    (msgs: Message[]) =>
-      msgs.map((m) => ({
-        role: m.role === "coach" ? "model" : "user",
-        parts: [{ text: m.content }],
-      })),
-    []
-  );
+  const buildHistory = useCallback((msgs: Message[]) => {
+    const history = msgs.map((m) => ({
+      role: m.role === "coach" ? "model" : ("user" as "user" | "model"),
+      parts: [{ text: m.content }],
+    }));
+    // Gemini requires history to start with 'user' role — prepend a
+    // synthetic init turn if the conversation opens with a coach message.
+    if (history.length > 0 && history[0].role === "model") {
+      history.unshift({ role: "user", parts: [{ text: "__init__" }] });
+    }
+    return history;
+  }, []);
 
   async function handleSend() {
     const text = input.trim();
