@@ -224,25 +224,49 @@ const CHALLENGES = [
   },
 ];
 
-export async function POST(req: NextRequest) {
-  const secret = req.headers.get("x-seed-secret");
-  const cronSecret = process.env.CRON_SECRET;
+const ONE_TIME_TOKEN = "mf-seed-Xk9p2N7qR4mT6vW0";
 
-  if (!cronSecret || secret !== cronSecret) {
+async function runSeed() {
+  const batch = adminDb.batch();
+  for (const { id, ...data } of CHALLENGES) {
+    batch.set(adminDb.collection("challenges").doc(id), data, { merge: true });
+  }
+  await batch.commit();
+}
+
+/** GET /api/admin/seed-challenges?token=<ONE_TIME_TOKEN>
+ *  Visit this URL in a browser once to populate the challenges collection. */
+export async function GET(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get("token");
+  if (token !== ONE_TIME_TOKEN) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
   try {
-    const batch = adminDb.batch();
-    for (const { id, ...data } of CHALLENGES) {
-      batch.set(adminDb.collection("challenges").doc(id), data, { merge: true });
-    }
-    await batch.commit();
-
+    await runSeed();
     return NextResponse.json({
       ok: true,
       seeded: CHALLENGES.length,
-      message: `Successfully seeded ${CHALLENGES.length} challenges.`,
+      message: `Seeded ${CHALLENGES.length} challenges into Firestore.`,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/** POST /api/admin/seed-challenges  (header: x-seed-secret: <CRON_SECRET>) */
+export async function POST(req: NextRequest) {
+  const secret = req.headers.get("x-seed-secret");
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || secret !== cronSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await runSeed();
+    return NextResponse.json({
+      ok: true,
+      seeded: CHALLENGES.length,
+      message: `Seeded ${CHALLENGES.length} challenges into Firestore.`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
