@@ -30,6 +30,7 @@ export default function HabitsPage() {
   const {
     data: habits,
     isLoading,
+    isError,
     refetch,
   } = api.habits.list.useQuery(
     { localDate },
@@ -99,7 +100,22 @@ export default function HabitsPage() {
         </div>
       )}
 
-      {!isLoading && (!habits || habits.length === 0) && (
+      {!isLoading && isError && (
+        <div className="flex flex-col items-center gap-4 py-20 text-center">
+          <p className="text-2xl">⚠️</p>
+          <p className="text-base font-medium text-text-secondary">
+            Failed to load habits. Please try again.
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="bg-forge-orange px-6 py-3 text-sm font-bold text-forge-base hover:bg-forge-orange-hover"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !isError && (!habits || habits.length === 0) && (
         <div className="flex flex-col items-center gap-4 py-20 text-center">
           <p className="text-2xl">🔥</p>
           <p className="text-base font-medium text-text-secondary">
