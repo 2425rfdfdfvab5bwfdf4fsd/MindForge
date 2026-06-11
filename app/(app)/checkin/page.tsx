@@ -506,10 +506,10 @@ export default function CheckinPage() {
                     <div className="flex items-center justify-between px-4 py-3">
                       <div className="flex items-center gap-2.5 text-text-muted">
                         <Flame className="h-3.5 w-3.5 text-forge-orange" />
-                        <span className="text-xs">Current Streak</span>
+                        <span className="text-xs">Level</span>
                       </div>
                       <span className="font-heading text-sm font-bold text-text-primary">
-                        {profile.currentStreakDays ?? 0}d
+                        {profile.level ?? 1}
                       </span>
                     </div>
                     <div className="flex items-center justify-between px-4 py-3">
