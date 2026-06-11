@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       try {
         const chat = geminiPro.startChat({
           history: history.map((m) => ({ role: m.role, parts: m.parts })),
-          systemInstruction: systemPrompt,
+          systemInstruction: { role: "system", parts: [{ text: systemPrompt }] },
         });
         const result = await chat.sendMessageStream(lastUserText);
         for await (const chunk of result.stream) {
