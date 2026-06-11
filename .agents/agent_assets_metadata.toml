@@ -30,3 +30,9 @@ id = "q_aoTi-hgd5vOW3yGEK88"
 uri = "file://research/mindforge-build-guide.md"
 type = "text"
 title = "MindForge Build Guide v1.1 — Fixed"
+
+[[outputs]]
+id = "wG0sjbRK0Ftm2M4hSKtvR"
+uri = "file://DEPLOYMENT.md"
+type = "text"
+title = "MindForge Deployment Guide"
