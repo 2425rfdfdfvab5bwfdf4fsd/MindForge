@@ -261,7 +261,7 @@ export default function HabitsPage() {
             <div
               key={i}
               className="h-[76px] animate-pulse bg-forge-elevated"
-              style={{ borderLeft: "3px solid #2A2927", border: "1px solid #2A2927", borderLeft: "3px solid #2A2927" }}
+              style={{ border: "1px solid #2A2927", borderLeft: "3px solid #2A2927" }}
             />
           ))}
         </div>
