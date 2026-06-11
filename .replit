@@ -39,3 +39,4 @@ externalPort = 80
 
 [userenv.shared]
 NEXT_PUBLIC_POSTHOG_HOST = "https://app.posthog.com"
+NEXT_PUBLIC_POSTHOG_KEY = "phc_knuAkpXHR5qiggR9fdIZ6ewTckCen9xQVfg8X9jT5a3R"
