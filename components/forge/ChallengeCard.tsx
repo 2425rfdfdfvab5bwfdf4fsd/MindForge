@@ -283,9 +283,20 @@ export function ChallengeCard({ challenge, isFree, hasActiveChallenge, onActivat
               </button>
             )}
             {status === "completed" && (
-              <div className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-green-500">
-                <CheckCircle2 className="h-4 w-4" />
-                Completed
+              <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 py-1 text-sm font-bold text-green-500">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Completed
+                </div>
+                <button
+                  onClick={() => onActivate(challenge.id)}
+                  disabled={isActivating || hasActiveChallenge}
+                  title={hasActiveChallenge ? "Finish your current challenge first" : undefined}
+                  className="w-full py-2 text-xs font-bold border border-forge-border text-text-muted hover:border-forge-border-strong hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5"
+                >
+                  {isActivating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                  {isActivating ? "Starting…" : "Try Again"}
+                </button>
               </div>
             )}
             {status === "failed" && (

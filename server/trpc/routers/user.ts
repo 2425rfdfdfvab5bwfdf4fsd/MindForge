@@ -138,9 +138,11 @@ export const userRouter = router({
     const snap = await adminDb
       .collection("environment_audit_items")
       .where("userId", "==", ctx.user.id)
-      .orderBy("createdAt")
       .get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as EnvironmentAuditItem[];
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as EnvironmentAuditItem & { createdAt?: string })
+      .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""))
+      .map(({ createdAt: _c, ...rest }) => rest) as EnvironmentAuditItem[];
   }),
 
   markEnvironmentItemDone: protectedProcedure
@@ -164,15 +166,17 @@ export const userRouter = router({
     const snap = await adminDb
       .collection("user_memories")
       .where("userId", "==", ctx.user.id)
-      .orderBy("createdAt")
       .get();
 
+    const docs = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as { id: string; memoryType: string; content: string; createdAt: string }))
+      .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+
     const grouped: Record<string, Array<{ id: string; content: string; created_at: string }>> = {};
-    for (const d of snap.docs) {
-      const data = d.data();
-      const type = data.memoryType as string;
+    for (const data of docs) {
+      const type = data.memoryType;
       if (!grouped[type]) grouped[type] = [];
-      grouped[type].push({ id: d.id, content: data.content, created_at: data.createdAt });
+      grouped[type].push({ id: data.id, content: data.content, created_at: data.createdAt });
     }
     return grouped;
   }),

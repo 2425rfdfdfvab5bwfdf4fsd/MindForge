@@ -39,6 +39,7 @@ export default function ChallengesPage() {
     onSuccess: () => {
       utils.challenges.list.invalidate();
       setActivatingId(null);
+      setActiveTab("active");
       showToast("Challenge started. No excuses.", "success");
     },
     onError: (err) => {
