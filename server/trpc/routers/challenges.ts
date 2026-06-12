@@ -105,14 +105,13 @@ export const challengesRouter = router({
         });
       }
 
-      const activeSnap = await adminDb
+      const allChalsSnap = await adminDb
         .collection("user_challenges")
         .where("userId", "==", ctx.user.id)
-        .where("status", "==", "active")
-        .limit(1)
         .get();
 
-      if (!activeSnap.empty) {
+      const hasActive = allChalsSnap.docs.some((d) => d.data().status === "active");
+      if (hasActive) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "Complete or abandon your current challenge first.",

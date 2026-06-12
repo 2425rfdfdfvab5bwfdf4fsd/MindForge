@@ -55,13 +55,13 @@ export const checkinsRouter = router({
       const snap = await adminDb
         .collection("daily_checkins")
         .where("userId", "==", ctx.user.id)
-        .where("localDate", "==", input.localDate)
-        .where("onboardingMirror", "==", false)
-        .limit(1)
         .get();
 
-      if (snap.empty) return null;
-      return { id: snap.docs[0].id, ...snap.docs[0].data() } as DailyCheckin;
+      const doc = snap.docs.find(
+        (d) => d.data().localDate === input.localDate && !d.data().onboardingMirror
+      );
+      if (!doc) return null;
+      return { id: doc.id, ...doc.data() } as DailyCheckin;
     }),
 
   updateMetadata: protectedProcedure
@@ -107,22 +107,25 @@ export const checkinsRouter = router({
       const snap = await adminDb
         .collection("daily_checkins")
         .where("userId", "==", ctx.user.id)
-        .where("onboardingMirror", "==", false)
-        .orderBy("localDate", "desc")
-        .limit(input.limit)
         .get();
 
-      return snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          localDate: data.localDate,
-          rawReflection: data.rawReflection,
-          moodSignal: data.moodSignal,
-          honestyScore: data.honestyScore,
-          aiResponse: data.aiResponse,
-          createdAt: data.createdAt,
-        };
-      });
+      return snap.docs
+        .filter((d) => !d.data().onboardingMirror)
+        .sort((a, b) =>
+          (b.data().localDate as string).localeCompare(a.data().localDate as string)
+        )
+        .slice(0, input.limit)
+        .map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            localDate: data.localDate,
+            rawReflection: data.rawReflection,
+            moodSignal: data.moodSignal,
+            honestyScore: data.honestyScore,
+            aiResponse: data.aiResponse,
+            createdAt: data.createdAt,
+          };
+        });
     }),
 });

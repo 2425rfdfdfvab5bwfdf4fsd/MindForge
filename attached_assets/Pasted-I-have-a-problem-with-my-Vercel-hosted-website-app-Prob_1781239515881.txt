@@ -1,0 +1,84 @@
+I have a problem with my Vercel-hosted website/app.
+
+Problem:
+The Analytics page is failing to load all analytics and reporting data in the production Vercel deployment. Multiple widgets and charts display "Failed to load data" and the summary section shows "Could not load summary stats." Although the page layout renders correctly, all analytics-related API requests appear to be failing.
+
+It happens when I:
+1. Log into the application.
+2. Open the Analytics page from the sidebar navigation.
+3. Wait for analytics data to load.
+4. Refresh the page or click the Retry buttons.
+5. Change the date range filter (e.g., Last 30 Days).
+
+I attached the screenshot/error/logs here:
+[Attached Screenshot]
+
+Please analyze this properly and find the real root cause first. Do not guess and do not apply random fixes.
+
+Check everything related, including:
+- Frontend code
+- Backend/API routes
+- Authentication/session
+- Database connection
+- Environment variables
+- Vercel deployment settings
+- Build logs and runtime logs
+- Dependencies/packages
+- Routing, middleware, and config files
+
+Additional observations:
+- The Analytics page UI loads successfully.
+- User authentication appears to be working because the user avatar/profile is visible.
+- Summary cards are rendering but contain default values (0), suggesting data retrieval is failing.
+- Forge Score History chart fails to load.
+- Habit Completion by Habit chart fails to load.
+- Check-in Honesty Trend chart fails to load.
+- Daily XP Earned chart fails to load.
+- Weekly Neural Report section loads but does not display actual analytics data.
+- Retry buttons do not resolve the issue.
+- The problem occurs in the production Vercel deployment.
+
+Please specifically investigate:
+- Analytics API endpoints and responses
+- Network requests in browser DevTools
+- API response status codes (401, 403, 404, 500, etc.)
+- Database queries used for analytics aggregation
+- Authentication and authorization checks
+- User session handling
+- Environment variable availability in production
+- Serverless function execution errors
+- ORM/database connection issues
+- Date filtering and analytics calculation logic
+- Vercel Function Logs
+- Build Logs
+- Runtime Logs
+- Middleware and route protection logic
+
+Potential areas that may be related:
+- Analytics service layer
+- Statistics aggregation functions
+- Habit completion queries
+- Check-in history queries
+- Forge Score calculations
+- User-specific data filtering
+- Database indexes and query performance
+- API route caching or edge runtime configuration
+
+After finding the root cause, fix it properly from A to Z.
+
+Please provide:
+
+1. The exact root cause
+2. Why this problem is happening
+3. Which files/configs need to be changed
+4. The correct fix with code/config changes
+5. Any Vercel environment variables/settings I need to update
+6. Any database schema, migration, or ORM changes required
+7. How to test and verify the issue is fixed after deployment
+
+If you need more information, ask only for the exact file, log, or screenshot needed.
+
+Important:
+- Do not expose or print any secret keys, tokens, passwords, or private environment variables.
+- Find the actual root cause before suggesting any fix.
+- Verify whether this is a frontend issue, backend issue, database issue, authentication issue, environment variable issue, or deployment configuration issue before making changes.

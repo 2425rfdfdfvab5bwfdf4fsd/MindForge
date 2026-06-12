@@ -11,9 +11,12 @@ export const cookiejarRouter = router({
     const snap = await adminDb
       .collection("cookie_jar_entries")
       .where("userId", "==", ctx.user.id)
-      .orderBy("createdAt", "desc")
       .get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() })) as CookieJarEntry[];
+    return snap.docs
+      .sort((a, b) =>
+        (b.data().createdAt as string).localeCompare(a.data().createdAt as string)
+      )
+      .map((d) => ({ id: d.id, ...d.data() })) as CookieJarEntry[];
   }),
 
   add: protectedProcedure
@@ -102,8 +105,6 @@ export const cookiejarRouter = router({
       const snap = await adminDb
         .collection("cookie_jar_entries")
         .where("userId", "==", ctx.user.id)
-        .orderBy("createdAt", "desc")
-        .limit(100)
         .get();
 
       const q = input.query.toLowerCase();
