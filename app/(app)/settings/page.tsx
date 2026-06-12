@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -145,7 +145,11 @@ export default function SettingsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("profile");
 
-  const { data: profile, refetch: refetchProfile } = api.user.getProfile.useQuery(undefined, {
+  const {
+    data: profile,
+    isError: profileError,
+    refetch: refetchProfile,
+  } = api.user.getProfile.useQuery(undefined, {
     retry: false,
   });
   const { data: subscription } = api.user.getSubscription.useQuery(undefined, { retry: false });
@@ -168,13 +172,31 @@ export default function SettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
 
+  // Initialize form state from profile only on first load.
+  // Using a ref prevents profile refetches (triggered after saves) from
+  // overwriting local edits the user hasn't saved yet.
+  const profileInitialized = useRef(false);
   useEffect(() => {
-    if (profile) {
+    if (profile && !profileInitialized.current) {
+      profileInitialized.current = true;
       setDisplayName(profile.displayName ?? "");
       setTimezone(profile.timezone ?? "UTC");
       setCoachIntensity((profile.coachIntensity as "hard" | "firm") ?? "hard");
     }
   }, [profile]);
+
+  // Dismiss the delete modal with Escape key
+  useEffect(() => {
+    if (!showDeleteModal) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setShowDeleteModal(false);
+        setDeleteConfirm("");
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showDeleteModal]);
 
   async function saveProfile() {
     try {
@@ -208,9 +230,12 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "mindforge-export.json";
+      // Match the date-stamped filename the server sends via Content-Disposition
+      a.download = `mindforge-export-${new Date().toISOString().split("T")[0]}.json`;
       a.click();
-      URL.revokeObjectURL(url);
+      // Revoke after a short delay — revoking synchronously can abort the
+      // download before the browser has had a chance to start fetching the blob.
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Export failed. Please try again.");
     } finally {
@@ -280,6 +305,18 @@ export default function SettingsPage() {
           </aside>
 
           <main className="flex-1 bg-[#111110] border border-[#2A2927] rounded-xl p-5 sm:p-6 2xl:p-8 space-y-8 2xl:space-y-10">
+            {profileError && (
+              <div className="flex items-center justify-between p-4 bg-red-900/10 border border-red-500/30 rounded-lg">
+                <p className="text-sm text-red-400">Failed to load your profile.</p>
+                <button
+                  onClick={() => refetchProfile()}
+                  className="text-xs text-[#FF6B2B] hover:text-[#FF5214] transition-colors ml-4"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             {tab === "profile" && (
               <>
                 <Section title="Profile">
