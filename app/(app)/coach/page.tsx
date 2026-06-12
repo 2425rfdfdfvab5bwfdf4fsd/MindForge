@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Brain, Lock, X, ChevronRight } from "lucide-react";
+import { Send, Brain, Lock, X, ChevronRight, AlertCircle } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -12,9 +12,14 @@ import { cn } from "@/lib/utils";
 // ---------------------------------------------------------------------------
 interface MessagePart { text: string }
 interface ChatMessage {
+  id: string;
   role: "user" | "model";
   parts: MessagePart[];
   timestamp: string;
+}
+
+function makeId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 const MEMORY_TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -38,7 +43,7 @@ function LockedCoach() {
       <div className="text-center max-w-sm">
         <h2 className="text-2xl font-bold text-text-primary mb-2">Your coach is waiting.</h2>
         <p className="text-text-muted text-sm leading-relaxed">
-          The AI Forge Coach remembers everything — your why, your triggers, your wins. 
+          The AI Forge Coach remembers everything — your why, your triggers, your wins.
           It builds a persistent memory of who you are and holds you to your highest standard.
           Available on Pro.
         </p>
@@ -49,6 +54,31 @@ function LockedCoach() {
       >
         Unlock with Pro <ChevronRight className="w-4 h-4" />
       </Link>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Profile error state
+// ---------------------------------------------------------------------------
+function CoachError() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[80vh] gap-4 px-4">
+      <div className="w-14 h-14 flex items-center justify-center border border-red-800/40 bg-red-950/30">
+        <AlertCircle className="w-6 h-6 text-red-400" />
+      </div>
+      <div className="text-center max-w-sm">
+        <h2 className="text-xl font-bold text-text-primary mb-2">Couldn&apos;t load coach</h2>
+        <p className="text-text-muted text-sm leading-relaxed">
+          There was a problem loading your profile. Check your connection and reload the page.
+        </p>
+      </div>
+      <button
+        onClick={() => window.location.reload()}
+        className="inline-flex items-center gap-2 px-5 py-2.5 border border-forge-border text-sm text-text-secondary hover:text-text-primary hover:border-forge-border-strong transition-colors"
+      >
+        Reload page
+      </button>
     </div>
   );
 }
@@ -102,6 +132,7 @@ function MemoryModal({
               </div>
               <button
                 onClick={onClose}
+                aria-label="Close memory modal"
                 className="text-text-muted hover:text-text-primary transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -182,7 +213,11 @@ function MessageBubble({ msg, isStreaming }: { msg: ChatMessage; isStreaming?: b
 // Main coach page
 // ---------------------------------------------------------------------------
 export default function CoachPage() {
-  const { data: profile, isLoading: profileLoading } = api.user.getProfile.useQuery();
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+  } = api.user.getProfile.useQuery();
   const { data: memories = {} } = api.user.getMemories.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
@@ -199,12 +234,20 @@ export default function CoachPage() {
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Refs that carry the latest values into the unmount cleanup — avoids
+  // calling setState on an unmounted component and avoids stale closures.
+  const sessionIdRef = useRef<string | null>(null);
+  const messagesRef  = useRef<ChatMessage[]>([]);
+
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  useEffect(() => { messagesRef.current = messages; },  [messages]);
+
   // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
 
-  // Persist message to session
+  // Persist message to session — fire-and-forget
   const persistMessage = useCallback(
     async (msg: ChatMessage, sid: string | null) => {
       if (!sid) return;
@@ -217,7 +260,7 @@ export default function CoachPage() {
     []
   );
 
-  // Create session and return id
+  // Create a new coaching session
   const createSession = useCallback(async (firstMsg?: ChatMessage) => {
     const res = await fetch("/api/sessions/coach", {
       method: "POST",
@@ -225,13 +268,14 @@ export default function CoachPage() {
       body: JSON.stringify({ action: "create", message: firstMsg }),
     });
     if (!res.ok) return null;
-    const { sessionId: sid } = await res.json();
-    return sid as string;
+    const { sessionId: sid } = await res.json() as { sessionId: string };
+    return sid;
   }, []);
 
-  // Stream from coach API
+  // Stream a response from the coach API
   const streamCoach = useCallback(
     async (msgs: ChatMessage[], sid: string | null) => {
+      // Cancel any previous in-flight stream
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -252,7 +296,7 @@ export default function CoachPage() {
           }),
         });
 
-        if (!res.ok || !res.body) throw new Error("Stream failed");
+        if (!res.ok || !res.body) throw new Error(`Stream failed (${res.status})`);
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -271,7 +315,7 @@ export default function CoachPage() {
             const raw = line.slice(6).trim();
             if (raw === "[DONE]") { streamDone = true; break; }
             try {
-              const parsed = JSON.parse(raw);
+              const parsed = JSON.parse(raw) as { text?: string; error?: string };
               if (parsed.error) {
                 full = "I'm having trouble connecting right now. Please try again.";
                 streamDone = true;
@@ -281,7 +325,7 @@ export default function CoachPage() {
                 full += parsed.text;
                 setStreamingText(full);
               }
-            } catch { /* skip */ }
+            } catch { /* skip malformed SSE line */ }
           }
         }
       } catch (err) {
@@ -290,6 +334,7 @@ export default function CoachPage() {
       }
 
       const coachMsg: ChatMessage = {
+        id: makeId(),
         role: "model",
         parts: [{ text: full || "..." }],
         timestamp: new Date().toISOString(),
@@ -304,7 +349,7 @@ export default function CoachPage() {
     [persistMessage]
   );
 
-  // On mount: load history + stream opening greeting
+  // On mount: load history then stream opening greeting if none exists
   useEffect(() => {
     if (initialized || profileLoading) return;
     if (!profile) return;
@@ -313,21 +358,26 @@ export default function CoachPage() {
     setInitialized(true);
 
     (async () => {
-      // Try to load last session
+      // Try to load the last session
       try {
         const res = await fetch("/api/sessions/coach?limit=50");
         if (res.ok) {
-          const { sessionId: sid, messages: hist } = await res.json();
+          const { sessionId: sid, messages: hist } = await res.json() as {
+            sessionId: string | null;
+            messages: ChatMessage[];
+          };
           if (hist?.length > 0) {
-            setMessages(hist);
+            // Ensure loaded messages have stable ids (legacy sessions may lack them)
+            setMessages(hist.map((m) => ({ ...m, id: m.id ?? makeId() })));
             setSessionId(sid);
-            return; // Don't stream greeting if history exists
+            return;
           }
         }
-      } catch { /* ignore */ }
+      } catch { /* fall through to greeting */ }
 
-      // No history — stream opening greeting
+      // No history — stream the opening greeting
       const greetingMsg: ChatMessage = {
+        id: makeId(),
         role: "user",
         parts: [{ text: "Hello coach. I'm ready to begin." }],
         timestamp: new Date().toISOString(),
@@ -340,24 +390,28 @@ export default function CoachPage() {
     })();
   }, [initialized, profileLoading, profile, createSession, streamCoach]);
 
-  // Cleanup — trigger memory extraction on unmount
+  // Cleanup on unmount only (empty deps intentional) — trigger memory extraction
+  // and abort any in-flight stream. Uses refs so it never goes stale and never
+  // fires on intermediate re-renders caused by state changes like setSessionId.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
-      const sid = sessionId;
+      const sid = sessionIdRef.current;
       if (!sid) return;
-      setMessages((prev) => {
-        const fullText = prev.map((m) => m.parts.map((p) => p.text).join("")).join("\n\n");
+      const msgs = messagesRef.current;
+      const fullText = msgs
+        .map((m) => m.parts.map((p) => p.text).join(""))
+        .join("\n\n");
+      if (fullText.trim()) {
         fetch("/api/sessions/coach", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "close", sessionId: sid, fullText }),
         }).catch(() => {});
-        return prev;
-      });
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, []); // Empty deps — runs ONLY on unmount, never on sessionId/messages changes
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -368,6 +422,7 @@ export default function CoachPage() {
     }
 
     const userMsg: ChatMessage = {
+      id: makeId(),
       role: "user",
       parts: [{ text }],
       timestamp: new Date().toISOString(),
@@ -376,9 +431,11 @@ export default function CoachPage() {
     let sid = sessionId;
 
     if (!sid) {
+      // Fallback: session creation failed at mount — recover gracefully
+      // Keep existing messages (greeting exchange) in the UI
       sid = await createSession(userMsg);
       setSessionId(sid);
-      setMessages([userMsg]);
+      setMessages((prev) => [...prev, userMsg]);
     } else {
       setMessages((prev) => [...prev, userMsg]);
       persistMessage(userMsg, sid);
@@ -391,11 +448,10 @@ export default function CoachPage() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
-  // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     if (textareaRef.current) {
@@ -404,7 +460,7 @@ export default function CoachPage() {
     }
   };
 
-  // Loading
+  // ── Loading spinner (profile fetch in-flight) ─────────────────────────────
   if (profileLoading) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
@@ -413,10 +469,19 @@ export default function CoachPage() {
     );
   }
 
-  // Free tier
+  // ── Profile fetch failed ──────────────────────────────────────────────────
+  if (profileError) {
+    return <CoachError />;
+  }
+
+  // ── Free tier (or no profile doc yet) ────────────────────────────────────
   if (!profile || profile.tier === "free") {
     return <LockedCoach />;
   }
+
+  // Derived: true while session history is loading / greeting is being created,
+  // before the first message appears and before streaming starts.
+  const isInitializing = initialized && messages.length === 0 && !isStreaming;
 
   const memoryCount = Object.values(memories).reduce((sum, arr) => sum + arr.length, 0);
 
@@ -430,6 +495,7 @@ export default function CoachPage() {
         </div>
         <button
           onClick={() => setMemoryOpen(true)}
+          aria-label="View coach memory"
           className="flex items-center gap-1.5 px-3 py-1.5 bg-forge-elevated hover:bg-forge-overlay border border-forge-border transition-colors text-xs text-text-secondary hover:text-text-primary"
         >
           <Brain className="w-3.5 h-3.5 text-forge-orange" />
@@ -444,9 +510,20 @@ export default function CoachPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">
+
+        {/* Initializing — session/history loading */}
+        {isInitializing && (
+          <div className="flex justify-center py-12">
+            <div className="flex items-center gap-3 text-text-muted text-sm">
+              <div className="w-5 h-5 border-2 border-forge-orange border-t-transparent rounded-full animate-spin" />
+              <span>Loading your session…</span>
+            </div>
+          </div>
+        )}
+
         <AnimatePresence initial={false}>
-          {messages.map((msg, i) => (
-            <MessageBubble key={i} msg={msg} />
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} msg={msg} />
           ))}
         </AnimatePresence>
 
@@ -454,6 +531,7 @@ export default function CoachPage() {
         {isStreaming && streamingText && (
           <MessageBubble
             msg={{
+              id: "streaming",
               role: "model",
               parts: [{ text: streamingText }],
               timestamp: new Date().toISOString(),
@@ -506,8 +584,9 @@ export default function CoachPage() {
             )}
           />
           <button
-            onClick={handleSend}
+            onClick={() => void handleSend()}
             disabled={!input.trim() || isStreaming}
+            aria-label="Send message"
             className={cn(
               "flex-shrink-0 w-10 h-10 flex items-center justify-center transition-all",
               input.trim() && !isStreaming
