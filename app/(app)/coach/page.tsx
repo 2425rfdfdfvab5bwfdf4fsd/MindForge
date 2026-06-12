@@ -65,6 +65,15 @@ function MemoryModal({
   onClose: () => void;
   memories: Record<string, Array<{ id: string; content: string; created_at: Date | string | null }>>;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [open, onClose]);
+
   const types = Object.keys(memories);
   return (
     <AnimatePresence>
@@ -263,7 +272,11 @@ export default function CoachPage() {
             if (raw === "[DONE]") { streamDone = true; break; }
             try {
               const parsed = JSON.parse(raw);
-              if (parsed.error) { streamDone = true; break; }
+              if (parsed.error) {
+                full = "I'm having trouble connecting right now. Please try again.";
+                streamDone = true;
+                break;
+              }
               if (parsed.text) {
                 full += parsed.text;
                 setStreamingText(full);
@@ -350,6 +363,9 @@ export default function CoachPage() {
     const text = input.trim();
     if (!text || isStreaming) return;
     setInput("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
 
     const userMsg: ChatMessage = {
       role: "user",
