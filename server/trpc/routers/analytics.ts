@@ -245,7 +245,7 @@ export const analyticsRouter = router({
 
       return {
         forgeScore: userSnap.data()?.forgeScore ?? 0,
-        checkinCount: scores.length,
+        checkinCount: checkinSnap.docs.length,
         avgHonestyScore,
         habitsCompleted: completionSnap.size,
       };

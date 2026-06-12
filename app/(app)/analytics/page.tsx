@@ -43,21 +43,33 @@ function StatCard({
   value,
   sub,
   accent,
+  isLoading,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   accent?: boolean;
+  isLoading?: boolean;
 }) {
   return (
     <div className="bg-[#111110] border border-[#2A2927] rounded-xl p-5 2xl:p-6">
-      <div className="text-xs 2xl:text-sm text-[#6B7280] uppercase tracking-wider mb-1">{label}</div>
-      <div
-        className={`text-3xl 2xl:text-4xl font-bold ${accent ? "text-[#FF6B2B]" : "text-white"}`}
-      >
-        {value}
+      <div className="text-xs 2xl:text-sm text-[#6B7280] uppercase tracking-wider mb-1">
+        {label}
       </div>
-      {sub && <div className="text-xs text-[#6B7280] mt-1">{sub}</div>}
+      {isLoading ? (
+        <div className="h-9 w-20 animate-pulse bg-[#2A2927] rounded mt-1" />
+      ) : (
+        <div
+          className={`text-3xl 2xl:text-4xl font-bold ${
+            accent ? "text-[#FF6B2B]" : "text-white"
+          }`}
+        >
+          {value}
+        </div>
+      )}
+      {sub && !isLoading && (
+        <div className="text-xs text-[#6B7280] mt-1">{sub}</div>
+      )}
     </div>
   );
 }
@@ -65,10 +77,16 @@ function StatCard({
 function ChartShell({
   title,
   icon: Icon,
+  isLoading,
+  isError,
+  onRetry,
   children,
 }: {
   title: string;
   icon: React.ElementType;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -77,7 +95,23 @@ function ChartShell({
         <Icon className="w-4 h-4 text-[#6B7280]" />
         <span className="text-sm font-semibold text-white">{title}</span>
       </div>
-      {children}
+      {isLoading ? (
+        <div className="h-[200px] animate-pulse bg-[#1A1918] rounded" />
+      ) : isError ? (
+        <div className="h-[200px] flex flex-col items-center justify-center gap-3">
+          <p className="text-[#4A4947] text-sm">Failed to load data</p>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="text-xs text-[#FF6B2B] hover:text-[#FF5214] transition-colors"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }
@@ -93,12 +127,46 @@ function EmptyChart({ message }: { message: string }) {
 export default function AnalyticsPage() {
   const [range, setRange] = useState<Range>(30);
 
-  const { data: forgeHistory = [] } = api.analytics.forgeScoreHistory.useQuery({ days: range });
-  const { data: habitRates = [] } = api.analytics.habitCompletionByHabit.useQuery({ days: range });
-  const { data: honestyTrend = [] } = api.analytics.checkinHonestyTrend.useQuery({ days: range });
-  const { data: xpHistory = [] } = api.analytics.xpHistory.useQuery({ days: range });
-  const { data: stats } = api.analytics.getPeriodStats.useQuery({ days: range });
-  const { data: weeklyReport } = api.analytics.getLatestWeeklyReport.useQuery();
+  const {
+    data: forgeHistory = [],
+    isLoading: forgeLoading,
+    isError: forgeError,
+    refetch: forgeRefetch,
+  } = api.analytics.forgeScoreHistory.useQuery({ days: range }, { retry: false });
+
+  const {
+    data: habitRates = [],
+    isLoading: habitRatesLoading,
+    isError: habitRatesError,
+    refetch: habitRatesRefetch,
+  } = api.analytics.habitCompletionByHabit.useQuery({ days: range }, { retry: false });
+
+  const {
+    data: honestyTrend = [],
+    isLoading: honestyLoading,
+    isError: honestyError,
+    refetch: honestyRefetch,
+  } = api.analytics.checkinHonestyTrend.useQuery({ days: range }, { retry: false });
+
+  const {
+    data: xpHistory = [],
+    isLoading: xpLoading,
+    isError: xpError,
+    refetch: xpRefetch,
+  } = api.analytics.xpHistory.useQuery({ days: range }, { retry: false });
+
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: statsError,
+    refetch: statsRefetch,
+  } = api.analytics.getPeriodStats.useQuery({ days: range }, { retry: false });
+
+  const { data: weeklyReport } = api.analytics.getLatestWeeklyReport.useQuery(
+    undefined,
+    { retry: false }
+  );
+
   const { data: profile } = api.user.getProfile.useQuery(undefined, { retry: false });
 
   const isPro = profile?.tier === "pro" || profile?.tier === "elite";
@@ -154,27 +222,49 @@ export default function AnalyticsPage() {
             label="Check-ins"
             value={stats?.checkinCount ?? 0}
             sub={`last ${range} days`}
+            isLoading={statsLoading}
           />
           <StatCard
             label="Avg Honesty"
             value={stats?.avgHonestyScore ?? 0}
             sub="out of 10"
+            isLoading={statsLoading}
           />
           <StatCard
             label="Habits Completed"
             value={stats?.habitsCompleted ?? 0}
             sub={`last ${range} days`}
+            isLoading={statsLoading}
           />
           <StatCard
             label="Forge Score"
             value={stats?.forgeScore ?? 0}
             accent
+            isLoading={statsLoading}
           />
         </div>
 
+        {statsError && (
+          <div className="flex items-center justify-between bg-[#111110] border border-[#2A2927] rounded-xl px-5 py-3">
+            <p className="text-sm text-[#4A4947]">Could not load summary stats</p>
+            <button
+              onClick={() => statsRefetch()}
+              className="text-xs text-[#FF6B2B] hover:text-[#FF5214] transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 2xl:gap-8">
           <div className="md:col-span-2">
-            <ChartShell title="Forge Score History" icon={TrendingUp}>
+            <ChartShell
+              title="Forge Score History"
+              icon={TrendingUp}
+              isLoading={forgeLoading}
+              isError={forgeError}
+              onRetry={() => forgeRefetch()}
+            >
               {forgeHistory.length === 0 ? (
                 <EmptyChart message="No forge score data yet — keep checking in" />
               ) : (
@@ -196,11 +286,11 @@ export default function AnalyticsPage() {
                       interval="preserveStartEnd"
                     />
                     <YAxis
-                      domain={[0, 1000]}
+                      domain={[0, "dataMax + 100"]}
                       tick={TICK_STYLE}
                       axisLine={false}
                       tickLine={false}
-                      width={35}
+                      width={40}
                     />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
@@ -221,7 +311,13 @@ export default function AnalyticsPage() {
             </ChartShell>
           </div>
 
-          <ChartShell title="Habit Completion by Habit" icon={Target}>
+          <ChartShell
+            title="Habit Completion by Habit"
+            icon={Target}
+            isLoading={habitRatesLoading}
+            isError={habitRatesError}
+            onRetry={() => habitRatesRefetch()}
+          >
             {habitRates.length === 0 ? (
               <EmptyChart message="No habits tracked yet" />
             ) : (
@@ -256,7 +352,13 @@ export default function AnalyticsPage() {
             )}
           </ChartShell>
 
-          <ChartShell title="Check-in Honesty Trend" icon={Activity}>
+          <ChartShell
+            title="Check-in Honesty Trend"
+            icon={Activity}
+            isLoading={honestyLoading}
+            isError={honestyError}
+            onRetry={() => honestyRefetch()}
+          >
             {honestyTrend.length === 0 ? (
               <EmptyChart message="No check-in data yet" />
             ) : (
@@ -297,7 +399,13 @@ export default function AnalyticsPage() {
           </ChartShell>
 
           <div className="md:col-span-2">
-            <ChartShell title="Total XP Over Time" icon={Zap}>
+            <ChartShell
+              title="Daily XP Earned"
+              icon={Zap}
+              isLoading={xpLoading}
+              isError={xpError}
+              onRetry={() => xpRefetch()}
+            >
               {xpHistory.length === 0 ? (
                 <EmptyChart message="No XP earned yet — complete habits and check-ins" />
               ) : (
@@ -353,8 +461,10 @@ function WeeklyReportCard({ report }: { report: Record<string, unknown> }) {
 
   const weekStart = report.weekStartDate as string;
   const weekEnd = weekStart
-    ? new Date(new Date(weekStart + "T00:00:00").getTime() + 6 * 86400000)
-        .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    ? new Date(new Date(weekStart + "T00:00:00").getTime() + 6 * 86400000).toLocaleDateString(
+        "en-US",
+        { month: "short", day: "numeric" }
+      )
     : "";
   const weekStartFormatted = weekStart
     ? new Date(weekStart + "T00:00:00").toLocaleDateString("en-US", {
@@ -376,9 +486,7 @@ function WeeklyReportCard({ report }: { report: Record<string, unknown> }) {
             <BarChart2 className="w-4 h-4 text-[#FF6B2B]" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-white">
-              Weekly Neural Report
-            </div>
+            <div className="text-sm font-semibold text-white">Weekly Neural Report</div>
             <div className="text-xs text-[#6B7280]">
               {weekStartFormatted} — {weekEnd}
             </div>
