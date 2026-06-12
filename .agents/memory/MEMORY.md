@@ -1,3 +1,4 @@
+- [MindForge onboarding flow](onboarding-flow.md) — 3-step sequence (mirror → why → environment), what each step collects, API calls, Firestore fields, and completion rewards
 - [MindForge stack & PRD constants](mindforge-stack.md) — critical values (XP, levels, pricing, field names) that must never be approximated
 - [Habits list query shape](habits-list-shape.md) — habits.list returns snake_case output shape intentionally; detail page must use habit_type not habitType
 - [TypeScript exclusions](ts-exclusions.md) — shared/models excluded from tsconfig; server/replit_integrations was deleted (Replit scaffolding, not used by app)
