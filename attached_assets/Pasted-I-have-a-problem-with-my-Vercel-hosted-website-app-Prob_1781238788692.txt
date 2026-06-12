@@ -1,0 +1,58 @@
+I have a problem with my Vercel-hosted website/app.
+
+Problem:
+The Habits page is failing to load data in production on Vercel. Instead of displaying the user's habits, the page shows the error message "Failed to load habits. Check your connection and try again." The UI loads correctly, but the habits data request is failing.
+
+It happens when I:
+1. Open the Habits page after logging into the application.
+2. Navigate to the Habits section from the sidebar.
+3. Try to load or refresh the habits list in the production Vercel deployment.
+
+I attached the screenshot/error/logs here:
+[Attached Screenshot]
+
+Please analyze this properly and find the real root cause first. Do not guess and do not apply random fixes.
+
+Check everything related, including:
+- Frontend code
+- Backend/API routes
+- Authentication/session
+- Database connection
+- Environment variables
+- Vercel deployment settings
+- Build logs and runtime logs
+- Dependencies/packages
+- Routing, middleware, and config files
+
+Additional observations:
+- The application UI renders successfully.
+- Authentication appears to work because the user profile/avatar is visible.
+- The issue seems isolated to loading habits data from the backend/API/database.
+- This is happening in the Vercel production deployment.
+- The page displays a retry button, but retrying does not resolve the issue.
+
+After finding the root cause, fix it properly from A to Z.
+
+Please provide:
+1. The exact root cause
+2. Why this problem is happening
+3. Which files/configs need to be changed
+4. The correct fix with code/config changes
+5. Any Vercel environment variables/settings I need to update
+6. How to test and verify the issue is fixed after deployment
+
+Please specifically inspect:
+- Browser Network requests for the habits API call
+- API response status codes (401, 403, 404, 500, etc.)
+- Vercel Function Logs
+- Database query execution
+- Authentication/session validation
+- Environment variable loading in production
+- Any CORS, middleware, or route protection issues
+- Server-side and client-side error handling
+
+If you need more information, ask only for the exact file, log, or screenshot needed.
+
+Important:
+Do not expose or print any secret keys, tokens, passwords, or private environment variables.
+Find the actual root cause before suggesting any fix.
