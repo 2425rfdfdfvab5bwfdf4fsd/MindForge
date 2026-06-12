@@ -20,14 +20,20 @@ export async function GET() {
       adminDb.collection("users").doc(uid).collection("badges").get(),
     ]);
 
+  function stripEmbedding(data: Record<string, unknown>) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { embedding: _emb, ...rest } = data;
+    return rest;
+  }
+
   const exportData = {
     exportedAt: new Date().toISOString(),
     userId: uid,
     checkins: checkins.docs.map((d) => ({ id: d.id, ...d.data() })),
-    cookieJar: jarEntries.docs.map((d) => ({ id: d.id, ...d.data() })),
+    cookieJar: jarEntries.docs.map((d) => ({ id: d.id, ...stripEmbedding(d.data()) })),
     habits: userHabits.docs.map((d) => ({ id: d.id, ...d.data() })),
     habitCompletions: completions.docs.map((d) => ({ id: d.id, ...d.data() })),
-    memories: memories.docs.map((d) => ({ id: d.id, ...d.data() })),
+    memories: memories.docs.map((d) => ({ id: d.id, ...stripEmbedding(d.data()) })),
     badges: badgesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
   };
 

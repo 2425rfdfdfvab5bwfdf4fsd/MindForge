@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Zap,
 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/trpc/client";
 
 type Tab = "profile" | "identity" | "coach" | "subscription" | "data";
@@ -176,21 +177,33 @@ export default function SettingsPage() {
   }, [profile]);
 
   async function saveProfile() {
-    await updateProfile.mutateAsync({ displayName: displayName.trim() || undefined });
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 2000);
+    try {
+      await updateProfile.mutateAsync({ displayName: displayName.trim() || undefined });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+    } catch {
+      toast.error("Failed to save profile. Please try again.");
+    }
   }
 
   async function saveCoach() {
-    await updateProfile.mutateAsync({ coachIntensity, timezone });
-    setCoachSaved(true);
-    setTimeout(() => setCoachSaved(false), 2000);
+    try {
+      await updateProfile.mutateAsync({ coachIntensity, timezone });
+      setCoachSaved(true);
+      setTimeout(() => setCoachSaved(false), 2000);
+    } catch {
+      toast.error("Failed to save preferences. Please try again.");
+    }
   }
 
   async function handleExport() {
     setExportLoading(true);
     try {
       const res = await fetch("/api/user/export");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? "Export failed");
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -198,6 +211,8 @@ export default function SettingsPage() {
       a.download = "mindforge-export.json";
       a.click();
       URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed. Please try again.");
     } finally {
       setExportLoading(false);
     }
@@ -207,8 +222,15 @@ export default function SettingsPage() {
     if (deleteConfirm !== "DELETE") return;
     setDeleteLoading(true);
     try {
-      await fetch("/api/user/delete", { method: "POST" });
+      const res = await fetch("/api/user/delete", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? "Deletion failed");
+      }
+      setShowDeleteModal(false);
       router.push("/");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Account deletion failed. Please try again.");
     } finally {
       setDeleteLoading(false);
     }
@@ -285,7 +307,7 @@ export default function SettingsPage() {
                         className="w-full bg-[#1A1918] border border-[#2A2927] rounded-lg px-4 py-2.5 text-[#6B7280] text-sm cursor-not-allowed"
                       />
                       <p className="text-xs text-[#4A4947] mt-1">
-                        Email is managed by your Replit account
+                        Email is managed by your authentication provider and cannot be changed here.
                       </p>
                     </div>
                   </div>
@@ -535,8 +557,12 @@ export default function SettingsPage() {
                       </p>
                       <button
                         onClick={async () => {
-                          await updateProfile.mutateAsync({ onboardingStep: "why" });
-                          router.push("/onboarding/why");
+                          try {
+                            await updateProfile.mutateAsync({ onboardingStep: "why" });
+                            router.push("/onboarding/why");
+                          } catch {
+                            toast.error("Failed to initiate reset. Please try again.");
+                          }
                         }}
                         disabled={updateProfile.isPending}
                         className="px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
