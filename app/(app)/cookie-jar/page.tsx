@@ -94,7 +94,7 @@ function VictoryModal({ entry, onClose, onSaved }: ModalProps) {
               {isEdit ? "Edit Victory" : "Lock In a Victory"}
             </h2>
           </div>
-          <button onClick={onClose} className="p-1 text-text-muted hover:text-text-primary transition-colors">
+          <button onClick={onClose} aria-label="Close modal" className="p-1 text-text-muted hover:text-text-primary transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -169,6 +169,7 @@ function VictoryModal({ entry, onClose, onSaved }: ModalProps) {
                 type="date"
                 value={dateOfVictory}
                 onChange={(e) => setDateOfVictory(e.target.value)}
+                max={new Date().toLocaleDateString("en-CA")}
                 className="w-full bg-forge-input border border-forge-border px-4 py-3 text-sm text-text-primary focus:outline-none focus:border-forge-orange focus:ring-1 focus:ring-forge-orange/20 transition-colors"
                 style={{ colorScheme: "dark" }}
               />
@@ -216,7 +217,7 @@ export default function CookieJarPage() {
 
   const utils = api.useUtils();
 
-  const { data: entries = [], isLoading } = api.cookiejar.list.useQuery(undefined, { retry: false });
+  const { data: entries = [], isLoading, isError: listError } = api.cookiejar.list.useQuery(undefined, { retry: false });
   const { data: searchResults, isFetching: isSearching } = api.cookiejar.search.useQuery(
     { query: activeQuery },
     { enabled: !!activeQuery, retry: false }
@@ -251,6 +252,8 @@ export default function CookieJarPage() {
       setActiveQuery(searchInput.trim());
     }
   }
+
+  const handleModalClose = useCallback(() => { setModalOpen(false); setEditEntry(null); }, []);
 
   function clearSearch() { setSearchInput(""); setActiveQuery(""); }
   function openAdd() { setEditEntry(null); setModalOpen(true); }
@@ -331,7 +334,7 @@ export default function CookieJarPage() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-text-muted">
                     {isSearching
-                      ? "Searching semantically…"
+                      ? "Searching…"
                       : `${displayEntries.length} result${displayEntries.length !== 1 ? "s" : ""} for "${activeQuery}"`}
                   </span>
                   <button onClick={clearSearch} className="text-xs text-forge-orange hover:text-forge-orange-hover transition-colors">
@@ -341,12 +344,34 @@ export default function CookieJarPage() {
               )}
 
               {/* Entries */}
-              {isLoading ? (
+              {(isLoading && !isSearchMode) || (isSearchMode && isSearching && !searchResults) ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="h-[100px] animate-pulse bg-forge-elevated border border-forge-border" />
                   ))}
                 </div>
+              ) : listError && !isSearchMode ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="border border-forge-border bg-forge-elevated py-20 text-center"
+                >
+                  <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center border border-red-800/30 bg-red-950/20">
+                    <Cookie className="h-8 w-8 text-red-400 opacity-60" />
+                  </div>
+                  <p className="font-heading text-lg font-bold text-text-primary mb-2">
+                    Failed to load victories
+                  </p>
+                  <p className="text-sm text-text-muted mb-5 max-w-xs mx-auto leading-relaxed">
+                    Something went wrong fetching your jar. Check your connection and try again.
+                  </p>
+                  <button
+                    onClick={() => utils.cookiejar.list.invalidate()}
+                    className="inline-flex items-center gap-2 border border-forge-border px-5 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:border-forge-border-strong transition-colors"
+                  >
+                    Retry
+                  </button>
+                </motion.div>
               ) : displayEntries.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -465,7 +490,7 @@ export default function CookieJarPage() {
                       <span className="text-xs">Search Mode</span>
                     </div>
                     <span className="text-xs text-text-secondary">
-                      Semantic AI
+                      Keyword
                     </span>
                   </div>
                 </div>
@@ -527,7 +552,7 @@ export default function CookieJarPage() {
         {modalOpen && (
           <VictoryModal
             entry={editEntry}
-            onClose={() => { setModalOpen(false); setEditEntry(null); }}
+            onClose={handleModalClose}
             onSaved={handleSaved}
           />
         )}
