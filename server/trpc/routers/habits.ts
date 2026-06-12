@@ -15,13 +15,12 @@ export const habitsRouter = router({
       const habitsSnap = await adminDb
         .collection("habits")
         .where("userId", "==", ctx.user.id)
-        .where("isActive", "==", true)
-        .orderBy("sortOrder")
         .get();
 
-      if (habitsSnap.empty) return [];
+      const activeDocs = habitsSnap.docs.filter((d) => d.data().isActive === true);
+      if (activeDocs.length === 0) return [];
 
-      const habitIds = habitsSnap.docs.map((d) => d.id);
+      const habitIds = activeDocs.map((d) => d.id);
 
       const [completionsSnap, streaksResults] = await Promise.all([
         adminDb
@@ -54,7 +53,7 @@ export const habitsRouter = router({
         }
       });
 
-      return habitsSnap.docs
+      return activeDocs
         .map((d) => {
           const h = d.data();
           const completedVal = completionMap.get(d.id);
@@ -291,14 +290,14 @@ export const habitsRouter = router({
         .collection("habit_completions")
         .where("habitId", "==", input.habitId)
         .where("userId", "==", ctx.user.id)
-        .where("localDate", ">=", fromStr)
-        .where("localDate", "<=", toStr)
-        .orderBy("localDate")
         .get();
 
-      return snap.docs.map((d) => ({
-        localDate: d.data().localDate,
-        completed: d.data().completed,
-      }));
+      return snap.docs
+        .map((d) => ({
+          localDate: d.data().localDate as string,
+          completed: d.data().completed as boolean,
+        }))
+        .filter((c) => c.localDate >= fromStr && c.localDate <= toStr)
+        .sort((a, b) => a.localDate.localeCompare(b.localDate));
     }),
 });
