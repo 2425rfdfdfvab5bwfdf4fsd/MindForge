@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Zap, ChevronRight, CheckCircle2, Flame, Trophy, Lock, Target } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,8 +23,10 @@ const DIFFICULTY_LABELS: Record<number, string> = {
 export default function ChallengesPage() {
   const [activeTab, setActiveTab] = useState<Tab>("available");
   const [activatingId, setActivatingId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [tipIdx] = useState(() => Math.floor(Math.random() * TIPS.length));
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const utils = api.useUtils();
 
@@ -50,16 +52,28 @@ export default function ChallengesPage() {
   });
 
   const complete = api.challenges.complete.useMutation({
+    onMutate: (vars) => setCompletingId(vars.userChallengeId),
     onSuccess: (data) => {
       utils.challenges.list.invalidate();
+      setCompletingId(null);
       showToast(`+${data.xpAwarded} XP earned. Well done.`, "success");
     },
-    onError: (err) => showToast(err.message || "Could not complete challenge.", "error"),
+    onError: (err) => {
+      setCompletingId(null);
+      showToast(err.message || "Could not complete challenge.", "error");
+    },
   });
 
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
   function showToast(message: string, type: "success" | "error") {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
   }
 
   const available  = challenges.filter((c) => !c.userChallenge || c.userChallenge.status === "failed");
@@ -252,6 +266,7 @@ export default function ChallengesPage() {
                           onActivate={(id) => activate.mutate({ challengeId: id })}
                           onComplete={(ucId, reflection) => complete.mutate({ userChallengeId: ucId, reflection })}
                           isActivating={activatingId === c.id && activate.isPending}
+                          isCompleting={completingId === c.userChallenge?.id && complete.isPending}
                         />
                       </motion.div>
                     ))}

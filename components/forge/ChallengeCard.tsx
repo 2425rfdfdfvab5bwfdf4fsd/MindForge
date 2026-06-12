@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Lock, Clock, Zap, CheckCircle2, XCircle, Loader2, Trophy, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -29,6 +29,7 @@ interface ChallengeCardProps {
   onActivate: (challengeId: string) => void;
   onComplete: (userChallengeId: string, reflection: string) => void;
   isActivating?: boolean;
+  isCompleting?: boolean;
 }
 
 function formatDuration(minutes: number): string {
@@ -38,9 +39,17 @@ function formatDuration(minutes: number): string {
   return `${days}d`;
 }
 
-function useCountdown(expiresAt: string | null | undefined) {
+function useCountdown(expiresAt: string | null | undefined): string | null {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!expiresAt) return;
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
   if (!expiresAt) return null;
-  const ms = new Date(expiresAt).getTime() - Date.now();
+  const ms = new Date(expiresAt).getTime() - now;
   if (ms <= 0) return "Expired";
   const days = Math.floor(ms / 86400000);
   const hours = Math.floor((ms % 86400000) / 3600000);
@@ -76,7 +85,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   cold: "Cold", screen: "Screen", physical: "Physical", fast: "Fast", social: "Social",
 };
 
-export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isActivating }: ChallengeCardProps) {
+export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isActivating, isCompleting }: ChallengeCardProps) {
   const [showComplete, setShowComplete] = useState(false);
   const [reflection, setReflection] = useState("");
   const [reflectionError, setReflectionError] = useState("");
@@ -102,7 +111,6 @@ export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isAct
     }
     setReflectionError("");
     onComplete(challenge.userChallenge!.id, reflection.trim());
-    setShowComplete(false);
   }
 
   return (
@@ -139,15 +147,14 @@ export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isAct
             {challenge.title}
           </h3>
           <div className="shrink-0 flex items-center gap-2 mt-0.5">
-            {/* Active pulse */}
             {status === "active" && (
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-forge-orange animate-pulse" />
                 <span className="text-xs font-bold text-forge-orange">Active</span>
               </span>
             )}
-            {status === "completed" && <CheckCircle2 className="h-4.5 w-4.5 text-green-500" />}
-            {status === "failed"    && <XCircle className="h-4.5 w-4.5 text-red-400" />}
+            {status === "completed" && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+            {status === "failed"    && <XCircle className="h-4 w-4 text-red-400" />}
           </div>
         </div>
 
@@ -229,13 +236,18 @@ export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isAct
                 <div className="flex gap-2">
                   <button
                     onClick={handleComplete}
-                    className="flex-1 py-2.5 text-sm font-bold text-white bg-green-700 hover:bg-green-600 transition-colors"
+                    disabled={isCompleting}
+                    className="flex-1 py-2.5 text-sm font-bold text-white bg-green-700 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                   >
-                    Mark Complete →
+                    {isCompleting
+                      ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</>
+                      : "Mark Complete →"
+                    }
                   </button>
                   <button
                     onClick={() => { setShowComplete(false); setReflection(""); setReflectionError(""); }}
-                    className="px-4 py-2.5 text-sm text-text-muted border border-forge-border hover:border-forge-border-strong hover:text-text-primary transition-colors"
+                    disabled={isCompleting}
+                    className="px-4 py-2.5 text-sm text-text-muted border border-forge-border hover:border-forge-border-strong hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Cancel
                   </button>
@@ -261,7 +273,8 @@ export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isAct
             {status === "active" && !showComplete && (
               <button
                 onClick={() => setShowComplete(true)}
-                className="w-full py-2.5 text-sm font-bold border border-green-700 text-green-400 hover:bg-green-950/40 transition-colors flex items-center justify-center gap-2"
+                disabled={isCompleting}
+                className="w-full py-2.5 text-sm font-bold border border-green-700 text-green-400 hover:bg-green-950/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
                 <Trophy className="h-3.5 w-3.5" />
                 Complete Challenge
