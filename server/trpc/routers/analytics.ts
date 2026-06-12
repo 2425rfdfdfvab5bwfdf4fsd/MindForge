@@ -14,10 +14,16 @@ export const analyticsRouter = router({
         .orderBy("recordedAt")
         .get();
 
-      return snap.docs.map((d) => ({
-        date: (d.data().recordedAt as string).split("T")[0],
-        score: d.data().score as number,
-      }));
+      // Multiple writes per day are possible (check-in + challenge completion).
+      // Keep the LATEST score per calendar date so the chart is a clean history line.
+      const byDate: Record<string, number> = {};
+      for (const d of snap.docs) {
+        const date = (d.data().recordedAt as string).split("T")[0];
+        byDate[date] = d.data().score as number; // docs are ordered by recordedAt asc → last write wins
+      }
+      return Object.entries(byDate)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, score]) => ({ date, score }));
     }),
 
   getDashboardStats: protectedProcedure.query(async ({ ctx }) => {

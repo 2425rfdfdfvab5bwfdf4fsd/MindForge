@@ -226,8 +226,14 @@ export default function AnalyticsPage() {
           />
           <StatCard
             label="Avg Honesty"
-            value={stats?.avgHonestyScore ?? 0}
-            sub="out of 10"
+            value={
+              stats
+                ? stats.checkinCount > 0
+                  ? stats.avgHonestyScore
+                  : "—"
+                : 0
+            }
+            sub={stats?.checkinCount && stats.checkinCount > 0 ? "out of 10" : undefined}
             isLoading={statsLoading}
           />
           <StatCard
@@ -460,14 +466,16 @@ function WeeklyReportCard({ report }: { report: Record<string, unknown> }) {
   const [expanded, setExpanded] = useState(false);
 
   const weekStart = report.weekStartDate as string;
+  // Use noon (T12:00:00) as the anchor so DST ±1h shifts never cross a date boundary.
   const weekEnd = weekStart
-    ? new Date(new Date(weekStart + "T00:00:00").getTime() + 6 * 86400000).toLocaleDateString(
-        "en-US",
-        { month: "short", day: "numeric" }
-      )
+    ? (() => {
+        const d = new Date(weekStart + "T12:00:00");
+        d.setDate(d.getDate() + 6);
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      })()
     : "";
   const weekStartFormatted = weekStart
-    ? new Date(weekStart + "T00:00:00").toLocaleDateString("en-US", {
+    ? new Date(weekStart + "T12:00:00").toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       })
