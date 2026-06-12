@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Flame, ChevronRight, Check, X, Zap } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 
@@ -80,6 +81,7 @@ export function HabitCard({ habit, localDate, onUpdate }: HabitCardProps) {
         await logCompletion.mutateAsync({ habitId: habit.id, localDate, completed });
       } catch {
         setStatus(habit.today_status);
+        toast.error("Failed to log habit. Please try again.");
       }
     },
     [isLocked, habit.id, habit.today_status, localDate, logCompletion]

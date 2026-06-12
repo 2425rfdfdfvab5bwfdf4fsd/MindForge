@@ -75,13 +75,17 @@ export default function NewHabitPage() {
       return;
     }
 
-    await createHabit.mutateAsync({
-      name: name.trim(),
-      category,
-      habitType,
-      targetFrequency,
-      targetDays: targetFrequency === "custom" ? targetDays : undefined,
-    });
+    try {
+      await createHabit.mutateAsync({
+        name: name.trim(),
+        category,
+        habitType,
+        targetFrequency,
+        targetDays: targetFrequency === "custom" ? targetDays : undefined,
+      });
+    } catch {
+      // onError callback handles UI error state
+    }
   }
 
   return (

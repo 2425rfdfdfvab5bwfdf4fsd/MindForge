@@ -16,6 +16,7 @@ export const habitsRouter = router({
         .collection("habits")
         .where("userId", "==", ctx.user.id)
         .where("isActive", "==", true)
+        .orderBy("sortOrder")
         .get();
 
       if (habitsSnap.empty) return [];

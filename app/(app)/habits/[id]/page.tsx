@@ -87,7 +87,6 @@ export default function HabitDetailPage() {
   const updateMutation = api.habits.update.useMutation({
     onSuccess: () => {
       setEditing(false);
-      refetch();
       utils.habits.list.invalidate();
     },
   });
