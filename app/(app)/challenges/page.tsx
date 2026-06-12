@@ -30,7 +30,7 @@ export default function ChallengesPage() {
 
   const utils = api.useUtils();
 
-  const { data: challenges = [], isLoading } = api.challenges.list.useQuery(undefined, { retry: false });
+  const { data: challenges = [], isLoading, isError: listError } = api.challenges.list.useQuery(undefined, { retry: false });
   const { data: profile } = api.user.getProfile.useQuery(undefined, { retry: false });
   const isFree = !profile || profile.tier === "free";
 
@@ -211,6 +211,28 @@ export default function ChallengesPage() {
                     <div key={i} className="h-[180px] animate-pulse bg-forge-elevated border border-forge-border" />
                   ))}
                 </div>
+              ) : listError ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="border border-forge-border bg-forge-elevated py-20 text-center"
+                >
+                  <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center border border-red-800/30 bg-red-950/20">
+                    <Target className="h-7 w-7 text-red-400 opacity-60" />
+                  </div>
+                  <p className="font-heading text-lg font-bold text-text-primary mb-2">
+                    Failed to load challenges
+                  </p>
+                  <p className="text-sm text-text-muted mb-5 max-w-xs mx-auto leading-relaxed">
+                    Something went wrong. Check your connection and try again.
+                  </p>
+                  <button
+                    onClick={() => utils.challenges.list.invalidate()}
+                    className="inline-flex items-center gap-2 border border-forge-border px-5 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:border-forge-border-strong transition-colors"
+                  >
+                    Retry
+                  </button>
+                </motion.div>
               ) : displayed.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -263,6 +285,7 @@ export default function ChallengesPage() {
                         <ChallengeCard
                           challenge={c}
                           isFree={isFree}
+                          hasActiveChallenge={active.length > 0 && c.userChallenge?.status !== "active"}
                           onActivate={(id) => activate.mutate({ challengeId: id })}
                           onComplete={(ucId, reflection) => complete.mutate({ userChallengeId: ucId, reflection })}
                           isActivating={activatingId === c.id && activate.isPending}

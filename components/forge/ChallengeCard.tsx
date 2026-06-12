@@ -26,6 +26,7 @@ export interface ChallengeData {
 interface ChallengeCardProps {
   challenge: ChallengeData;
   isFree: boolean;
+  hasActiveChallenge: boolean;
   onActivate: (challengeId: string) => void;
   onComplete: (userChallengeId: string, reflection: string) => void;
   isActivating?: boolean;
@@ -44,7 +45,7 @@ function useCountdown(expiresAt: string | null | undefined): string | null {
 
   useEffect(() => {
     if (!expiresAt) return;
-    const id = setInterval(() => setNow(Date.now()), 60_000);
+    const id = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(id);
   }, [expiresAt]);
 
@@ -85,7 +86,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   cold: "Cold", screen: "Screen", physical: "Physical", fast: "Fast", social: "Social",
 };
 
-export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isActivating, isCompleting }: ChallengeCardProps) {
+export function ChallengeCard({ challenge, isFree, hasActiveChallenge, onActivate, onComplete, isActivating, isCompleting }: ChallengeCardProps) {
   const [showComplete, setShowComplete] = useState(false);
   const [reflection, setReflection] = useState("");
   const [reflectionError, setReflectionError] = useState("");
@@ -263,7 +264,8 @@ export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isAct
             {status === "none" && (
               <button
                 onClick={() => onActivate(challenge.id)}
-                disabled={isActivating}
+                disabled={isActivating || hasActiveChallenge}
+                title={hasActiveChallenge ? "Finish your current challenge first" : undefined}
                 className="w-full py-2.5 text-sm font-bold text-forge-base bg-forge-orange hover:bg-forge-orange-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
                 {isActivating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
@@ -294,8 +296,9 @@ export function ChallengeCard({ challenge, isFree, onActivate, onComplete, isAct
                 </div>
                 <button
                   onClick={() => onActivate(challenge.id)}
-                  disabled={isActivating}
-                  className="w-full py-2.5 text-sm font-bold text-forge-base bg-forge-orange hover:bg-forge-orange-hover disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+                  disabled={isActivating || hasActiveChallenge}
+                  title={hasActiveChallenge ? "Finish your current challenge first" : undefined}
+                  className="w-full py-2.5 text-sm font-bold text-forge-base bg-forge-orange hover:bg-forge-orange-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
                   {isActivating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
                   Try Again
