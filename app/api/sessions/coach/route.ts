@@ -77,11 +77,11 @@ export async function GET(request: Request) {
   const snap = await adminDb
     .collection("coaching_sessions")
     .where("userId", "==", session.id)
-    .orderBy("createdAt", "desc")
-    .limit(1)
     .get();
 
-  const row = snap.docs[0];
+  const row = snap.docs
+    .map((d) => ({ ref: d, createdAt: (d.data().createdAt as string) ?? "" }))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.ref;
   const messages = (row?.data()?.messages as SessionMessage[]) ?? [];
 
   return Response.json({

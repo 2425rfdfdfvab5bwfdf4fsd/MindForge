@@ -35,26 +35,32 @@ async function fetchRecentMemories(userId: string): Promise<Memory[]> {
   const snap = await adminDb
     .collection("user_memories")
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
-    .limit(5)
     .get();
-  return snap.docs.map((d) => ({
-    content: d.data().content,
-    memory_type: d.data().memoryType,
-  }));
+  return snap.docs
+    .map((d) => ({
+      content: d.data().content as string,
+      memory_type: d.data().memoryType as string,
+      createdAt: (d.data().createdAt as string) ?? "",
+    }))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 5)
+    .map(({ content, memory_type }) => ({ content, memory_type }));
 }
 
 async function fetchRecentCookieJar(userId: string): Promise<CookieJarEntry[]> {
   const snap = await adminDb
     .collection("cookie_jar_entries")
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
-    .limit(3)
     .get();
-  return snap.docs.map((d) => ({
-    title: d.data().title,
-    description: d.data().description,
-  }));
+  return snap.docs
+    .map((d) => ({
+      title: d.data().title as string,
+      description: d.data().description as string,
+      createdAt: (d.data().createdAt as string) ?? "",
+    }))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 3)
+    .map(({ title, description }) => ({ title, description }));
 }
 
 function formatMemories(memories: Memory[]): string {
