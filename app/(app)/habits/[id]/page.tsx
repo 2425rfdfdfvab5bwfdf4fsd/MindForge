@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -37,6 +37,14 @@ const CATEGORY_COLORS: Record<
   perform: { bg: "#431407",  text: "#fb923c",  border: "#7c2d12", glow: "rgba(251,146,60,0.12)",  accent: "#fb923c" },
 };
 
+function getLocalDate(timezone: string): string {
+  try {
+    return new Date().toLocaleDateString("en-CA", { timeZone: timezone });
+  } catch {
+    return new Date().toLocaleDateString("en-CA");
+  }
+}
+
 /* ─── Circular progress ring ─────────────────────────────── */
 function RingProgress({ value, color }: { value: number; color: string }) {
   const r = 28;
@@ -66,13 +74,28 @@ export default function HabitDetailPage() {
   const [archiving, setArchiving] = useState(false);
   const [editing,   setEditing]   = useState(false);
   const [editName,  setEditName]  = useState("");
+  const [localDate, setLocalDate] = useState(() => getLocalDate("UTC"));
 
-  const { data: habits, refetch } = api.habits.list.useQuery(
-    { localDate: new Date().toISOString().slice(0, 10) },
-    { retry: false }
-  );
+  // Profile for timezone so the heatmap "today" cell is accurate
+  const { data: profile } = api.user.getProfile.useQuery(undefined, { retry: false });
 
-  const { data: history } = api.habits.getCompletionHistory.useQuery(
+  useEffect(() => {
+    if (profile?.timezone) setLocalDate(getLocalDate(profile.timezone));
+  }, [profile?.timezone]);
+
+  // Fetch the single habit — much more efficient than the full list
+  const {
+    data: habit,
+    isLoading: habitLoading,
+    isError: habitError,
+  } = api.habits.getById.useQuery({ id }, { retry: false });
+
+  const {
+    data: history,
+    isLoading: historyLoading,
+    isError: historyError,
+    refetch: refetchHistory,
+  } = api.habits.getCompletionHistory.useQuery(
     { habitId: id, days: 90 },
     { retry: false }
   );
@@ -87,17 +110,16 @@ export default function HabitDetailPage() {
   const updateMutation = api.habits.update.useMutation({
     onSuccess: () => {
       setEditing(false);
+      utils.habits.getById.invalidate({ id });
       utils.habits.list.invalidate();
     },
   });
 
-  const habit      = habits?.find((h) => h.id === id);
-  const historyArr = history ?? [];
-  const completedCount = historyArr.filter((h) => h.completed).length;
-  const totalLogged    = historyArr.length;
-  const completionRate = totalLogged > 0 ? Math.round((completedCount / totalLogged) * 100) : 0;
-
-  const cat = habit ? (CATEGORY_COLORS[habit.category] ?? CATEGORY_COLORS.perform) : null;
+  const historyArr        = history ?? [];
+  const completedCount    = historyArr.filter((h) => h.completed).length;
+  const totalLogged       = historyArr.length;
+  const completionRate    = totalLogged > 0 ? Math.round((completedCount / totalLogged) * 100) : 0;
+  const cat               = habit ? (CATEGORY_COLORS[habit.category] ?? CATEGORY_COLORS.perform) : null;
 
   async function handleArchive() {
     if (!window.confirm("Archive this habit? It won't appear in your daily list anymore.")) return;
@@ -122,6 +144,10 @@ export default function HabitDetailPage() {
       toast.error("Habit name cannot be empty.");
       return;
     }
+    if (trimmed.length > 60) {
+      toast.error("Habit name must be 60 characters or fewer.");
+      return;
+    }
     try {
       await updateMutation.mutateAsync({ id, name: trimmed });
     } catch {
@@ -129,8 +155,8 @@ export default function HabitDetailPage() {
     }
   }
 
-  /* ── Not found ── */
-  if (habits && !habit) {
+  /* ── Error: habit not found or forbidden ── */
+  if (habitError) {
     return (
       <div className="mx-auto max-w-6xl 2xl:max-w-8xl px-4 sm:px-6 py-10">
         <p className="text-text-muted">Habit not found or archived.</p>
@@ -142,7 +168,7 @@ export default function HabitDetailPage() {
   }
 
   /* ── Loading skeleton ── */
-  if (!habit) {
+  if (habitLoading || !habit) {
     return (
       <div className="mx-auto max-w-6xl 2xl:max-w-8xl px-4 sm:px-6 py-8 sm:py-10">
         <div className="mb-6 h-5 w-24 animate-pulse rounded-sm bg-forge-border" />
@@ -157,7 +183,7 @@ export default function HabitDetailPage() {
     );
   }
 
-  const isAvoid   = habit.habit_type === "avoid";
+  const isAvoid     = habit.habit_type === "avoid";
   const streakEmoji = habit.current_streak >= 30 ? "🏆" : habit.current_streak >= 7 ? "🔥" : habit.current_streak >= 1 ? "⚡" : "";
   const streakSub   = habit.current_streak === 0 ? "Start today" : habit.current_streak === 1 ? "Day 1 — keep going" : `${habit.current_streak} days straight`;
 
@@ -357,13 +383,19 @@ export default function HabitDetailPage() {
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-xs font-semibold uppercase tracking-widest text-text-muted">Completion Rate</p>
-              <p className="mt-2 font-heading text-4xl 2xl:text-5xl font-bold tabular-nums text-text-primary leading-none">
-                {completionRate}
-                <span className="ml-0.5 text-xl font-semibold text-text-muted">%</span>
-              </p>
-              <p className="mt-2 text-xs text-text-muted">
-                {completedCount} of {totalLogged} logged days
-              </p>
+              {historyLoading ? (
+                <div className="mt-2 h-12 w-20 animate-pulse rounded bg-forge-border" />
+              ) : (
+                <>
+                  <p className="mt-2 font-heading text-4xl 2xl:text-5xl font-bold tabular-nums text-text-primary leading-none">
+                    {completionRate}
+                    <span className="ml-0.5 text-xl font-semibold text-text-muted">%</span>
+                  </p>
+                  <p className="mt-2 text-xs text-text-muted">
+                    {completedCount} of {totalLogged} logged days
+                  </p>
+                </>
+              )}
             </div>
             <div className="relative mt-0.5 shrink-0">
               <RingProgress
@@ -371,7 +403,7 @@ export default function HabitDetailPage() {
                 color={completionRate >= 80 ? "#22c55e" : completionRate >= 50 ? "#fb923c" : "#ef4444"}
               />
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-text-primary">
-                {completionRate}%
+                {historyLoading ? "…" : `${completionRate}%`}
               </span>
             </div>
           </div>
@@ -431,7 +463,21 @@ export default function HabitDetailPage() {
 
         {/* Grid body */}
         <div className="px-6 py-5 2xl:px-8 2xl:py-6">
-          <HabitGrid history={historyArr} fullWidth />
+          {historyError ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm text-text-muted">Failed to load completion history.</p>
+              <button
+                onClick={() => refetchHistory()}
+                className="text-xs font-semibold text-forge-orange hover:underline"
+              >
+                Retry
+              </button>
+            </div>
+          ) : historyLoading ? (
+            <div className="h-24 animate-pulse rounded bg-forge-border" />
+          ) : (
+            <HabitGrid history={historyArr} fullWidth todayLocalDate={localDate} />
+          )}
         </div>
 
         {/* Mobile legend */}

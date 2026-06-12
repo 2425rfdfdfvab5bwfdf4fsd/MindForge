@@ -250,6 +250,29 @@ export const habitsRouter = router({
       return { streak: newStreak, forgeScore, xpAwarded, leveledUp, triggerFortyPercent };
     }),
 
+  getById: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const snap = await adminDb.collection("habits").doc(input.id).get();
+      if (!snap.exists || snap.data()?.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      const h = snap.data()!;
+      const streakSnap = await adminDb.collection("habit_streaks").doc(input.id).get();
+      return {
+        id: snap.id,
+        name: h.name as string,
+        category: h.category as string,
+        habit_type: h.habitType as string,
+        target_frequency: h.targetFrequency as string,
+        target_days: (h.targetDays ?? []) as number[],
+        sort_order: (h.sortOrder as number) ?? 0,
+        is_active: (h.isActive as boolean) ?? true,
+        current_streak: streakSnap.data()?.currentStreak ?? 0,
+        longest_streak: streakSnap.data()?.longestStreak ?? 0,
+      };
+    }),
+
   getCompletionHistory: protectedProcedure
     .input(z.object({ habitId: z.string(), days: z.number().min(1).max(365) }))
     .query(async ({ ctx, input }) => {

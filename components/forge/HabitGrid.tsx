@@ -10,19 +10,26 @@ interface DayCell {
 interface HabitGridProps {
   history: { localDate: string; completed: boolean }[];
   fullWidth?: boolean;
+  /** User's local today as 'YYYY-MM-DD'. Falls back to browser local date. */
+  todayLocalDate?: string;
 }
 
 const DAY_LABELS  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function buildGrid(history: HabitGridProps["history"]): DayCell[] {
+function buildGrid(
+  history: HabitGridProps["history"],
+  todayStr: string
+): DayCell[] {
   const map = new Map(history.map((h) => [h.localDate, h.completed]));
   const cells: DayCell[] = [];
-  const today = new Date();
+  // Use noon to avoid DST edge-cases when subtracting days.
+  const anchor = new Date(todayStr + "T12:00:00");
   for (let i = 89; i >= 0; i--) {
-    const d = new Date(today);
+    const d = new Date(anchor);
     d.setDate(d.getDate() - i);
-    const s = d.toISOString().slice(0, 10);
+    // en-CA locale gives YYYY-MM-DD format — same shape as localDate in Firestore.
+    const s = d.toLocaleDateString("en-CA");
     cells.push({ date: s, completed: map.has(s) ? map.get(s)! : null });
   }
   return cells;
@@ -111,7 +118,6 @@ function TransposedGrid({ cells, firstDay, todayStr }: {
     const d      = new Date(cell.date + "T12:00:00");
     const label  = MONTH_NAMES[d.getMonth()];
     if (!monthByWeek.has(week)) {
-      /* Only place label if it starts at or near first cell of that week to avoid clutter */
       const weekStartDayOfMonth = new Date(cell.date + "T12:00:00").getDate();
       if (weekStartDayOfMonth <= 7) monthByWeek.set(week, label);
     }
@@ -122,8 +128,8 @@ function TransposedGrid({ cells, firstDay, todayStr }: {
     Array(7).fill(null)
   );
   cells.forEach((cell, i) => {
-    const absPos   = firstDay + i;
-    const week     = Math.floor(absPos / 7);
+    const absPos    = firstDay + i;
+    const week      = Math.floor(absPos / 7);
     const dayOfWeek = absPos % 7;
     grid[week][dayOfWeek] = cell;
   });
@@ -133,7 +139,7 @@ function TransposedGrid({ cells, firstDay, todayStr }: {
       {/* Month labels row */}
       <div
         className="mb-1 flex"
-        style={{ paddingLeft: "2.25rem" /* offset for day-label column */ }}
+        style={{ paddingLeft: "2.25rem" }}
       >
         <div
           className="grid flex-1"
@@ -238,9 +244,12 @@ function CompactGrid({ cells, firstDay, todayStr }: {
 /* ────────────────────────────────────────────────────────────
    PUBLIC EXPORT
 ──────────────────────────────────────────────────────────── */
-export function HabitGrid({ history, fullWidth = false }: HabitGridProps) {
-  const cells    = buildGrid(history);
-  const todayStr = new Date().toISOString().slice(0, 10);
+export function HabitGrid({ history, fullWidth = false, todayLocalDate }: HabitGridProps) {
+  // Prefer the explicitly provided local date; fall back to browser local date.
+  // Using toLocaleDateString("en-CA") gives YYYY-MM-DD in the browser's timezone,
+  // which is far better than the UTC date from toISOString().slice(0,10).
+  const todayStr = todayLocalDate ?? new Date().toLocaleDateString("en-CA");
+  const cells    = buildGrid(history, todayStr);
   const firstDay = new Date(cells[0].date + "T12:00:00").getDay();
 
   return (
