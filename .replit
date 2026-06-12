@@ -44,3 +44,4 @@ externalPort = 3000
 [userenv.shared]
 NEXT_PUBLIC_POSTHOG_HOST = "https://app.posthog.com"
 NEXT_PUBLIC_POSTHOG_KEY = "phc_knuAkpXHR5qiggR9fdIZ6ewTckCen9xQVfg8X9jT5a3R"
+NEXT_PUBLIC_APP_URL = "https://656031d8-ae37-452c-8d48-52ee12c59905-00-2ypm3pb1qxvwu.sisko.replit.dev"
