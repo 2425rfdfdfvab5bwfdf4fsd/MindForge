@@ -61,6 +61,7 @@ export default function HabitDetailPage() {
   const params   = useParams();
   const router   = useRouter();
   const id       = params.id as string;
+  const utils    = api.useUtils();
 
   const [archiving, setArchiving] = useState(false);
   const [editing,   setEditing]   = useState(false);
@@ -77,11 +78,18 @@ export default function HabitDetailPage() {
   );
 
   const archiveMutation = api.habits.archive.useMutation({
-    onSuccess: () => router.push("/habits"),
+    onSuccess: () => {
+      utils.habits.list.invalidate();
+      router.push("/habits");
+    },
   });
 
   const updateMutation = api.habits.update.useMutation({
-    onSuccess: () => { setEditing(false); refetch(); },
+    onSuccess: () => {
+      setEditing(false);
+      refetch();
+      utils.habits.list.invalidate();
+    },
   });
 
   const habit      = habits?.find((h) => h.id === id);
@@ -95,8 +103,13 @@ export default function HabitDetailPage() {
   async function handleArchive() {
     if (!window.confirm("Archive this habit? It won't appear in your daily list anymore.")) return;
     setArchiving(true);
-    try { await archiveMutation.mutateAsync({ id }); }
-    finally { setArchiving(false); }
+    try {
+      await archiveMutation.mutateAsync({ id });
+    } catch {
+      toast.error("Failed to archive. Please try again.");
+    } finally {
+      setArchiving(false);
+    }
   }
 
   function startEdit() {

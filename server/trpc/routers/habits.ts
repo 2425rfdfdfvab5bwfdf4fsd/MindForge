@@ -252,10 +252,16 @@ export const habitsRouter = router({
   getCompletionHistory: protectedProcedure
     .input(z.object({ habitId: z.string(), days: z.number().min(1).max(365) }))
     .query(async ({ ctx, input }) => {
+      /* Expand the query window by ±1 day so users in any UTC offset see
+         all their completions. habit_completions.localDate is the user's
+         local calendar date, which can differ from UTC by up to ±14 hours. */
       const from = new Date();
-      from.setDate(from.getDate() - input.days);
+      from.setDate(from.getDate() - input.days - 1);
       const fromStr = from.toISOString().slice(0, 10);
-      const toStr = new Date().toISOString().slice(0, 10);
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const toStr = tomorrow.toISOString().slice(0, 10);
 
       const snap = await adminDb
         .collection("habit_completions")
