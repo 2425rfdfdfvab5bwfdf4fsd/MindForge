@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Plus, Search, X, Cookie, Trophy, Zap, ChevronRight, Flame } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import { api } from "@/lib/trpc/client";
 import { CookieJarEntry, type CookieJarEntryData } from "@/components/forge/CookieJarEntry";
 
@@ -210,6 +210,7 @@ export default function CookieJarPage() {
   const [activeQuery, setActiveQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<CookieJarEntryData | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [quoteIdx] = useState(() => Math.floor(Math.random() * GOGGINS_QUOTES.length));
 
@@ -221,8 +222,21 @@ export default function CookieJarPage() {
     { enabled: !!activeQuery, retry: false }
   );
   const deleteMutation = api.cookiejar.delete.useMutation({
-    onSuccess: () => utils.cookiejar.list.invalidate(),
+    onSuccess: () => {
+      utils.cookiejar.list.invalidate();
+      setDeletingId(null);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to delete. Please try again.");
+      setDeletingId(null);
+    },
   });
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchInput(value);
@@ -246,7 +260,11 @@ export default function CookieJarPage() {
   const isSearchMode = !!activeQuery;
   const displayEntries: Entry[] = isSearchMode ? (searchResults ?? []) : entries;
   const FREE_LIMIT = 5;
-  const isFreeAtLimit = !isSearchMode && entries.length >= FREE_LIMIT;
+  // Free users are hard-capped at FREE_LIMIT by the server. If entries exceed
+  // that limit the user must be on Pro — hide the free-tier bar entirely.
+  const isDefinitelyPro = entries.length > FREE_LIMIT;
+  const showFreeBar = !isSearchMode && entries.length > 0 && !isDefinitelyPro;
+  const isFreeAtLimit = entries.length >= FREE_LIMIT;
   const quote = GOGGINS_QUOTES[quoteIdx];
 
   return (
@@ -378,7 +396,8 @@ export default function CookieJarPage() {
                         <CookieJarEntry
                           entry={entry}
                           onEdit={openEdit}
-                          onDelete={(id) => deleteMutation.mutate({ id })}
+                          onDelete={(id) => { setDeletingId(id); deleteMutation.mutate({ id }); }}
+                          isDeleting={deletingId === entry.id}
                         />
                       </motion.div>
                     ))}
@@ -386,8 +405,8 @@ export default function CookieJarPage() {
                 </AnimatePresence>
               )}
 
-              {/* Free tier usage bar */}
-              {!isSearchMode && entries.length > 0 && (
+              {/* Free tier usage bar — only shown for free-tier users (≤ FREE_LIMIT entries) */}
+              {showFreeBar && (
                 <div className="border border-forge-border bg-forge-elevated px-4 py-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-text-muted">

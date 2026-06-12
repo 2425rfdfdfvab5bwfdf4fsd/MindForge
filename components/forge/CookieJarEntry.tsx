@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Pencil, Trash2, Calendar } from "lucide-react";
 
 export interface CookieJarEntryData {
@@ -15,11 +15,16 @@ interface CookieJarEntryProps {
   entry: CookieJarEntryData;
   onEdit: (entry: CookieJarEntryData) => void;
   onDelete: (id: string) => void;
+  isDeleting?: boolean;
 }
 
-export function CookieJarEntry({ entry, onEdit, onDelete }: CookieJarEntryProps) {
+export function CookieJarEntry({ entry, onEdit, onDelete, isDeleting = false }: CookieJarEntryProps) {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    if (isDeleting) setConfirmDelete(false);
+  }, [isDeleting]);
 
   const formattedDate = entry.dateOfVictory
     ? new Date(entry.dateOfVictory + "T12:00:00").toLocaleDateString("en-US", {
@@ -32,7 +37,7 @@ export function CookieJarEntry({ entry, onEdit, onDelete }: CookieJarEntryProps)
   const isLong = entry.description.length > 160;
 
   return (
-    <div className="group relative bg-forge-elevated border border-forge-border hover:border-forge-border-strong transition-all duration-200 flex flex-col overflow-hidden">
+    <div className={`group relative bg-forge-elevated border border-forge-border hover:border-forge-border-strong transition-all duration-200 flex flex-col overflow-hidden ${isDeleting ? "opacity-50 pointer-events-none" : ""}`}>
       {/* Left orange accent bar */}
       <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-forge-orange opacity-60 group-hover:opacity-100 transition-opacity" />
 
@@ -59,7 +64,7 @@ export function CookieJarEntry({ entry, onEdit, onDelete }: CookieJarEntryProps)
             </div>
           </div>
 
-          {/* Action buttons — always visible */}
+          {/* Action buttons */}
           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => onEdit(entry)}
