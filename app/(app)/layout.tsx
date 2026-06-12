@@ -2,9 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { adminDb } from "@/lib/firebase/admin";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { AppShellClient } from "@/components/layout/AppShellClient";
 import { MobileNav } from "@/components/layout/MobileNav";
-import { Header } from "@/components/layout/Header";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
@@ -28,23 +27,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-forge-base">
-      {/* Desktop sidebar */}
-      <Sidebar />
+      <AppShellClient
+        score={profile.forgeScore ?? 0}
+        level={profile.level ?? 1}
+        avatarUrl={profile.avatarUrl ?? null}
+        displayName={profile.displayName ?? null}
+        userTier={profile.tier ?? "free"}
+      >
+        {children}
+      </AppShellClient>
 
-      {/* Main area — offset by sidebar width on desktop */}
-      <div className="flex min-h-screen flex-col lg:pl-[240px]">
-        <Header />
-
-        {/* Scrollable content */}
-        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
-          {children}
-        </main>
-      </div>
-
-      {/* Mobile bottom nav */}
       <MobileNav />
 
-      {/* Toast notifications — forge dark theme */}
       <Toaster
         theme="dark"
         toastOptions={{

@@ -184,13 +184,21 @@ export const dashboardRouter = router({
           date_of_victory: d.data().dateOfVictory,
         }));
 
-      // Filter today's XP events in JS
-      const dayStart = input.localDate + "T00:00:00.000Z";
-      const dayEnd = input.localDate + "T23:59:59.999Z";
+      // Filter today's XP events in JS using the user's local timezone so that
+      // events at e.g. 23:00 UTC+8 (= 15:00 UTC) are correctly included.
+      const userTimezone = user?.timezone ?? "UTC";
       const todayXPDelta = xpEventsSnap.docs
         .filter((d) => {
           const t = d.data().createdAt ?? "";
-          return t >= dayStart && t <= dayEnd;
+          if (!t) return false;
+          try {
+            const eventLocalDate = new Date(t).toLocaleDateString("en-CA", {
+              timeZone: userTimezone,
+            });
+            return eventLocalDate === input.localDate;
+          } catch {
+            return false;
+          }
         })
         .reduce((sum, d) => sum + (d.data().xpAmount as number), 0);
 
