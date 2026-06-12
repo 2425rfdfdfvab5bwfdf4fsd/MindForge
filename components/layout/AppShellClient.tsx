@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { RuleForty } from "@/components/forge/RuleForty";
+import { api } from "@/lib/trpc/client";
 
 interface AppShellClientProps {
   children: React.ReactNode;
@@ -16,13 +17,23 @@ interface AppShellClientProps {
 
 export function AppShellClient({
   children,
-  score,
-  level,
+  score: initialScore,
+  level: initialLevel,
   avatarUrl,
   displayName,
   userTier,
 }: AppShellClientProps) {
   const [ruleFortyOpen, setRuleFortyOpen] = useState(false);
+
+  // Re-fetch profile in the client so the header score/level stays current
+  // after XP-awarding mutations (habit completions, check-ins, etc.).
+  // staleTime prevents hammering the server on every re-render.
+  const { data: liveProfile } = api.user.getProfile.useQuery(undefined, {
+    staleTime: 15_000,
+  });
+
+  const liveScore = liveProfile?.forgeScore ?? initialScore;
+  const liveLevel = liveProfile?.level ?? initialLevel;
 
   return (
     <>
@@ -33,8 +44,8 @@ export function AppShellClient({
 
       <div className="flex min-h-screen flex-col lg:pl-[240px]">
         <Header
-          score={score}
-          level={level}
+          score={liveScore}
+          level={liveLevel}
           avatarUrl={avatarUrl}
           displayName={displayName}
         />

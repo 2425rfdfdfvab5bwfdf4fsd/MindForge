@@ -128,11 +128,12 @@ export const dashboardRouter = router({
         .sort((a, b) => b.current_streak - a.current_streak)
         .slice(0, 3);
 
-      // Filter today's check-in in JS (non-onboarding only)
+      // Filter today's check-in in JS (non-onboarding only).
+      // Use !onboardingMirror so legacy docs without the field are also matched.
       const todayCheckinDoc = checkinSnap.docs.find(
         (d) =>
           d.data().localDate === input.localDate &&
-          d.data().onboardingMirror === false
+          !d.data().onboardingMirror
       );
       const todayCheckin = todayCheckinDoc
         ? {

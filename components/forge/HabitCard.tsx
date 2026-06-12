@@ -17,6 +17,7 @@ interface HabitCardProps {
   };
   localDate: string;
   onUpdate?: () => void;
+  onFortyPercent?: (habitId: string) => void;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -52,7 +53,7 @@ function makeParticles(n: number) {
   }));
 }
 
-export function HabitCard({ habit, localDate, onUpdate }: HabitCardProps) {
+export function HabitCard({ habit, localDate, onUpdate, onFortyPercent }: HabitCardProps) {
   const [status, setStatus] = useState(habit.today_status);
   const [sparks, setSparks] = useState<ReturnType<typeof makeParticles>>([]);
 
@@ -61,9 +62,7 @@ export function HabitCard({ habit, localDate, onUpdate }: HabitCardProps) {
     setStatus(habit.today_status);
   }, [habit.today_status]);
 
-  const logCompletion = api.habits.logCompletion.useMutation({
-    onSuccess: () => onUpdate?.(),
-  });
+  const logCompletion = api.habits.logCompletion.useMutation();
 
   const isLocked  = status === "completed" || status === "missed";
   const cat       = CATEGORY_STYLES[habit.category] ?? CATEGORY_STYLES.perform;
@@ -78,13 +77,17 @@ export function HabitCard({ habit, localDate, onUpdate }: HabitCardProps) {
         setTimeout(() => setSparks([]), 600);
       }
       try {
-        await logCompletion.mutateAsync({ habitId: habit.id, localDate, completed });
+        const result = await logCompletion.mutateAsync({ habitId: habit.id, localDate, completed });
+        if (result.triggerFortyPercent) {
+          onFortyPercent?.(habit.id);
+        }
+        onUpdate?.();
       } catch {
         setStatus(habit.today_status);
         toast.error("Failed to log habit. Please try again.");
       }
     },
-    [isLocked, habit.id, habit.today_status, localDate, logCompletion]
+    [isLocked, habit.id, habit.today_status, localDate, logCompletion, onFortyPercent, onUpdate]
   );
 
   return (
