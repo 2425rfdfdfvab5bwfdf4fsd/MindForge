@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, CheckCircle2, Flame, TrendingUp, Clock, ChevronRight, Zap } from "lucide-react";
+import { BookOpen, CheckCircle2, Flame, TrendingUp, Clock, ChevronRight, Zap, AlertCircle } from "lucide-react";
 import { api } from "@/lib/trpc/client";
 import { useStreamingResponse } from "@/hooks/useStreamingResponse";
 import { RuleForty } from "@/components/forge/RuleForty";
@@ -59,7 +59,8 @@ function getLocalDate(): string {
 function yesterdayDate(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  // Use browser local date — avoids UTC off-by-one for non-UTC timezones
+  return d.toLocaleDateString("en-CA");
 }
 
 function BounceDots({ label }: { label: string }) {
@@ -112,11 +113,13 @@ export default function CheckinPage() {
   const [moodSignal, setMoodSignal] = useState<string | null>(null);
   const [showRuleForty, setShowRuleForty] = useState(false);
   const [isFree, setIsFree] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [promptIdx] = useState(() => Math.floor(Math.random() * MIRROR_PROMPTS.length));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debriefEndRef = useRef<HTMLDivElement>(null);
 
-  const { streamedText, isStreaming, isComplete, startStream, reset } = useStreamingResponse();
+  const { streamedText, isStreaming, isComplete, error: streamError, startStream, reset } =
+    useStreamingResponse();
 
   const { data: profile } = api.user.getProfile.useQuery(undefined, { retry: false });
   const { data: todayCheckin, isLoading: checkinLoading } =
@@ -129,6 +132,7 @@ export default function CheckinPage() {
     if (profile) setIsFree(profile.tier === "free");
   }, [profile]);
 
+  // Restore completed check-in from server state on page load / revisit
   useEffect(() => {
     if (todayCheckin && !checkinLoading) {
       setCheckinId(todayCheckin.id);
@@ -139,16 +143,25 @@ export default function CheckinPage() {
     }
   }, [todayCheckin, checkinLoading]);
 
+  // Auto-scroll as debrief streams in
   useEffect(() => {
     debriefEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [streamedText]);
 
+  // Advance to classifying when streaming finishes successfully
   useEffect(() => {
     if (isComplete && phase === "streaming" && streamedText && checkinId) {
       handleClassify(streamedText, checkinId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isComplete, phase]);
+  }, [isComplete, phase, streamedText, checkinId]);
+
+  // Recover from streaming errors — don't leave the page stuck forever
+  useEffect(() => {
+    if (streamError && phase === "streaming") {
+      setPhase("complete");
+    }
+  }, [streamError, phase]);
 
   function handleTextChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setText(e.target.value);
@@ -158,6 +171,7 @@ export default function CheckinPage() {
 
   const handleSubmit = useCallback(async () => {
     if (text.trim().length < 50 || phase !== "idle") return;
+    setSubmitError(null);
     setPhase("submitting");
     try {
       const result = await submitMutation.mutateAsync({
@@ -180,7 +194,9 @@ export default function CheckinPage() {
           forge_score: profile?.forgeScore ?? 0,
         },
       });
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Submission failed. Please try again.";
+      setSubmitError(msg);
       setPhase("idle");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,7 +231,7 @@ export default function CheckinPage() {
           }).catch(() => {});
         }
       } catch {
-        // non-fatal
+        // non-fatal — classification failure doesn't block the complete state
       } finally {
         setPhase("complete");
       }
@@ -335,6 +351,14 @@ export default function CheckinPage() {
                     <span className="text-xs tabular-nums text-text-disabled">{charCount}</span>
                   </div>
 
+                  {/* Submit error */}
+                  {submitError && (
+                    <div className="flex items-start gap-2.5 border border-red-800/40 bg-red-950/30 px-4 py-3">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
+                      <p className="text-sm text-red-400">{submitError}</p>
+                    </div>
+                  )}
+
                   <button
                     onClick={handleSubmit}
                     disabled={!ready}
@@ -381,6 +405,12 @@ export default function CheckinPage() {
                     <div className="px-5 py-4 text-sm leading-relaxed text-text-secondary min-h-[80px]">
                       {!streamedText && isStreaming && (
                         <span className="text-text-disabled text-xs">Generating your debrief…</span>
+                      )}
+                      {/* Stream error inline */}
+                      {streamError && !streamedText && (
+                        <span className="text-text-disabled text-xs">
+                          Debrief unavailable — your reflection was saved.
+                        </span>
                       )}
                       <span className="whitespace-pre-wrap">{streamedText}</span>
                       {isStreaming && streamedText && (
@@ -438,7 +468,7 @@ export default function CheckinPage() {
                     </div>
 
                     {/* Free-tier upgrade prompt */}
-                    {isFree && !todayCheckin?.aiResponse && (
+                    {isFree && !todayCheckin?.aiResponse && !streamedText && (
                       <div className="border border-forge-orange/30 bg-[#1C0E06] overflow-hidden">
                         <div className="flex items-center gap-2 border-b border-forge-orange/20 px-5 py-3">
                           <Zap className="h-3.5 w-3.5 text-forge-orange" />
@@ -544,11 +574,12 @@ export default function CheckinPage() {
                         </span>
                       </div>
                     )}
+                    {/* Link to check-in page itself (no per-entry history route exists) */}
                     <Link
-                      href={`/checkin/history/${yesterdayCheckin.id}`}
+                      href="/checkin"
                       className="inline-flex items-center gap-1 text-xs text-forge-orange hover:text-forge-orange-text transition-colors"
                     >
-                      Full entry <ChevronRight className="h-3 w-3" />
+                      View check-in <ChevronRight className="h-3 w-3" />
                     </Link>
                   </div>
                 </div>
@@ -594,9 +625,11 @@ export default function CheckinPage() {
         </div>
       </div>
 
+      {/* 40% Rule modal — auto_checkin so it streams the personalized coach response */}
       <RuleForty
         open={showRuleForty}
         onClose={() => setShowRuleForty(false)}
+        triggeredBy="auto_checkin"
         triggerContext={`Daily check-in mood: ${moodSignal}. Entry: "${submittedText.slice(0, 200)}"`}
       />
 
